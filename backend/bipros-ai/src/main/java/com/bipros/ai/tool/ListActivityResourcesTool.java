@@ -3,6 +3,8 @@ package com.bipros.ai.tool;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.ai.context.AiContext;
+import com.bipros.ai.resolver.EffectiveRate;
+import com.bipros.ai.resolver.EffectiveRateResolver;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceAssignment;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
@@ -50,6 +52,7 @@ public class ListActivityResourcesTool implements Tool {
     private final ResourceAssignmentRepository assignmentRepository;
     private final ResourceRepository resourceRepository;
     private final ActivityRepository activityRepository;
+    private final EffectiveRateResolver rateResolver;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -65,7 +68,10 @@ public class ListActivityResourcesTool implements Tool {
                 + "Returns each resource's code, name, type, planned vs actual units and cost, unit "
                 + "of measure, and assignment dates. Use for questions like 'what's deployed on "
                 + "ACT-1.3.5(ii)', 'how many cranes on the foundation activity', 'which labour crews "
-                + "are working on traffic diversion'. Requires a current project in scope.";
+                + "are working on traffic diversion'. Requires a current project in scope. "
+                + "Each row includes effective_rate (project pool override → resource base rate), "
+                + "unit, unit_basis (DAY/HOUR/EACH — drives DPR cost formula), rate_source, "
+                + "override_applied, and formula_overrides for disclosure.";
     }
 
     @Override
@@ -157,14 +163,24 @@ public class ListActivityResourcesTool implements Tool {
             row.put("code", r != null ? r.getCode() : null);
             row.put("name", r != null ? r.getName() : (a.getResourceId() == null ? "(role-only assignment)" : null));
             row.put("type", type);
-            row.put("unit", r != null ? r.getUnit() : null);
+
+            EffectiveRate er = rateResolver.resolve(projectId, a.getResourceId());
+            row.put("unit", er.unit());
+            row.put("unit_basis", er.basis());
+            row.put("effective_rate", er.rate() == null ? null : er.rate().doubleValue());
+            row.put("rate_source", er.source().name());
+            row.put("override_applied", er.overrideApplied());
+            row.put("base_cost_per_unit", r != null && r.getCostPerUnit() != null
+                    ? r.getCostPerUnit().doubleValue() : null);
+            ArrayNode notes = objectMapper.createArrayNode();
+            if (er.overrideApplied()) notes.add("rate_overridden_per_project");
+            row.set("formula_overrides", notes);
+
             row.put("planned_units", a.getPlannedUnits());
             row.put("actual_units", a.getActualUnits());
             row.put("remaining_units", a.getRemainingUnits());
             row.put("planned_cost", a.getPlannedCost() == null ? null : a.getPlannedCost().doubleValue());
             row.put("actual_cost", a.getActualCost() == null ? null : a.getActualCost().doubleValue());
-            row.put("cost_per_unit", r != null && r.getCostPerUnit() != null
-                    ? r.getCostPerUnit().doubleValue() : null);
             row.put("planned_start", a.getPlannedStartDate() != null ? a.getPlannedStartDate().toString() : null);
             row.put("planned_finish", a.getPlannedFinishDate() != null ? a.getPlannedFinishDate().toString() : null);
             row.put("actual_start", a.getActualStartDate() != null ? a.getActualStartDate().toString() : null);

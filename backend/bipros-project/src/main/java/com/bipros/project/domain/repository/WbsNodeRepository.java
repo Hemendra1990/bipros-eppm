@@ -15,6 +15,8 @@ public interface WbsNodeRepository extends JpaRepository<WbsNode, UUID> {
 
     List<WbsNode> findByParentIdOrderBySortOrder(UUID parentId);
 
+    List<WbsNode> findByProjectId(UUID projectId);
+
     List<WbsNode> findByProjectIdOrderBySortOrder(UUID projectId);
 
     Optional<WbsNode> findByCode(String code);
@@ -24,4 +26,7 @@ public interface WbsNodeRepository extends JpaRepository<WbsNode, UUID> {
     boolean existsByCode(String code);
 
     boolean existsByProjectIdAndCode(UUID projectId, String code);
+
+    /** Number of WBS elements assigned to an OBS node — used to guard OBS deletion. */
+    long countByObsNodeId(UUID obsNodeId);
 }

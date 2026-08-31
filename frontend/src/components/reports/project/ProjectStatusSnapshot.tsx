@@ -22,10 +22,11 @@ import {
   EmptyBlock,
   LoadingBlock,
   SectionCard,
-  formatCrore,
   formatPct,
 } from "@/components/common/dashboard/primitives";
 import { projectInsightsApi } from "@/lib/api/projectInsightsApi";
+import { useProjectCurrencyOptional } from "@/lib/currency/ProjectCurrencyProvider";
+import { formatMoney } from "@/lib/currency/format";
 
 type RagBand = "good" | "amber" | "red" | "neutral";
 
@@ -34,6 +35,7 @@ const RAG_BAND: Record<string, RagBand> = {
   AMBER: "amber",
   RED: "red",
   CRIMSON: "red",
+  GREY: "neutral",
 };
 
 const RAG_LABEL: Record<string, string> = {
@@ -41,6 +43,7 @@ const RAG_LABEL: Record<string, string> = {
   AMBER: "At risk",
   RED: "Critical",
   CRIMSON: "Critical",
+  GREY: "No data",
 };
 
 const RAG_TONE: Record<RagBand, {
@@ -123,7 +126,7 @@ function RagTile({
           className={`mt-1 font-display text-[28px] font-semibold leading-none tracking-tight ${tone.label}`}
           style={{ fontVariationSettings: "'opsz' 144" }}
         >
-          {rag}
+          {rag === "GREY" ? "N/A" : rag}
         </div>
       </div>
     </div>
@@ -152,6 +155,14 @@ export function ProjectStatusSnapshot({ projectId }: { projectId: string }) {
     queryKey: ["project-status-snapshot", projectId],
     queryFn: () => projectInsightsApi.getStatusSnapshot(projectId),
   });
+
+  // BAC/EAC arrive in CRORE units (raw ÷ 1e7). Recover the raw amount and render
+  // per-currency (k/L/Cr for INR, K/M/B otherwise). Optional hook + INR fallback
+  // so it is safe if ever rendered outside a project route. Display-only.
+  const cur = useProjectCurrencyOptional();
+  const moneyCompact = cur
+    ? cur.moneyCompact
+    : (v: number | null | undefined) => formatMoney(v, { code: "INR" }, { compact: true });
 
   if (isLoading)
     return (
@@ -207,10 +218,7 @@ export function ProjectStatusSnapshot({ projectId }: { projectId: string }) {
           <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-paper px-2.5 py-1">
               <CalendarClock size={11} />
-              Data date {new Date(s.lastUpdatedAt).toLocaleString("en-IN", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
+              Data date {s.dataDate ?? s.lastUpdatedAt?.slice(0, 10)}
             </span>
           </div>
         </div>
@@ -282,14 +290,14 @@ export function ProjectStatusSnapshot({ projectId }: { projectId: string }) {
           />
           <KpiTile
             label="BAC"
-            value={formatCrore(s.bacCrores, 1)}
+            value={moneyCompact(s.bacCrores * 1e7)}
             hint="Budget at completion"
             tone="accent"
             icon={<Banknote size={14} />}
           />
           <KpiTile
             label="EAC"
-            value={formatCrore(s.eacCrores, 1)}
+            value={moneyCompact(s.eacCrores * 1e7)}
             hint={
               eacBand === "good"
                 ? "Within budget"

@@ -9,11 +9,15 @@ import { baselineApi } from "@/lib/api/baselineApi";
 import type { ProjectResponse } from "@/lib/types";
 import { ScheduleVarianceSection } from "@/components/reports/ScheduleVarianceSection";
 import { CostVarianceSection } from "@/components/reports/CostVarianceSection";
+import { ProjectCurrencyProvider } from "@/lib/currency/ProjectCurrencyProvider";
+import { useAuthStore } from "@/lib/state/store";
 
 type Tab = "schedule" | "cost";
 
 export default function VarianceReportPage() {
   const [tab, setTab] = useState<Tab>("schedule");
+  // Access-Output row 4: cost variance is COST.READ data — hide the tab from roles without it.
+  const canCost = useAuthStore((st) => st.hasPermission)("COST.READ");
   // User's explicit picks. Empty string = "no explicit pick yet, fall back to default".
   // Defaults are derived during render below — keeping fallbacks out of state avoids
   // the effect → setState cascade that the react-hooks lint enforces against.
@@ -158,9 +162,11 @@ export default function VarianceReportPage() {
         <TabButton active={tab === "schedule"} onClick={() => setTab("schedule")}>
           Schedule variance
         </TabButton>
-        <TabButton active={tab === "cost"} onClick={() => setTab("cost")}>
-          Cost variance
-        </TabButton>
+        {canCost && (
+          <TabButton active={tab === "cost"} onClick={() => setTab("cost")}>
+            Cost variance
+          </TabButton>
+        )}
       </div>
 
       {noBaseline ? (
@@ -182,10 +188,14 @@ export default function VarianceReportPage() {
         <div className="rounded-2xl border border-dashed border-hairline bg-ivory/50 p-10 text-center text-sm text-slate">
           Pick a project and baseline above to load the report.
         </div>
-      ) : tab === "schedule" ? (
-        <ScheduleVarianceSection projectId={projectId} baselineId={baselineId} />
       ) : (
-        <CostVarianceSection projectId={projectId} baselineId={baselineId} />
+        <ProjectCurrencyProvider key={projectId} currency={selectedProject?.budgetCurrency}>
+          {tab === "schedule" ? (
+            <ScheduleVarianceSection projectId={projectId} baselineId={baselineId} />
+          ) : (
+            <CostVarianceSection projectId={projectId} baselineId={baselineId} />
+          )}
+        </ProjectCurrencyProvider>
       )}
     </div>
   );

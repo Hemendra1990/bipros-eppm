@@ -51,36 +51,46 @@ export function RiskHeatmapPanel() {
           <div className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
             5×5 heatmap
           </div>
-          <table className="border-collapse text-xs">
-            <thead>
-              <tr>
-                <th className="p-1 text-right text-text-muted">P \ I</th>
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <th key={i} className="w-14 p-1 text-center text-text-muted">
-                    {i}
+          {/* Static 5×5 matrix — a fixed grid must NOT use the virtualized table
+              (an unbounded virtualizer scroll element froze the whole page). */}
+          <div className="overflow-hidden rounded-xl border border-hairline">
+            <table className="w-full border-collapse text-sm">
+              <thead className="bg-ivory dark:bg-[#161616] border-b border-hairline">
+                <tr>
+                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.10em] text-slate dark:text-[#A1A1A6]">
+                    P \ I
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[5, 4, 3, 2, 1].map((p) => (
-                <tr key={p}>
-                  <td className="p-1 text-right text-text-muted">{p}</td>
-                  {[1, 2, 3, 4, 5].map((i) => {
-                    const n = grid.get(`${p}-${i}`) ?? 0;
-                    return (
-                      <td
-                        key={i}
-                        className={`h-12 w-14 border border-border text-center align-middle ${cellColor(p, i)}`}
-                      >
-                        {n > 0 ? <span className="text-base font-bold">{n}</span> : "·"}
-                      </td>
-                    );
-                  })}
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <th
+                      key={i}
+                      className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.10em] text-slate dark:text-[#A1A1A6]"
+                    >
+                      {i}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {[5, 4, 3, 2, 1].map((p) => (
+                  <tr key={p} className="border-b border-hairline/50 last:border-b-0">
+                    <td className="px-4 text-right text-text-muted">{p}</td>
+                    {[1, 2, 3, 4, 5].map((i) => {
+                      const n = grid.get(`${p}-${i}`) ?? 0;
+                      return (
+                        <td key={i} className="p-0">
+                          <div
+                            className={`flex h-12 items-center justify-center ${cellColor(p, i)}`}
+                          >
+                            {n > 0 ? <span className="text-base font-bold">{n}</span> : "·"}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <div className="mt-2 text-[10px] text-text-muted">
             Bottom-left = low exposure. Top-right = extreme.
           </div>

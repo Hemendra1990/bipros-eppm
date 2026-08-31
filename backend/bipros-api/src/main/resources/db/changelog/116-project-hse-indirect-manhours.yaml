@@ -1,0 +1,21 @@
+databaseChangeLog:
+  # Adds the manual "indirect (office) man-hours" bucket to the per-project HSE inputs. Additive
+  # nullable column (dev ddl-auto:update adds it automatically over existing rows); code treats
+  # null as 0. Backs the office/support-staff man-hours the site DPRs don't capture.
+  - changeSet:
+      id: 116-project-hse-indirect-man-hours
+      author: subrat
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: project_hse_metrics
+            columns:
+              - column:
+                  name: indirect_man_hours
+                  type: NUMERIC(19, 2)
+                  defaultValueNumeric: 0
+      rollback:
+        - dropColumn:
+            schemaName: project
+            tableName: project_hse_metrics
+            columnName: indirect_man_hours

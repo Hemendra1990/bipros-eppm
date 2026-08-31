@@ -1,0 +1,16 @@
+- dialog "Add DPR":
+  - generic:
+    - heading "Add DPR" [level=2]
+    - button "Close"
+  - generic:
+    - generic:
+      - generic
+      - generic
+      - generic
+      - generic
+      - generic: No productivity tracking for this activity — no Work Activity is linked. The DPR will save; capacity utilization won't measure expected vs actual.
+      - generic
+      - generic
+      - generic
+      - generic
+      - generic

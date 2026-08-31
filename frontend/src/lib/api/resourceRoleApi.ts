@@ -15,6 +15,11 @@ export interface ResourceRole {
   resourceTypeId: string;
   resourceTypeCode: string;
   resourceTypeName: string;
+  /**
+   * @deprecated Phase 8 hides this from the UI. The DB column still exists for the
+   * assignment unit fallback used when a role-only / unstaffed slot has no resource yet,
+   * but new roles never set it and the form no longer exposes it.
+   */
   productivityUnit?: string | null;
   sortOrder: number;
   active: boolean;
@@ -27,7 +32,6 @@ export interface ResourceRoleRequest {
   name: string;
   description?: string | null;
   resourceTypeId: string;
-  productivityUnit?: string | null;
   sortOrder?: number | null;
   active?: boolean;
 }

@@ -1,5 +1,8 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { integrationApi, type IntegrationConfig } from "@/lib/api/integrationApi";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -25,7 +28,65 @@ export default function IntegrationsPage() {
     retry: 0,
   });
 
-  const integrations = data ?? [];
+  const integrations = useMemo(() => data ?? [], [data]);
+
+  const columns = useMemo<ColumnDef<IntegrationConfig>[]>(() => [
+    {
+      accessorKey: "systemCode",
+      header: "Code",
+      cell: ({ row }) => <span className="font-mono text-xs text-text-secondary">{row.original.systemCode}</span>,
+    },
+    {
+      accessorKey: "systemName",
+      header: "Name",
+      cell: ({ row }) => <span className="text-text-primary">{row.original.systemName}</span>,
+    },
+    {
+      accessorKey: "authType",
+      header: "Auth",
+      cell: ({ row }) => <span className="text-xs text-text-secondary">{row.original.authType}</span>,
+    },
+    {
+      accessorKey: "baseUrl",
+      header: "Base URL",
+      cell: ({ row }) => <span className="text-xs text-text-secondary break-all">{row.original.baseUrl}</span>,
+    },
+    {
+      accessorKey: "isEnabled",
+      header: "Enabled",
+      cell: ({ row }) => (
+        <span
+          className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ring-1 ${
+            row.original.isEnabled
+              ? "bg-accent/10 text-blue-300 ring-accent/20"
+              : "bg-surface-active/50 text-text-secondary ring-border/40"
+          }`}
+        >
+          {row.original.isEnabled ? "Enabled" : "Disabled"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <span
+          className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ring-1 ${statusBadgeClass(row.original.status)}`}
+        >
+          {row.original.status}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "lastSyncAt",
+      header: "Last Sync",
+      cell: ({ row }) => (
+        <span className="text-xs text-text-secondary">
+          {row.original.lastSyncAt ? new Date(row.original.lastSyncAt).toLocaleString() : "—"}
+        </span>
+      ),
+    },
+  ], []);
 
   return (
     <div className="space-y-4 p-4">
@@ -52,55 +113,15 @@ export default function IntegrationsPage() {
           No integrations configured yet.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-surface/50 shadow-lg">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border/60 bg-surface/80 text-left">
-              <tr>
-                <th className="px-4 py-3 font-semibold text-text-secondary">Code</th>
-                <th className="px-4 py-3 font-semibold text-text-secondary">Name</th>
-                <th className="px-4 py-3 font-semibold text-text-secondary">Auth</th>
-                <th className="px-4 py-3 font-semibold text-text-secondary">Base URL</th>
-                <th className="px-4 py-3 font-semibold text-text-secondary">Enabled</th>
-                <th className="px-4 py-3 font-semibold text-text-secondary">Status</th>
-                <th className="px-4 py-3 font-semibold text-text-secondary">Last Sync</th>
-              </tr>
-            </thead>
-            <tbody>
-              {integrations.map((ic) => (
-                <tr
-                  key={ic.id}
-                  className="border-b border-border/60 last:border-b-0 hover:bg-surface-hover/30"
-                >
-                  <td className="px-4 py-3 font-mono text-xs text-text-secondary">{ic.systemCode}</td>
-                  <td className="px-4 py-3 text-text-primary">{ic.systemName}</td>
-                  <td className="px-4 py-3 text-xs text-text-secondary">{ic.authType}</td>
-                  <td className="px-4 py-3 text-xs text-text-secondary break-all">{ic.baseUrl}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ring-1 ${
-                        ic.isEnabled
-                          ? "bg-accent/10 text-blue-300 ring-accent/20"
-                          : "bg-surface-active/50 text-text-secondary ring-border/40"
-                      }`}
-                    >
-                      {ic.isEnabled ? "Enabled" : "Disabled"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ring-1 ${statusBadgeClass(ic.status)}`}
-                    >
-                      {ic.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-text-secondary">
-                    {ic.lastSyncAt ? new Date(ic.lastSyncAt).toLocaleString() : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+
+        <VirtualDataTable
+          columns={columns}
+          data={integrations}
+          sortable
+          resizable
+          searchable={false}
+          className="rounded-xl border border-border bg-surface/50 shadow-lg"
+        />
       )}
     </div>
   );

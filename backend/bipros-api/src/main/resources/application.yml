@@ -1,12 +1,30 @@
 spring:
   profiles:
-    active: seed
+    active: dev
   application:
     name: bipros-eppm
 
   sql:
     init:
       mode: never
+
+  # Outbound mail. Spring Boot only creates a JavaMailSender bean when spring.mail.host is set,
+  # and EmailChannel requires BOTH that bean and bipros.agent.notify.email.host before it will
+  # transmit. With SMTP_HOST unset (the default) the channel runs in PREVIEW mode — it renders
+  # the message and logs it, so the whole notification path is testable without a mail server.
+  mail:
+    host: ${SMTP_HOST:smtp.office365.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:true}
+          starttls:
+            enable: ${SMTP_STARTTLS:true}
+        transport:
+          protocol: smtp
 
   datasource:
     # Env-overrides make this file the single source of truth for local/dev; prod just sets
@@ -35,6 +53,11 @@ spring:
         default_schema: public
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
+        # Issue CREATE SCHEMA for schemas referenced via @Table(schema=...) when ddl-auto
+        # is update/create/create-drop. Lets a first-time dev boot against an empty DB
+        # without pre-running docker/init-schemas.sql.
+        hbm2ddl:
+          create_namespaces: true
         jdbc:
           batch_size: 50
         order_inserts: true
@@ -57,13 +80,20 @@ spring:
   servlet:
     multipart:
       enabled: true
-      max-file-size: 50MB
-      max-request-size: 60MB
+      max-file-size: 1100MB
+      max-request-size: 1100MB
+      file-size-threshold: 10MB    # spool to disk above this
 
 server:
   port: 8080
   servlet:
     context-path: /
+  tomcat:
+    # Tomcat silently drops large bodies past max-swallow-size (default 2MB).
+    # Match the multipart limits so 1GB HDS PDF uploads aren't truncated.
+    max-swallow-size: 1200MB
+    max-http-form-post-size: 1200MB
+    connection-timeout: 10m
 
 # JWT Configuration — set JWT_SECRET in prod env to a 32+ byte random string.
 bipros:
@@ -75,6 +105,10 @@ bipros:
   cors:
     # Comma-separated list of allowed frontend origins. Override via CORS_ALLOWED_ORIGINS.
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+
+  # WhatsApp deep-link redirects. Set WHATSAPP_FRONTEND_URL in prod.
+  whatsapp:
+    frontend-url: ${WHATSAPP_FRONTEND_URL:http://localhost:3000}
 
   # Document binary storage — local filesystem; point at shared volume in prod or swap to S3
   document:
@@ -88,6 +122,30 @@ bipros:
       path: ./storage/contracts
       max-file-size: 52428800   # 50 MB in bytes; must match spring.servlet.multipart.max-file-size
 
+  # DPR photo attachments — local-disk storage; per-DPR subdirectories (one folder per DPR id).
+  # Images only (jpeg/png/webp/heic), 15 MB cap per file enforced in DprAttachmentStorageService.
+  dpr:
+    storage:
+      path: ${BIPROS_DPR_STORAGE_PATH:./storage/dpr-photos}
+      max-file-size: 15728640   # 15 MB
+    # DPR voice notes — MinIO-backed (durable, multi-instance-safe). Audio only; 25 MB cap per
+    # file enforced in DprVoiceNoteService. Bucket auto-created on boot.
+    voice-notes:
+      endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${MINIO_ACCESS_KEY:minio}
+      secret-key: ${MINIO_SECRET_KEY:minio123}
+      region: ${MINIO_REGION:us-east-1}
+      bucket: ${DPR_VOICE_NOTES_BUCKET:dpr-voice-notes}
+      multipart-part-size-mb: 5
+      max-file-size: 26214400   # 25 MB
+    # Daily DPR Report engine (ported 2026-08-05). Operational switches live in Admin →
+    # Settings (dpr_report_enabled / dpr_report_cadence / dpr_report_window /
+    # dpr_report_recipients_override — seeded by DprReportSettingsSeeder, default OFF).
+    # Blank from-address ⇒ falls back to spring.mail.username (same rule as agent alerts).
+    report:
+      from-address: ${DPR_REPORT_FROM:}
+      tick-ms: ${DPR_REPORT_TICK_MS:900000}
+
   # Error responses — include exception class + message + top stack frame in 500 bodies.
   # Default is OFF so production never leaks internals; default profile (dev) turns it ON below.
   errors:
@@ -99,6 +157,44 @@ bipros:
     # Default: every day at 2:05 AM local time.
     duration-percent-cron: "0 5 2 * * *"
 
+  # AI agent framework (bipros-ai) — cron schedules for the background sweeps in
+  # AgentSweepJobs / WeatherIngestJob / AgentDigestJob. Spring 6-field cron:
+  # "sec min hour day-of-month month day-of-week". Every job is single-node
+  # lease-guarded; the LLM sweeps (daily-sweep, issue-hourly) additionally no-op
+  # unless an AI provider is configured. Set any entry to "-" to disable that job.
+  agent:
+    schedule:
+      weather-ingest-cron: "0 10 * * * *"      # hourly at :10 — intraday refresh of today's site weather + AQI from Open-Meteo (manual entries always win)
+      daily-sweep-cron: "0 0 2 * * *"          # 02:00 daily — DAILY_PROJECT_SWEEP per active project (LLM)
+      ttl-expiry-cron: "0 30 1 * * *"          # 01:30 daily — expire stale findings past their TTL
+      issue-hourly-cron: "0 0 * * * *"         # top of every hour — issue_intelligence per active project (LLM)
+      digest-cron: "0 0 7 * * *"               # 07:00 daily — deferred MEDIUM/LOW findings digest + email
+      portfolio-weekly-cron: "0 0 6 * * MON"   # Mon 06:00 — portfolio weekly sweep (stub)
+
+    # Which channels each severity fans out to, and whether it goes now or waits for the
+    # 07:00 digest. Do not delete the block: with an EMPTY map NotificationRouter returns
+    # before touching any channel and nothing reaches anybody.
+    # Owner decision 2026-08-07: per-finding EMAIL is OFF for every severity — the
+    # requirements workbook (AI Agent sheet) asks for report-summary mails to roles plus a
+    # few specific event alerts, never one email per finding. Findings surface in-app
+    # (bell + Notification log); email is reserved for the report mails (e.g. the scheduled
+    # DPR report). To re-enable email for a severity add it to channels here, or per-project
+    # via an AgentNotificationRule row (which overrides this map); the 07:00 digest honours
+    # the same channel config.
+    notify:
+      routing:
+        critical: { channels: "in_app", immediate: true }
+        high:     { channels: "in_app", immediate: true }
+        medium:   { channels: "in_app", immediate: false }   # false => 07:00 digest
+        low:      { channels: "in_app", immediate: false }
+        info:     { channels: "in_app", immediate: false }
+      email:
+        # Single-key SMTP gate: the channel transmits when spring.mail.host (SMTP_HOST) is set —
+        # no second host key. Blank SMTP_HOST keeps PREVIEW mode (composed + logged, not sent).
+        # From falls back to spring.mail.username when blank (gmail/outlook reject a mismatch).
+        from: ${BIPROS_MAIL_FROM:}
+        app-base-url: ${FRONTEND_URL:http://localhost:3000}
+
   # Seeder gates. The Excel master-data loader replaces the entire resource catalog
   # on every boot (it deletes resources/contracts/etc and re-inserts from
   # seed-data/ic-pms-sample.xlsx). Default OFF here so dev iterations don't lose
@@ -107,6 +203,29 @@ bipros:
   seeders:
     excel-master:
       enabled: ${BIPROS_SEEDERS_EXCEL_MASTER_ENABLED:false}
+
+  # Disable the DBS aggregate backfill on every boot — for the fresh-environment
+  # E2E run we explicitly recompute via /v1/projects/{pid}/dbs/recompute-range
+  # after DPR import (faster + deterministic).
+  dbs:
+    # Section D (Fuel) in the Daily Balance Sheet is derived as this fraction of
+    # Section C (Machinery) cost. 0.35 = 35%. Change here + restart (no UI, no recompile).
+    fuel-machinery-cost-ratio: 0.35
+    backfill:
+      enabled: ${BIPROS_DBS_BACKFILL_ENABLED:false}
+
+  # Disable the project-team backfill seeder. It iterates over project.projects
+  # and tries to reattach the PM via ownerId; if we wipe projects mid-cycle it
+  # tries to dereference stale FK. We populate project team explicitly via API.
+  seeder:
+    project-team:
+      enabled: ${BIPROS_SEEDER_PROJECT_TEAM_ENABLED:false}
+
+  # Disable the legacy-daily-output backfill so a clean DB doesn't trigger
+  # migration of zero rows.
+  backfill:
+    legacy-daily-output:
+      enabled: ${BIPROS_BACKFILL_LEGACY_DAILY_OUTPUT_ENABLED:false}
 
   # Satellite raster storage. MinIO in dev (docker-compose.yml), AWS S3 in prod
   # via the same config keys (change endpoint + credentials).
@@ -179,13 +298,65 @@ bipros:
     # Per-module ReAct loop caps. `general` is the global / portfolio mode that
     # typically needs an extra round (list_projects → query → drill in → answer);
     # `default` covers project-scoped chats (cost / schedule / risk / dpr / evm).
+    # The verification pass consumes one round on top of any tool-calling rounds,
+    # so effective "real reasoning" budget = cap - 1. Cross-entity questions
+    # (issues per activity, walk-from-X) regularly need 6+ rounds when the model
+    # discovers + corrects + verifies, so the project cap is set generously.
     max-tool-rounds:
-      general: 8
-      default: 6
+      general: 12
+      default: 10
     conversation:
       max-messages: 32
       max-input-tokens: 200000
       ttl-days: 90
+
+  # HDS — Highway Design Standards knowledge base (PDF ingestion + vector retrieval).
+  # reranker.enabled defaults false so Phase 2 ships without the BGE cross-encoder
+  # service; retrieval falls back to RRF over BM25 + vector. Flip on after Phase 5.
+  hds:
+    storage:
+      bucket: hds
+      endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${MINIO_ACCESS_KEY:minio}
+      secret-key: ${MINIO_SECRET_KEY:minio123}
+      region: ${MINIO_REGION:us-east-1}
+      multipart-part-size-mb: 5
+    docling:
+      url: ${DOCLING_URL:http://localhost:5001}
+      timeout-minutes: 60
+    # PDF parser routing. PDFBox handles text-extractable PDFs (the common HDS case)
+    # with ~200 MB peak memory regardless of file size. Docling stays as the fallback
+    # for image/scanned PDFs that need layout + OCR analysis.
+    parser:
+      text-mode-enabled: ${HDS_PARSER_TEXT_MODE:true}
+      min-chars-per-page: 200
+      probe-sample-size: 5
+      # Any PDF this size or larger goes through PDFBox regardless of probe outcome.
+      # Set 0 to disable. Tuned for a 10-12 GiB Docker VM where Docling OOMs above
+      # ~150 MB inputs.
+      force-pdfbox-over-mb: 100
+    embedding:
+      model: text-embedding-3-large
+      dimensions: 1536
+      batch-size: 100
+      concurrency: 4
+    reranker:
+      enabled: ${HDS_RERANKER_ENABLED:false}
+      url: ${HDS_RERANKER_URL:http://localhost:8088}
+      top-k: 10
+    retrieval:
+      similarity-floor: 0.30
+      bm25-top-k: 50
+      vector-top-k: 50
+      max-chunks-per-query: 20
+      max-rounds: 2
+      cache-ttl-seconds: 3600
+    verifier:
+      max-retries: 1
+    ingestion:
+      worker-poll-seconds: 5
+      heartbeat-interval-seconds: 10
+      stale-job-after-seconds: 60
 
 # OpenAPI
 springdoc:
@@ -213,6 +384,22 @@ logging:
     org.hibernate.SQL: INFO
     org.hibernate.type.descriptor.sql.BasicBinder: INFO
     org.springframework.security: DEBUG
+
+# Disable legacy project seeders (OmanRoadProjectSeeder / KhasabDailyDataSeeder)
+# that would re-create projects 6155 / SC-180 deleted from this dev DB. Override
+# with -Dseeders.legacy.enabled=true to re-enable for a fresh seed.
+seeders:
+  legacy:
+    enabled: false
+
+# Skip AnalyticsBackfillBootstrap on every boot. The bootstrap re-runs heavy
+# backfills for any fact table that's empty (cost/evm/risk/labour) — for the
+# OMAN-only DB there's no source data in those tables, so the iteration is wasted
+# CPU and currently pegs ClickHouse during merges. Trigger backfills manually via
+# /v1/admin/analytics/backfill when needed. Set true to re-enable on-boot backfill.
+analytics:
+  bootstrap:
+    enabled: false
 
 ---
 # Production profile — activate with SPRING_PROFILES_ACTIVE=prod.

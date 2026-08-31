@@ -1,6 +1,7 @@
 package com.bipros.activity.application.service;
 
 import com.bipros.activity.application.dto.UpdateActivityRequest;
+import com.bipros.activity.application.percent.BoqProgressGuard;
 import com.bipros.activity.application.percent.PercentCompleteCalculator;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.model.ActivityRelationship;
@@ -10,6 +11,7 @@ import com.bipros.activity.domain.model.RelationshipType;
 import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.repository.ActivityStepRepository;
+import com.bipros.activity.domain.repository.ActivitySupervisorRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
@@ -39,12 +41,14 @@ import static org.mockito.Mockito.when;
 class ActivityServicePredecessorValidationTest {
 
   @Mock private ActivityRepository activityRepository;
+  @Mock private ActivitySupervisorRepository activitySupervisorRepository;
   @Mock private ActivityRelationshipRepository relationshipRepository;
   @Mock private AuditService auditService;
   @Mock private ProjectAccessGuard projectAccess;
   @Mock private ProjectRepository projectRepository;
   @Mock private PercentCompleteCalculator percentCompleteCalculator;
   @Mock private ActivityStepRepository stepRepository;
+  @Mock private BoqProgressGuard boqProgressGuard;
 
   private ActivityService service;
 
@@ -55,7 +59,7 @@ class ActivityServicePredecessorValidationTest {
 
   @BeforeEach
   void setUp() {
-    service = new ActivityService(activityRepository, relationshipRepository, auditService, projectAccess, projectRepository, percentCompleteCalculator, stepRepository);
+    service = new ActivityService(activityRepository, activitySupervisorRepository, relationshipRepository, auditService, projectAccess, projectRepository, percentCompleteCalculator, new com.bipros.activity.application.percent.ParentRollupCalculator(), stepRepository, org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class), boqProgressGuard, com.bipros.common.security.ScopeKeys::all);
 
     successorId = UUID.randomUUID();
     predecessorId = UUID.randomUUID();
@@ -106,7 +110,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           10.0, null, LocalDate.of(2026, 4, 20), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       BusinessRuleException ex = assertThrows(BusinessRuleException.class,
           () -> service.updateActivity(successorId, req));
@@ -122,7 +126,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           25.0, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertThrows(BusinessRuleException.class, () -> service.updateActivity(successorId, req));
     }
@@ -141,7 +145,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           10.0, null, LocalDate.of(2026, 4, 12), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }
@@ -160,7 +164,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           null, null, LocalDate.of(2026, 4, 20), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertThrows(BusinessRuleException.class, () -> service.updateActivity(successorId, req));
     }
@@ -176,7 +180,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           null, null, LocalDate.of(2026, 4, 18), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }
@@ -198,7 +202,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           100.0, null, null, LocalDate.of(2026, 4, 30),
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertThrows(BusinessRuleException.class, () -> service.updateActivity(successorId, req));
     }
@@ -212,7 +216,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           25.0, null, LocalDate.of(2026, 4, 20), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }
@@ -230,7 +234,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           50.0, null, LocalDate.of(2026, 4, 20), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }
@@ -246,7 +250,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           10.0, null, LocalDate.of(2026, 4, 20), null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }
@@ -258,7 +262,7 @@ class ActivityServicePredecessorValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           "Renamed", null, null, null, null, null, null, null, null,
           null, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(successorId, req));
     }

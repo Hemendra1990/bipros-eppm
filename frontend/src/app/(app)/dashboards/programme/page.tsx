@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import { dashboardApi } from "@/lib/api/dashboardApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { activityApi } from "@/lib/api/activityApi";
@@ -12,7 +12,6 @@ import Link from "next/link";
 import { ArrowLeft, Calendar, Flag, Gauge, Users } from "lucide-react";
 import type {
   ProjectResponse,
-  ActivityResponse,
   OrganisationResponse,
 } from "@/lib/types";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
@@ -20,6 +19,7 @@ import { Badge, type BadgeVariant } from "@/components/ui/badge";
 interface Milestone {
   id: string;
   name: string;
+  projectId: string;
   plannedDate: string;
   actualDate?: string;
   status: string;
@@ -72,6 +72,10 @@ function evmTone(value: number | undefined): {
   return { text: "text-burgundy", badge: "danger" };
 }
 
+// No EVM baseline (BAC/EV = 0) → SPI/CPI aren't meaningful (0 = no data, not poor
+// performance). Render neutral rather than danger-red.
+const NO_EVM_TONE = { text: "text-ash", badge: "neutral" as BadgeVariant };
+
 const formatScore = (score: number | null) =>
   score == null ? "n/a" : `${score}%`;
 
@@ -87,13 +91,19 @@ export default function ProgrammeDashboardPage() {
     queryKey: ["projects"],
     queryFn: () => projectApi.listProjects(),
   });
+  const projects = projectsData?.data?.content ?? [];
 
-  const { data: activitiesData } = useQuery({
-    queryKey: ["activities", selectedProjectId],
-    queryFn: () =>
-      selectedProjectId ? activityApi.listActivities(selectedProjectId) : null,
-    enabled: !!selectedProjectId,
-    retry: 1,
+  // Activities for every project so the milestone tracker spans all programmes.
+  // Schedule milestones are activities of type START_MILESTONE / FINISH_MILESTONE —
+  // a small subset, and there's no cross-project milestone endpoint yet, so we page a
+  // large window per project and filter client-side. Fine at portfolio scale; a
+  // dedicated endpoint is the clean long-term fix.
+  const activitiesQueries = useQueries({
+    queries: projects.map((p: ProjectResponse) => ({
+      queryKey: ["activities", "milestones", p.id],
+      queryFn: () => activityApi.listActivities(p.id, 0, 500),
+      staleTime: 60_000,
+    })),
   });
 
   const { data: epcContractorsData } = useQuery({
@@ -119,8 +129,6 @@ export default function ProgrammeDashboardPage() {
     return map;
   }, [evmRollupResponse]);
 
-  const projects = projectsData?.data?.content ?? [];
-  const activities = activitiesData?.data?.content ?? [];
   const epcContractors: OrganisationResponse[] = epcContractorsData?.data ?? [];
   const contractorPerfByCode = useMemo(() => {
     const map = new Map<string, ContractorPerformance>();
@@ -128,50 +136,32 @@ export default function ProgrammeDashboardPage() {
     return map;
   }, [contractorPerfData]);
 
-  const mockMilestones: Milestone[] = activities
-    .filter((a: ActivityResponse) => a.name?.toLowerCase()?.includes("milestone"))
-    .slice(0, 4)
-    .map((a: ActivityResponse) => ({
-      id: a.id,
-      name: a.name,
-      plannedDate: a.plannedStartDate || "",
-      actualDate: a.actualStartDate ?? undefined,
-      status: a.status || "PENDING",
-    }));
+  // Real schedule milestones across all programmes: activities typed START/FINISH_MILESTONE.
+  // START milestones track their start dates; FINISH milestones track their finish dates.
+  const MILESTONE_TYPES = new Set(["START_MILESTONE", "FINISH_MILESTONE"]);
+  const allMilestones: Milestone[] = activitiesQueries
+    .flatMap((q) => q.data?.data?.content ?? [])
+    .filter((a) => MILESTONE_TYPES.has(a.activityType ?? ""))
+    .map((a) => {
+      const isFinish = a.activityType === "FINISH_MILESTONE";
+      return {
+        id: a.id,
+        name: a.name,
+        projectId: a.projectId,
+        plannedDate: (isFinish ? a.plannedFinishDate : a.plannedStartDate) ?? "",
+        actualDate: (isFinish ? a.actualFinishDate : a.actualStartDate) ?? undefined,
+        status: a.status || "PENDING",
+      };
+    })
+    .sort((a, b) => (a.plannedDate || "").localeCompare(b.plannedDate || ""));
 
-  const milestonesToDisplay: Milestone[] =
-    mockMilestones.length > 0
-      ? mockMilestones
-      : [
-          {
-            id: "1",
-            name: "Foundation Work Complete",
-            plannedDate: "2025-03-31",
-            actualDate: "2025-03-28",
-            status: "COMPLETED",
-          },
-          {
-            id: "2",
-            name: "Structural Work 50%",
-            plannedDate: "2025-06-30",
-            actualDate: undefined,
-            status: "IN_PROGRESS",
-          },
-          {
-            id: "3",
-            name: "MEP Installation Start",
-            plannedDate: "2025-07-15",
-            actualDate: undefined,
-            status: "PENDING",
-          },
-          {
-            id: "4",
-            name: "Internal Finishes",
-            plannedDate: "2025-09-30",
-            actualDate: undefined,
-            status: "PENDING",
-          },
-        ];
+  // Selecting a project card drills the tracker into that project; otherwise show all.
+  const displayedMilestones = selectedProjectId
+    ? allMilestones.filter((m) => m.projectId === selectedProjectId)
+    : allMilestones;
+  const projectNameById = new Map(
+    projects.map((p: ProjectResponse) => [p.id, p.name] as const),
+  );
 
   const contractors: ContractorScorecard[] = epcContractors.map((o) => {
     const perf = contractorPerfByCode.get(o.code);
@@ -184,17 +174,23 @@ export default function ProgrammeDashboardPage() {
     };
   });
 
-  // Aggregate KPI strip
+  // Aggregate KPI strip. Average only EVM-active projects (a cost baseline AND earned
+  // work) so projects with no EVM don't dilute the mean toward zero.
   const evmRows = Array.from(evmByProjectId.values());
-  const avgSpi = evmRows.length
-    ? evmRows.reduce((s, r) => s + (r.spi ?? 0), 0) / evmRows.length
+  const evmActiveRows = evmRows.filter((r) => (r.bac ?? 0) > 0 && (r.ev ?? 0) > 0);
+  const avgSpi = evmActiveRows.length
+    ? evmActiveRows.reduce((s, r) => s + (r.spi ?? 0), 0) / evmActiveRows.length
     : null;
-  const avgCpi = evmRows.length
-    ? evmRows.reduce((s, r) => s + (r.cpi ?? 0), 0) / evmRows.length
+  const avgCpi = evmActiveRows.length
+    ? evmActiveRows.reduce((s, r) => s + (r.cpi ?? 0), 0) / evmActiveRows.length
     : null;
-  const milestoneCompleted = milestonesToDisplay.filter(
+  const activeProjectCount = projects.filter(
+    (p: ProjectResponse) => p.status === "ACTIVE"
+  ).length;
+  const milestoneCompleted = allMilestones.filter(
     (m) => m.status === "COMPLETED"
   ).length;
+  const milestoneTotal = allMilestones.length;
 
   if (isLoadingConfig) {
     return (
@@ -233,7 +229,7 @@ export default function ProgrammeDashboardPage() {
 
       {/* KPI strip */}
       <div className="mb-7 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
-        <KpiCard label="Active programmes" value={projects.length} />
+        <KpiCard label="Active programmes" value={activeProjectCount} />
         <KpiCard
           label="Avg SPI"
           value={avgSpi != null ? avgSpi.toFixed(2) : "—"}
@@ -246,7 +242,7 @@ export default function ProgrammeDashboardPage() {
         />
         <KpiCard
           label="Milestones met"
-          value={`${milestoneCompleted}/${milestonesToDisplay.length}`}
+          value={milestoneTotal > 0 ? `${milestoneCompleted}/${milestoneTotal}` : "—"}
           accent="gold"
         />
       </div>
@@ -266,8 +262,11 @@ export default function ProgrammeDashboardPage() {
           ) : (
             projects.map((project: ProjectResponse) => {
               const evm = evmByProjectId.get(project.id);
-              const spiTone = evmTone(evm?.spi);
-              const cpiTone = evmTone(evm?.cpi);
+              // "EVM-active" = has a cost baseline AND earned work. Otherwise SPI/CPI are
+              // not meaningful (0 = no baseline, not poor performance) → render neutral —.
+              const hasEvm = !!evm && (evm.bac ?? 0) > 0 && (evm.ev ?? 0) > 0;
+              const spiTone = hasEvm ? evmTone(evm!.spi) : NO_EVM_TONE;
+              const cpiTone = hasEvm ? evmTone(evm!.cpi) : NO_EVM_TONE;
               const isSelected = selectedProjectId === project.id;
               return (
                 <button
@@ -293,12 +292,12 @@ export default function ProgrammeDashboardPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <EvmStat
                       label="SPI"
-                      value={evm ? evm.spi.toFixed(2) : "—"}
+                      value={hasEvm ? evm!.spi.toFixed(2) : "—"}
                       tone={spiTone.text}
                     />
                     <EvmStat
                       label="CPI"
-                      value={evm ? evm.cpi.toFixed(2) : "—"}
+                      value={hasEvm ? evm!.cpi.toFixed(2) : "—"}
                       tone={cpiTone.text}
                     />
                   </div>
@@ -318,14 +317,18 @@ export default function ProgrammeDashboardPage() {
             icon={<Flag size={14} strokeWidth={1.75} />}
           />
           <div className="overflow-hidden rounded-2xl border border-hairline bg-paper">
+            {displayedMilestones.length === 0 ? (
+              <EmptyState label="No milestones tracked yet" />
+            ) : (
             <ol className="relative divide-y divide-hairline">
-              {milestonesToDisplay.map((milestone, i) => {
+              {displayedMilestones.map((milestone, i) => {
                 const planned = milestone.plannedDate
                   ? new Date(milestone.plannedDate).toLocaleDateString()
                   : "—";
                 const actual = milestone.actualDate
                   ? new Date(milestone.actualDate).toLocaleDateString()
                   : null;
+                const projectName = projectNameById.get(milestone.projectId);
                 return (
                   <li key={milestone.id} className="relative p-5 pl-12">
                     {/* Timeline dot + line */}
@@ -339,14 +342,19 @@ export default function ProgrammeDashboardPage() {
                             : "bg-ash/60"
                       }`}
                     />
-                    {i < milestonesToDisplay.length - 1 && (
+                    {i < displayedMilestones.length - 1 && (
                       <span
                         aria-hidden
                         className="absolute left-[24px] top-9 bottom-0 w-px bg-hairline"
                       />
                     )}
                     <div className="mb-1.5 flex items-start justify-between gap-2">
-                      <h3 className="font-semibold text-charcoal">{milestone.name}</h3>
+                      <div>
+                        <h3 className="font-semibold text-charcoal">{milestone.name}</h3>
+                        {projectName && (
+                          <div className="text-[11px] text-slate">{projectName}</div>
+                        )}
+                      </div>
                       <Badge variant={milestoneBadge(milestone.status)} withDot>
                         {milestone.status.replace("_", " ")}
                       </Badge>
@@ -366,6 +374,7 @@ export default function ProgrammeDashboardPage() {
                 );
               })}
             </ol>
+            )}
           </div>
         </section>
 

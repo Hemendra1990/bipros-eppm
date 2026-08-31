@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, lazy, useState, useMemo } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import { getErrorMessage } from "@/lib/utils/error";
+import toast from "react-hot-toast";
 import { activityNotifications, notificationHelpers } from "@/lib/notificationHelpers";
 import { PageHeader } from "@/components/common/PageHeader";
 import { activityApi } from "@/lib/api/activityApi";
@@ -12,22 +15,48 @@ import { workActivityApi } from "@/lib/api/workActivityApi";
 import type { WorkActivityResponse } from "@/lib/api/workActivityApi";
 import { calendarApi, type CalendarResponse } from "@/lib/api/calendarApi";
 import { projectApi } from "@/lib/api/projectApi";
+import { boqApi } from "@/lib/api/boqApi";
 import { resourceApi } from "@/lib/api/resourceApi";
+import { RoleDemandOverview } from "@/components/activity/RoleDemandOverview";
+import { RoleDemandSections } from "@/components/activity/RoleDemandSections";
+import { WorkActivityCoverageChip } from "@/components/activity/WorkActivityCoverageChip";
+import { LinkOrCreateWorkActivityDialog, type DialogMode } from "@/components/activity/LinkOrCreateWorkActivityDialog";
+import { useActivityMasterStatus } from "@/lib/hooks/useActivityMasterStatus";
 import type { ResourceAssignmentResponse } from "@/lib/api/resourceApi";
 import { projectResourceApi } from "@/lib/api/projectResourceApi";
 import type { ProjectResourceResponse } from "@/lib/api/projectResourceApi";
+import { userApi } from "@/lib/api/userApi";
 import { costApi } from "@/lib/api/costApi";
 import type { CostAccount } from "@/lib/api/costApi";
 import { evmApi } from "@/lib/api/evmApi";
 import type { ActivityEvmResponse } from "@/lib/api/evmApi";
 import { activityStepApi } from "@/lib/api/activityStepApi";
+import { useAuthStore } from "@/lib/state/store";
 import type { ActivityStepResponse, CreateActivityStepRequest } from "@/lib/api/activityStepApi";
-import { SearchableSelect } from "@/components/common/SearchableSelect";
+import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { ActivityDependencies } from "@/components/activity/ActivityDependencies";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ActivityAssignmentsByRole } from "@/components/activity/ActivityAssignmentsByRole";
-import { UdfSection } from "@/components/udf/UdfSection";
+import { ActivityEditStatusBadge } from "@/components/activity/ActivityEditStatusBadge";
+import { ResourceAssignmentForm } from "@/components/resource/ResourceAssignmentForm";
+import { SetSupervisorDialog } from "@/components/activity/SetSupervisorDialog";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import type { ExpenseResponse } from "@/lib/types";
+import { AlertTriangle, Lock, RefreshCw, Unlock } from "lucide-react";
+import { useScheduleStaleStore } from "@/lib/state/scheduleStaleStore";
+
+// Heavy children deferred so the initial paint of the detail page is cheap —
+// when arriving here from /activities (especially WBS Tree view) the router
+// transition can starve out behind synchronous render of these subtrees, which
+// shows as Chrome's "Page Unresponsive" dialog.
+const ActivityDependencies = lazy(() =>
+  import("@/components/activity/ActivityDependencies").then((m) => ({
+    default: m.ActivityDependencies,
+  })),
+);
+const UdfSection = lazy(() =>
+  import("@/components/udf/UdfSection").then((m) => ({ default: m.UdfSection })),
+);
 
 const CONSTRAINT_TYPE_LABELS: Record<ConstraintType, string> = {
   START_ON: "Start On",
@@ -57,12 +86,23 @@ type EditData = Omit<UpdateActivityRequest, "originalDuration" | "percentComplet
 
 export default function ActivityDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const projectId = params.projectId as string;
   const activityId = params.activityId as string;
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canEditActivity = hasPermission("ACTIVITY.UPDATE");
+  const canLockActivity = hasPermission("ACTIVITY.LOCK");
+  const canUnlockActivity = hasPermission("ACTIVITY.UNLOCK");
+  const markScheduleStale = useScheduleStaleStore((s) => s.markScheduleStale);
 
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState("");
+  /**
+   * Confirm dialog for the lock / unlock action. Single piece of state because the two
+   * actions are mutually exclusive (you can only lock something that's DRAFT and vice versa).
+   */
+  const [lockConfirm, setLockConfirm] = useState<"lock" | "unlock" | null>(null);
 
   const [editData, setEditData] = useState<EditData>({
     name: "",
@@ -73,6 +113,19 @@ export default function ActivityDetailPage() {
     workActivityId: "",
     calendarId: "",
     costAccountId: null,
+    preliminary: false,
+  });
+
+  // Hierarchy (D10/D11): parent edited separately from EditForm — "" = top-level. On save,
+  // a change maps to parentActivityId (set) or clearParent (detach).
+  const [parentEdit, setParentEdit] = useState<string>("");
+
+  // BOQ link (D8/§5.3): edited separately from EditForm. "" = unlinked; plannedQty as text.
+  // operationId (Stage 4): mandatory when the picked line is split into operations.
+  const [boqEdit, setBoqEdit] = useState<{ itemId: string; operationId: string; plannedQty: string }>({
+    itemId: "",
+    operationId: "",
+    plannedQty: "",
   });
 
   const [usePert, setUsePert] = useState(false);
@@ -97,6 +150,51 @@ export default function ActivityDetailPage() {
   });
   const workActivities: WorkActivityResponse[] = workActivitiesData?.data ?? [];
 
+  // Parent candidates (hierarchy D10) — any other project activity; the backend rejects
+  // cycles, cross-project parents and parents holding schedule links. Also used (always on)
+  // to detect whether THIS activity is a parent, which hides DPR affordances.
+  const { data: parentCandidatesData } = useQuery({
+    queryKey: ["activities", projectId, "all-for-parent-picker"],
+    queryFn: () => activityApi.listActivities(projectId, 0, 1000),
+  });
+  const parentOptions = (parentCandidatesData?.data?.content ?? [])
+    .filter((a) => a.id !== activityId)
+    .map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }));
+  const isParentActivity = (parentCandidatesData?.data?.content ?? []).some(
+    (a) => a.parentActivityId === activityId,
+  );
+
+  // BOQ lines for the link picker (design D8) + the client-side WBS-divergence warning (D13).
+  const { data: boqListData } = useQuery({
+    queryKey: ["boq", projectId],
+    queryFn: () => boqApi.list(projectId),
+    enabled: isEditing,
+  });
+  const boqItems = boqListData?.data?.items ?? [];
+  const boqLinkOptions = boqItems
+    .slice()
+    .sort((a, b) => a.itemNo.localeCompare(b.itemNo, undefined, { numeric: true }))
+    .map((b) => ({ value: b.id, label: `${b.itemNo} — ${b.description}` }));
+  const pickedBoqLine = boqItems.find((b) => b.id === boqEdit.itemId) ?? null;
+  const boqWbsDiverges =
+    !!pickedBoqLine?.wbsNodeId &&
+    !!activity?.wbsNodeId &&
+    pickedBoqLine.wbsNodeId !== activity.wbsNodeId;
+
+  // Stage 4: a split line demands an operation (L2) — fetch its operations for the picker.
+  const pickedLineIsSplit = !!pickedBoqLine?.splitMode;
+  const { data: pickedOpsData } = useQuery({
+    queryKey: ["boq-operations", projectId, boqEdit.itemId],
+    queryFn: () => boqApi.listOperations(projectId, boqEdit.itemId),
+    enabled: isEditing && pickedLineIsSplit && !!boqEdit.itemId,
+  });
+  const operationOptions: SelectOption[] = (pickedOpsData?.data ?? [])
+    .filter((op) => !op.isLegacy && !!op.id)
+    .map((op) => ({
+      value: op.id as string,
+      label: `${op.opCode} — ${op.name}${op.isMeasure ? " (measurement)" : ""}`,
+    }));
+
   const { data: costAccountsData } = useQuery({
     queryKey: ["cost-accounts"],
     queryFn: () => costApi.listCostAccounts(),
@@ -108,6 +206,19 @@ export default function ActivityDetailPage() {
     queryFn: () => calendarApi.listCalendars(),
   });
   const projectCalendars = calendarsData?.data ?? [];
+
+  // Phase 4.4 RBAC: supervisor picker is sourced from the User pool, scoped to the
+  // supervisor-eligible roles. The legacy project resource pool is no longer the source
+  // of truth — see SetSupervisorDialog for the canonical mirror.
+  const { data: supervisorUsers, isLoading: isLoadingSupervisorPool } = useQuery({
+    queryKey: ["users-by-role", "supervisor-pool"],
+    queryFn: () =>
+      userApi.listByRoles(["SUPERVISOR", "FOREMAN", "SITE_ENGINEER", "SITE_MANAGER"]),
+  });
+  const supervisorOptions = (supervisorUsers ?? []).map((u) => ({
+    value: u.id,
+    label: u.employeeCode ? `${u.employeeCode} — ${u.name}` : u.name,
+  }));
 
   const { data: projectData } = useQuery({
     queryKey: ["project", projectId],
@@ -124,6 +235,7 @@ export default function ActivityDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity", projectId, activityId] });
       queryClient.invalidateQueries({ queryKey: ["activities", projectId] });
+      markScheduleStale(projectId);
       setIsEditing(false);
       setError("");
       activityNotifications.updated();
@@ -132,6 +244,42 @@ export default function ActivityDetailPage() {
       const msg = getErrorMessage(err, "Failed to update activity");
       setError(msg);
       notificationHelpers.handleApiError(err, "Failed to update activity");
+    },
+  });
+
+  /**
+   * Edit-lifecycle toggles. Lock makes inputs read-only and unblocks DPR submission; unlock
+   * does the reverse. The backend rejects {@code UpdateActivityRequest} against a LOCKED row
+   * with {@code ACTIVITY_LOCKED}, so we mirror that gate on the client by disabling inputs.
+   */
+  const lockMutation = useMutation({
+    mutationFn: () => activityApi.lock(projectId, activityId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity", projectId, activityId] });
+      queryClient.invalidateQueries({ queryKey: ["activities", projectId] });
+      setLockConfirm(null);
+      setIsEditing(false);
+      setError("");
+    },
+    onError: (err: unknown) => {
+      setError(getErrorMessage(err, "Failed to lock activity"));
+      notificationHelpers.handleApiError(err, "Failed to lock activity");
+      setLockConfirm(null);
+    },
+  });
+
+  const unlockMutation = useMutation({
+    mutationFn: () => activityApi.unlock(projectId, activityId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity", projectId, activityId] });
+      queryClient.invalidateQueries({ queryKey: ["activities", projectId] });
+      setLockConfirm(null);
+      setError("");
+    },
+    onError: (err: unknown) => {
+      setError(getErrorMessage(err, "Failed to unlock activity"));
+      notificationHelpers.handleApiError(err, "Failed to unlock activity");
+      setLockConfirm(null);
     },
   });
 
@@ -180,7 +328,15 @@ export default function ActivityDetailPage() {
     // so flipping DURATION→PHYSICAL in the same save call lets us include percentComplete.
     const effectiveType = editData.percentCompleteType ?? activity?.percentCompleteType ?? "DURATION";
     const isManualPercent = effectiveType === "PHYSICAL";
-    const { percentComplete: _editPct, ...rest } = editData;
+    // Phase 4.4: supervisor is owned by `PUT .../{activityId}/supervisor` (User-based RBAC),
+    // not the generic activity-update endpoint. Strip the picker fields off the body so they
+    // don't reach the deprecated UpdateActivityRequest path on the backend.
+    const {
+      percentComplete: _editPct,
+      supervisorUserId: nextSupervisorUserId,
+      supervisorUserName: nextSupervisorUserName,
+      ...rest
+    } = editData;
     const sanitizedData: UpdateActivityRequest = {
       ...rest,
       originalDuration: editData.originalDuration === "" ? 0 : editData.originalDuration,
@@ -188,11 +344,73 @@ export default function ActivityDetailPage() {
         ? { percentComplete: editData.percentComplete === "" ? 0 : editData.percentComplete }
         : {}),
     };
+
+    // Hierarchy: only send the parent fields when the selection actually changed —
+    // null parentActivityId means "unchanged" on the backend, detach needs clearParent.
+    const oldParent = activity?.parentActivityId ?? "";
+    if (parentEdit !== oldParent) {
+      if (parentEdit) {
+        sanitizedData.parentActivityId = parentEdit;
+      } else {
+        sanitizedData.clearParent = true;
+      }
+    }
+
+    // BOQ link: same PATCH convention — send only what changed; unlink needs the explicit flag.
+    const oldBoq = activity?.boqItemId ?? "";
+    if (boqEdit.itemId !== oldBoq) {
+      if (boqEdit.itemId) {
+        sanitizedData.boqItemId = boqEdit.itemId;
+      } else {
+        sanitizedData.clearBoqLink = true;
+      }
+    }
+    // Stage 4 (L2): a split line demands an operation; the server rejects DPRs without one.
+    if (boqEdit.itemId && pickedLineIsSplit && !boqEdit.operationId) {
+      setError("This BOQ line is split into operations — pick the one this activity executes");
+      return;
+    }
+    const oldOperation = activity?.boqOperationId ?? "";
+    if (boqEdit.itemId && boqEdit.operationId && boqEdit.operationId !== oldOperation) {
+      sanitizedData.boqOperationId = boqEdit.operationId;
+    }
+    const oldPlanned = activity?.plannedQty != null ? String(activity.plannedQty) : "";
+    if (boqEdit.itemId && boqEdit.plannedQty !== oldPlanned && boqEdit.plannedQty !== "") {
+      const parsed = Number(boqEdit.plannedQty);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        setError("Planned quantity must be a number greater than zero");
+        return;
+      }
+      sanitizedData.plannedQty = parsed;
+    }
+
+    const supervisorChanged =
+      (nextSupervisorUserId ?? null) !== (activity?.responsibleResourceId ?? null);
+    if (supervisorChanged) {
+      try {
+        await activityApi.setSupervisor(projectId, activityId, {
+          supervisorUserId: nextSupervisorUserId ?? null,
+          supervisorName: nextSupervisorUserName ?? null,
+        });
+      } catch (err: unknown) {
+        const msg = getErrorMessage(err, "Failed to update supervisor");
+        setError(msg);
+        notificationHelpers.handleApiError(err, "Failed to update supervisor");
+        return;
+      }
+    }
+
     updateMutation.mutate(sanitizedData);
   };
 
   const handleStartEdit = () => {
     if (activity) {
+      setParentEdit(activity.parentActivityId ?? "");
+      setBoqEdit({
+        itemId: activity.boqItemId ?? "",
+        operationId: activity.boqOperationId ?? "",
+        plannedQty: activity.plannedQty != null ? String(activity.plannedQty) : "",
+      });
       setEditData({
         name: activity.name,
         percentComplete: activity.percentComplete,
@@ -207,6 +425,9 @@ export default function ActivityDetailPage() {
         workActivityId: activity.workActivityId || "",
         calendarId: activity.calendarId || "",
         costAccountId: activity.costAccountId ?? null,
+        preliminary: activity.preliminary ?? false,
+        supervisorUserId: activity.responsibleResourceId ?? null,
+        supervisorUserName: activity.responsibleResourceName ?? null,
         primaryConstraintType: activity.primaryConstraintType ?? undefined,
         primaryConstraintDate: activity.primaryConstraintDate || "",
         secondaryConstraintType: activity.secondaryConstraintType ?? undefined,
@@ -220,6 +441,15 @@ export default function ActivityDetailPage() {
     setEditData((prev) => ({ ...prev, workActivityId: value }));
   };
 
+  const handleSupervisorChange = (value: string) => {
+    const picked = (supervisorUsers ?? []).find((u) => u.id === value);
+    setEditData((prev) => ({
+      ...prev,
+      supervisorUserId: value || null,
+      supervisorUserName: picked?.name ?? null,
+    }));
+  };
+
   if (isLoading) {
     return <div className="text-center text-text-muted">Loading activity...</div>;
   }
@@ -228,33 +458,212 @@ export default function ActivityDetailPage() {
     return <div className="text-center text-red-500">Activity not found</div>;
   }
 
+  // LOCKED activities accept DPRs but reject manual edits. We mirror that backend rule by
+  // disabling all input fields and the Save button below. The auth-level {@code canEditActivity}
+  // gate still applies — a viewer never gets to edit regardless of lock state.
+  const isLocked = activity.editStatus === "LOCKED";
+
   return (
     <div>
       <PageHeader
         title={activity.code}
         description={activity.name}
         actions={
-          <button
-            onClick={handleStartEdit}
-            disabled={isEditing}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
-          >
-            {isEditing ? "Editing..." : "Edit"}
-          </button>
+          <div className="flex items-center gap-2">
+            <ActivityEditStatusBadge editStatus={activity.editStatus} />
+            {isLocked && !isParentActivity && (
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(`/projects/${projectId}/dpr?new=1&activityId=${activityId}`)
+                }
+                className="rounded-md border border-border bg-surface px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-hover"
+                title="Create a Daily Progress Report pre-filled with this activity"
+              >
+                Create DPR
+              </button>
+            )}
+            {isParentActivity && (
+              <span
+                className="rounded-md border border-border bg-surface-hover px-3 py-1.5 text-xs text-text-secondary"
+                title="Grouping activity — % rolls up from its children; DPRs and the resource plan live on the children"
+              >
+                Grouping · rolled up
+              </span>
+            )}
+            {isLocked && canUnlockActivity && (
+              <button
+                type="button"
+                onClick={() => setLockConfirm("unlock")}
+                disabled={unlockMutation.isPending}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-text-primary hover:bg-surface-hover disabled:opacity-60"
+                title="Unlock this activity to re-enable manual edits"
+              >
+                <Unlock size={14} />
+                {unlockMutation.isPending ? "Unlocking…" : "Unlock"}
+              </button>
+            )}
+            {!isLocked && canLockActivity && (
+              <button
+                type="button"
+                onClick={() => setLockConfirm("lock")}
+                disabled={lockMutation.isPending}
+                className="inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-2 text-sm font-medium text-text-primary hover:bg-warning/80 disabled:opacity-60"
+                title="Lock this activity so DPRs can be submitted against it"
+              >
+                <Lock size={14} />
+                {lockMutation.isPending ? "Locking…" : "Lock"}
+              </button>
+            )}
+            {canEditActivity && (
+              <button
+                onClick={handleStartEdit}
+                disabled={isEditing || isLocked}
+                title={isLocked ? "Unlock the activity to edit fields" : undefined}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border disabled:cursor-not-allowed"
+              >
+                {isEditing ? "Editing..." : "Edit"}
+              </button>
+            )}
+          </div>
         }
       />
+
+      {isLocked && (
+        <div className="mb-4 flex items-center gap-2 rounded-md border border-border bg-surface-hover/30 px-4 py-3 text-sm text-text-secondary">
+          <Lock size={16} className="shrink-0 text-text-muted" />
+          <span>
+            <strong className="text-text-primary">This activity is locked.</strong> Click Unlock to
+            edit.
+          </span>
+        </div>
+      )}
+
+      {!isLocked && (
+        <div className="mb-4 flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
+          <AlertTriangle size={16} className="shrink-0" />
+          <span>
+            <strong>Draft</strong> — inputs are editable but DPRs can&apos;t be submitted until you
+            lock this activity.
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 rounded-md bg-danger/10 p-4 text-sm text-danger">{error}</div>
       )}
 
+      <ConfirmDialog
+        open={lockConfirm === "lock"}
+        title="Lock this activity?"
+        message="Lock this activity? Manual edits will be disabled until you unlock it. DPRs can be submitted against locked activities."
+        confirmLabel={lockMutation.isPending ? "Locking…" : "Lock"}
+        variant="warning"
+        onConfirm={() => lockMutation.mutate()}
+        onCancel={() => setLockConfirm(null)}
+      />
+      <ConfirmDialog
+        open={lockConfirm === "unlock"}
+        title="Unlock this activity?"
+        message="Unlock this activity? Inputs will become editable again, but DPRs can't be submitted while it's in Draft."
+        confirmLabel={unlockMutation.isPending ? "Unlocking…" : "Unlock"}
+        variant="info"
+        onConfirm={() => unlockMutation.mutate()}
+        onCancel={() => setLockConfirm(null)}
+      />
+
       {isEditing ? (
+        <>
+        {/* Hierarchy (D10/D11): parent lives outside EditForm — clearing detaches (top-level),
+            picking re-nests and regenerates the dotted code for this activity + descendants. */}
+        <div className="mb-4 rounded-lg border border-border bg-surface/50 p-4 shadow-sm">
+          <label className="block text-sm font-medium text-text-secondary">Parent activity</label>
+          <div className="mt-1 max-w-xl">
+            <SearchableSelect
+              value={parentEdit}
+              onChange={setParentEdit}
+              placeholder="— none (top-level) —"
+              options={parentOptions}
+            />
+          </div>
+          <p className="mt-1 text-xs text-text-muted">
+            Moving this activity re-generates its code as parentCode.segment (descendants follow).
+            Parents are grouping nodes — they take no DPRs, resource plan or schedule links.
+          </p>
+        </div>
+        {/* BOQ link (D8/§5.3): which contract line this activity executes. DPRs inherit it. */}
+        <div className="mb-4 rounded-lg border border-border bg-surface/50 p-4 shadow-sm">
+          <label className="block text-sm font-medium text-text-secondary">BOQ link</label>
+          <div className="mt-1 grid gap-4 md:grid-cols-2">
+            <div>
+              <SearchableSelect
+                value={boqEdit.itemId}
+                // Changing the line resets any operation of the OLD line (Stage 4).
+                onChange={(v) => setBoqEdit((prev) => ({ ...prev, itemId: v, operationId: "" }))}
+                placeholder="— not linked —"
+                options={boqLinkOptions}
+                disabled={isParentActivity}
+              />
+              {isParentActivity && (
+                <p className="mt-1 text-xs text-text-muted">
+                  Parents carry no BOQ link — link the child activities instead.
+                </p>
+              )}
+              {boqWbsDiverges && (
+                <p className="mt-1 text-xs text-warning">
+                  This BOQ line is tagged to a different WBS node than the activity — allowed,
+                  but check it is intentional.
+                </p>
+              )}
+              {pickedLineIsSplit && (
+                <div className="mt-2">
+                  <SearchableSelect
+                    value={boqEdit.operationId}
+                    onChange={(v) => setBoqEdit((prev) => ({ ...prev, operationId: v }))}
+                    placeholder="— pick the operation (required) —"
+                    options={operationOptions}
+                    disabled={isParentActivity}
+                  />
+                  <p className="mt-1 text-xs text-text-muted">
+                    This line is split into operations — pick the one this activity executes.
+                    DPRs cannot be filed until it is set.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                value={boqEdit.plannedQty}
+                onChange={(e) => setBoqEdit((prev) => ({ ...prev, plannedQty: e.target.value }))}
+                placeholder="Planned qty (defaults to the line's BOQ qty)"
+                className="block w-full rounded-md border border-border px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                disabled={!boqEdit.itemId || isParentActivity}
+              />
+              <p className="mt-1 text-xs text-text-muted">
+                This activity&apos;s own workdone target{pickedBoqLine?.unit ? ` (${pickedBoqLine.unit})` : ""}.
+                Set it when several activities share one BOQ line so each shows an honest %.
+              </p>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-text-muted">
+            Once linked, DPRs for this activity inherit the BOQ item automatically — the
+            supervisor stops picking it on the DPR form.
+          </p>
+        </div>
         <EditForm
           data={editData}
           onChange={handleEditChange}
           onSubmit={handleSaveEdit}
           onCancel={() => setIsEditing(false)}
           isSubmitting={updateMutation.isPending}
+          // Defense-in-depth: even though the Edit button is disabled while locked, if the
+          // activity flips to LOCKED while this form is open we still want every input to
+          // refuse keystrokes — otherwise the user will spend a minute typing and then have
+          // the server reject the save with {@code ACTIVITY_LOCKED}.
+          disabled={!canEditActivity || isLocked}
           usePert={usePert}
           onTogglePert={() => setUsePert(!usePert)}
           pertData={pertData}
@@ -266,7 +675,14 @@ export default function ActivityDetailPage() {
           projectCalendarId={projectCalendarId}
           costAccounts={costAccounts}
           percentCompleteType={activity.percentCompleteType}
+          supervisorOptions={supervisorOptions}
+          isLoadingSupervisorPool={isLoadingSupervisorPool}
+          onSupervisorChange={handleSupervisorChange}
+          onPreliminaryChange={(checked) =>
+            setEditData((prev) => ({ ...prev, preliminary: checked }))
+          }
         />
+        </>
       ) : (
         <ViewMode activity={activity} projectId={projectId} workActivity={linkedWorkActivity} projectCalendars={projectCalendars} projectCalendarId={projectCalendarId} costAccounts={costAccounts} />
       )}
@@ -335,6 +751,22 @@ function ViewMode({
     }
   }
 
+  const queryClient = useQueryClient();
+  const { money } = useProjectCurrency();
+  const isLocked = activity.editStatus === "LOCKED";
+
+  const recomputeMutation = useMutation({
+    mutationFn: () => resourceApi.recomputeProjectAssignmentCosts(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["role-assignments", projectId, activity.id] });
+      queryClient.invalidateQueries({ queryKey: ["activity", projectId, activity.id] });
+      toast.success("Resource costs recomputed");
+    },
+    onError: (err) => {
+      notificationHelpers.handleApiError(err, "Failed to recompute costs");
+    },
+  });
+
   const { data: assignmentsData } = useQuery({
     queryKey: ["resource-assignments", "activity", projectId, activity.id],
     queryFn: () => resourceApi.getAssignmentsByActivity(projectId, activity.id),
@@ -344,6 +776,8 @@ function ViewMode({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogAssignment, setDialogAssignment] = useState<ResourceAssignmentResponse | null>(null);
   const [dialogMode, setDialogMode] = useState<"staff" | "swap">("staff");
+  const [showAssignForm, setShowAssignForm] = useState(false);
+  const [supervisorDialogOpen, setSupervisorDialogOpen] = useState(false);
 
   const openStaffDialog = (assignment: ResourceAssignmentResponse) => {
     setDialogAssignment(assignment);
@@ -361,7 +795,10 @@ function ViewMode({
     queryKey: ["expenses", "activity", projectId, activity.id],
     queryFn: () => costApi.getActivityExpenses(projectId, activity.id),
   });
-  const activityExpenses: ExpenseResponse[] = expensesData?.data ?? [];
+  const activityExpenses: ExpenseResponse[] = useMemo(
+    () => expensesData?.data ?? [],
+    [expensesData]
+  );
 
   const { data: evmData, isLoading: isEvmLoading } = useQuery({
     queryKey: ["evm", "activity", projectId, activity.id],
@@ -373,8 +810,78 @@ function ViewMode({
   const totalActualCost = assignments.reduce((sum, a) => sum + (a.actualCost ?? 0), 0);
   const totalExpenses = activityExpenses.reduce((sum, e) => sum + (e.actualCost ?? 0), 0);
 
-  const fmt = (n: number) =>
-    n.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
+  const fmt = (n: number) => money(n, { decimals: 0 });
+
+  type ExpenseRow =
+    | ExpenseResponse
+    | {
+        id: "__TOTAL__";
+        description: string;
+        expenseCategory: string;
+        actualStartDate: string | null;
+        actualCost: number;
+      };
+
+  const expenseColumns = useMemo<ColumnDef<ExpenseRow>[]>(() => [
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: ({ row }) => {
+        const isTotal = row.original.id === "__TOTAL__";
+        return (
+          <span className={isTotal ? "text-text-secondary font-semibold" : "text-text-primary"}>
+            {row.original.description}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "expenseCategory",
+      header: "Category",
+      cell: ({ row }) => (
+        <span className="text-text-secondary">{row.original.expenseCategory}</span>
+      ),
+    },
+    {
+      accessorKey: "actualStartDate",
+      header: "Date",
+      cell: ({ row }) => (
+        <span className="text-text-secondary">
+          {row.original.actualStartDate ?? "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "actualCost",
+      header: "Amount",
+      cell: ({ row }) => {
+        const isTotal = row.original.id === "__TOTAL__";
+        return (
+          <span className={`text-right block ${isTotal ? "text-accent font-semibold" : "text-text-primary"}`}>
+            {fmt(row.original.actualCost ?? 0)}
+          </span>
+        );
+      },
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [money]);
+
+  const expenseTableData = useMemo<ExpenseRow[]>(
+    () =>
+      activityExpenses.length > 0
+        ? [
+            ...activityExpenses,
+            {
+              id: "__TOTAL__",
+              description: "Total Expenses",
+              expenseCategory: "",
+              actualStartDate: null,
+              actualCost: totalExpenses,
+            } as ExpenseRow,
+          ]
+        : [],
+    [activityExpenses, totalExpenses]
+  );
 
   return (
     <div className="space-y-5">
@@ -411,6 +918,49 @@ function ViewMode({
         {stat("Critical", activity.isCritical ? "Yes" : "No", activity.isCritical ? "danger" : "success")}
       </div>
 
+      {/* Supervisor */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        {stat(
+          "Supervisor",
+          <span className="flex items-center gap-2">
+            <span
+              className="truncate"
+              title={
+                activity.supervisors && activity.supervisors.length > 1
+                  ? activity.supervisors.map((s) => s.userName ?? s.userId).join(", ")
+                  : undefined
+              }
+            >
+              {(() => {
+                const svs = activity.supervisors;
+                if (svs && svs.length > 0) {
+                  const first = svs[0].userName ?? svs[0].userId;
+                  if (svs.length === 1) return first;
+                  return `${first} +${svs.length - 1} more`;
+                }
+                return activity.responsibleResourceName ?? (
+                  <span className="text-text-muted text-sm font-normal">— not set —</span>
+                );
+              })()}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSupervisorDialogOpen(true)}
+              className="rounded-md border border-border px-2 py-0.5 text-xs font-medium text-text-secondary hover:bg-surface-hover"
+            >
+              Change
+            </button>
+          </span>
+        )}
+      </div>
+
+      <SetSupervisorDialog
+        open={supervisorDialogOpen}
+        onClose={() => setSupervisorDialogOpen(false)}
+        projectId={projectId}
+        activity={activity}
+      />
+
       {/* Dates Panel */}
       <div className="rounded-lg border border-border bg-surface/50 p-4">
         <h3 className="text-sm font-semibold text-text-primary mb-2">Dates</h3>
@@ -425,6 +975,38 @@ function ViewMode({
           {datePair("Actual Finish", activity.actualFinishDate, "Not finished")}
         </div>
       </div>
+
+      {/* Resource Demand — full editor (Manpower / Equipment / Material) plus read-only rollup,
+          mirroring ActivityDetailDrawer so users can manage demand from either surface. */}
+      <section className="rounded-lg border border-border bg-surface/50 p-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-text-primary">Resource Demand</h3>
+          <button
+            type="button"
+            onClick={() => recomputeMutation.mutate()}
+            disabled={recomputeMutation.isPending}
+            title="Recompute planned costs from current role rates and project overrides."
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-hover px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-active disabled:opacity-60"
+          >
+            <RefreshCw size={14} className={recomputeMutation.isPending ? "animate-spin" : ""} />
+            {recomputeMutation.isPending ? "Recomputing…" : "Recompute"}
+          </button>
+        </div>
+
+        <RoleDemandSections
+          projectId={projectId}
+          activityId={activity.id}
+          locked={isLocked}
+        />
+
+        <div className="mt-4">
+          <RoleDemandOverview
+            projectId={projectId}
+            activityId={activity.id}
+            title="Resource Plan"
+          />
+        </div>
+      </section>
 
       {/* Constraints */}
       {(activity.primaryConstraintType || activity.secondaryConstraintType) && (
@@ -474,57 +1056,18 @@ function ViewMode({
       <div className="rounded-lg border border-border bg-surface/50 p-4">
         <h3 className="text-sm font-semibold text-text-primary mb-3">Cost &amp; Earned Value</h3>
 
-        {assignments.length > 0 ? (
-          <div className="mb-4">
-            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Resource Assignments</p>
-            <ActivityAssignmentsByRole
-              assignments={assignments}
-              onStaff={openStaffDialog}
-              onSwap={openSwapDialog}
-            />
-          </div>
-        ) : (
-          <p className="text-sm text-text-muted mb-4">No resource assignments for this activity.</p>
-        )}
-
-        <StaffSwapDialog
-          projectId={projectId}
-          activityId={activity.id}
-          open={dialogOpen}
-          onClose={() => setDialogOpen(false)}
-          assignment={dialogAssignment}
-          mode={dialogMode}
-        />
+        {/* Resource demand summary is shown at the top of the page via RoleDemandOverview;
+            this card now focuses on Expenses + EVM cost rollup tiles only. */}
 
         {activityExpenses.length > 0 && (
           <div className="mb-4">
             <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Expenses</p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Description</th>
-                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Category</th>
-                    <th className="text-left py-1.5 pr-3 text-xs font-medium text-text-secondary">Date</th>
-                    <th className="text-right py-1.5 text-xs font-medium text-text-secondary">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activityExpenses.map((e) => (
-                    <tr key={e.id} className="border-b border-border/40">
-                      <td className="py-1.5 pr-3 text-text-primary">{e.description}</td>
-                      <td className="py-1.5 pr-3 text-text-secondary">{e.expenseCategory}</td>
-                      <td className="py-1.5 pr-3 text-text-secondary">{e.actualStartDate}</td>
-                      <td className="py-1.5 text-right text-text-primary">{fmt(e.actualCost ?? 0)}</td>
-                    </tr>
-                  ))}
-                  <tr className="font-semibold bg-surface-hover/30">
-                    <td colSpan={3} className="py-1.5 pr-3 text-text-secondary">Total Expenses</td>
-                    <td className="py-1.5 text-right text-accent">{fmt(totalExpenses)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <SimpleTable
+              data={expenseTableData}
+              columns={expenseColumns}
+              sortable={false}
+              className="border-0 rounded-none"
+            />
           </div>
         )}
 
@@ -587,28 +1130,7 @@ function ViewMode({
       <ActivityStepsPanel activityId={activity.id} projectId={projectId} percentCompleteType={activity.percentCompleteType as string | undefined} />
 
       {/* Master Work Activity link */}
-      <div className="rounded-lg border border-border bg-surface/50 p-4">
-        <h3 className="text-sm font-semibold text-text-primary mb-2">Work Activity (master)</h3>
-        {workActivity ? (
-          <div className="flex flex-wrap items-center gap-3 text-sm text-text-primary">
-            <span className="font-medium">{workActivity.name}</span>
-            <span className="font-mono text-xs text-text-muted">{workActivity.code}</span>
-            {workActivity.defaultUnit && (
-              <span className="px-2 py-0.5 rounded bg-info/10 text-info ring-1 ring-info/20 text-xs">
-                {workActivity.defaultUnit}
-              </span>
-            )}
-            {workActivity.discipline && (
-              <span className="text-xs text-text-secondary">· {workActivity.discipline}</span>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-text-muted">
-            Not linked. Edit the activity and pick a master entry to enable
-            productivity-norm-driven capacity utilisation reports.
-          </p>
-        )}
-      </div>
+      <WorkActivityMasterPanel activity={activity} projectId={projectId} workActivity={workActivity} />
 
       {/* Calendar */}
       <div className="rounded-lg border border-border bg-surface/50 p-4">
@@ -655,15 +1177,149 @@ function ViewMode({
       </div>
 
       {/* Dependencies */}
-      <ActivityDependencies
-        projectId={projectId}
-        activityId={activity.id}
-        activityName={activity.name}
-      />
+      <Suspense fallback={<div className="rounded-lg border border-border bg-surface/50 p-4 text-sm text-text-muted">Loading dependencies…</div>}>
+        <ActivityDependencies
+          projectId={projectId}
+          activityId={activity.id}
+          activityName={activity.name}
+        />
+      </Suspense>
 
       {/* Custom Fields */}
-      <UdfSection entityId={activity.id} subject="ACTIVITY" projectId={projectId} />
+      <Suspense fallback={<div className="rounded-xl border border-border bg-surface/50 p-6 text-sm text-text-muted">Loading custom fields…</div>}>
+        <UdfSection entityId={activity.id} subject="ACTIVITY" projectId={projectId} />
+      </Suspense>
     </div>
+  );
+}
+
+function WorkActivityMasterPanel({
+  activity,
+  projectId,
+  workActivity,
+}: {
+  activity: ActivityResponse;
+  projectId: string;
+  workActivity: WorkActivityResponse | null;
+}) {
+  const status = useActivityMasterStatus(activity.workActivityId);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<DialogMode>("LINK_OR_CREATE");
+
+  const openDialog = (m: DialogMode) => {
+    setDialogMode(m);
+    setDialogOpen(true);
+  };
+
+  // The dialog is mounted once at the end and re-used across status transitions; otherwise
+  // a state change from UNLINKED → LINKED_NO_NORMS mid-wizard would swap the parent JSX
+  // branch, unmount the active dialog, and reset the user back to step 1.
+  const dialog = (
+    <LinkOrCreateWorkActivityDialog
+      open={dialogOpen}
+      onClose={() => setDialogOpen(false)}
+      mode={dialogMode}
+      projectId={projectId}
+      activityId={activity.id}
+      defaultCode={activity.code}
+      defaultName={activity.name}
+      existingMasterId={status.master?.id}
+      existingMasterName={status.master?.name ?? undefined}
+      existingMasterDefaultUnit={status.master?.defaultUnit ?? undefined}
+    />
+  );
+
+  if (status.state === "UNLINKED") {
+    return (
+      <>
+        <div className="rounded-lg border border-warning/40 bg-warning/5 p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-2 flex items-center gap-2">
+            <AlertTriangle size={16} className="text-warning" />
+            Work Activity (master) — not mapped
+          </h3>
+          <p className="text-sm text-text-secondary">
+            This activity is not mapped to any Master Work Activity. Productivity Norms are not
+            configured for this activity, therefore Capacity Utilization calculations may be
+            inaccurate.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => openDialog("LINK_OR_CREATE")}
+              className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover"
+            >
+              Link / Create Master
+            </button>
+          </div>
+        </div>
+        {dialog}
+      </>
+    );
+  }
+
+  if (status.state === "LINKED_NO_NORMS") {
+    return (
+      <>
+        <div className="rounded-lg border border-danger/40 bg-danger/5 p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-2 flex items-center gap-2">
+            <AlertTriangle size={16} className="text-danger" />
+            Work Activity (master) — no Productivity Norms
+          </h3>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-text-primary">
+            <span className="font-medium">{status.master?.name ?? workActivity?.name}</span>
+            {status.master?.code && (
+              <span className="font-mono text-xs text-text-muted">{status.master.code}</span>
+            )}
+            {status.master?.defaultUnit && (
+              <span className="px-2 py-0.5 rounded bg-info/10 text-info ring-1 ring-info/20 text-xs">
+                {status.master.defaultUnit}
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-sm text-text-secondary">
+            No productivity norms are configured for this master. Capacity Utilization cannot
+            compute expected output until at least one norm exists.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => openDialog("CONFIGURE_NORMS_ONLY")}
+              className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover"
+            >
+              Configure Productivity Norms
+            </button>
+          </div>
+        </div>
+        {dialog}
+      </>
+    );
+  }
+
+  // OK / LOADING — render the original linked summary + coverage chip.
+  return (
+    <>
+      <div className="rounded-lg border border-border bg-surface/50 p-4">
+        <h3 className="text-sm font-semibold text-text-primary mb-2">Work Activity (master)</h3>
+        {workActivity ? (
+          <div className="flex flex-wrap items-center gap-3 text-sm text-text-primary">
+            <span className="font-medium">{workActivity.name}</span>
+            <span className="font-mono text-xs text-text-muted">{workActivity.code}</span>
+            {workActivity.defaultUnit && (
+              <span className="px-2 py-0.5 rounded bg-info/10 text-info ring-1 ring-info/20 text-xs">
+                {workActivity.defaultUnit}
+              </span>
+            )}
+            {workActivity.discipline && (
+              <span className="text-xs text-text-secondary">· {workActivity.discipline}</span>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-text-muted">Resolving master…</p>
+        )}
+        <WorkActivityCoverageChip workActivityId={activity.workActivityId} />
+      </div>
+      {dialog}
+    </>
   );
 }
 
@@ -911,6 +1567,12 @@ interface EditFormProps {
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
   isSubmitting: boolean;
+  /**
+   * Master disable switch. Set when the activity is LOCKED (DPR-flow stage) or the user
+   * lacks {@code ACTIVITY.UPDATE}. Disables every input + the Save button so the form
+   * matches the server-side {@code ACTIVITY_LOCKED} rejection behaviour.
+   */
+  disabled?: boolean;
   usePert: boolean;
   onTogglePert: () => void;
   pertData: {
@@ -928,6 +1590,15 @@ interface EditFormProps {
   projectCalendarId: string | null | undefined;
   costAccounts: CostAccount[];
   percentCompleteType?: string | null;
+  supervisorOptions: { value: string; label: string }[];
+  isLoadingSupervisorPool: boolean;
+  onSupervisorChange: (value: string) => void;
+  /**
+   * DBS-Phase-2: toggles the BOQ Section 1 (Preliminary) flag. Routed up to the page state
+   * because the value flows back to the backend via {@code UpdateActivityRequest.preliminary}
+   * (not a free-text input the generic {@code onChange} handler can pick up).
+   */
+  onPreliminaryChange: (checked: boolean) => void;
 }
 
 function EditForm({
@@ -936,6 +1607,7 @@ function EditForm({
   onSubmit,
   onCancel,
   isSubmitting,
+  disabled = false,
   usePert,
   onTogglePert,
   pertData,
@@ -947,10 +1619,19 @@ function EditForm({
   projectCalendarId,
   costAccounts,
   percentCompleteType,
+  supervisorOptions,
+  isLoadingSupervisorPool,
+  onSupervisorChange,
+  onPreliminaryChange,
 }: EditFormProps) {
   return (
     <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
       <form onSubmit={onSubmit} className="space-y-6">
+        {/* Wrapping every input in a single <fieldset disabled> is the cheapest way to cascade
+            the lock-state read-only mode through this large form. Native form controls (input,
+            select, button) inherit the disabled attribute automatically; SearchableSelect calls
+            below OR their existing disabled props with this same flag for the non-native picker. */}
+        <fieldset disabled={disabled} className="space-y-6 disabled:opacity-70">
         <div>
           <label className="block text-sm font-medium text-text-secondary">Name *</label>
           <input
@@ -1150,11 +1831,14 @@ function EditForm({
                 label: wa.defaultUnit ? `${wa.name} (${wa.defaultUnit})` : wa.name,
               })),
             ]}
+            disabled={disabled}
           />
           <p className="mt-1 text-xs text-text-muted">
-            Links this project activity to its master library entry — required for productivity-norm
-            lookups when computing budgeted vs actual resource-days.
+            Links this project activity to its master library entry. Optional — leave blank for
+            activities that don't need productivity tracking (e.g. design / engineering / office
+            work). When set, the productivity norms below drive DPR expected-vs-actual.
           </p>
+          <WorkActivityCoverageChip workActivityId={data.workActivityId} />
         </div>
 
         <div>
@@ -1208,6 +1892,52 @@ function EditForm({
           <p className="mt-1 text-xs text-text-muted">
             Leave empty to inherit the cost account from the WBS node.
           </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-secondary">
+            Supervisor
+          </label>
+          <SearchableSelect
+            value={data.supervisorUserId ?? ""}
+            onChange={onSupervisorChange}
+            placeholder={
+              isLoadingSupervisorPool
+                ? "Loading users..."
+                : supervisorOptions.length
+                  ? "Search supervisors..."
+                  : "No users with supervisor roles"
+            }
+            options={[{ value: "", label: "— none —" }, ...supervisorOptions]}
+            disabled={disabled || isLoadingSupervisorPool || supervisorOptions.length === 0}
+          />
+          <p className="mt-1 text-xs text-text-muted">
+            Field-accountable supervisor. Picker lists users carrying SUPERVISOR /
+            FOREMAN / SITE_ENGINEER / SITE_MANAGER roles.
+          </p>
+        </div>
+
+        <div className="border-t border-border pt-6">
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="preliminary"
+              checked={data.preliminary ?? false}
+              onChange={(e) => onPreliminaryChange(e.target.checked)}
+              className="mt-1 rounded border-border"
+            />
+            <label htmlFor="preliminary" className="text-sm text-text-secondary">
+              <span className="font-medium text-text-primary">
+                Preliminary item (BOQ Section 1 — mobilization, site setup, diversions, etc.)
+              </span>
+              <p className="mt-1 text-xs text-text-muted">
+                When checked, this activity&rsquo;s cost is rolled up into the DBS{" "}
+                <em>Preliminaries</em> bucket instead of <em>Direct Cost</em>. Use for
+                mobilisation, site facilities, diversions, bonds, insurance and other Section 1
+                overhead items.
+              </p>
+            </label>
+          </div>
         </div>
 
         <div className="border-t border-border pt-6">
@@ -1297,11 +2027,16 @@ function EditForm({
           </div>
         )}
 
+        </fieldset>
+
+        {/* Action row sits OUTSIDE the fieldset so Cancel is always clickable — even when the
+            activity has been locked mid-edit, the user must be able to back out of the form. */}
         <div className="flex gap-3 pt-6">
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
+            disabled={isSubmitting || disabled}
+            title={disabled ? "Unlock the activity to save edits" : undefined}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border disabled:cursor-not-allowed"
           >
             {isSubmitting ? "Saving..." : "Save Changes"}
           </button>

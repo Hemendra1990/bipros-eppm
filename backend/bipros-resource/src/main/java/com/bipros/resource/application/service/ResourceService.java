@@ -1,5 +1,7 @@
 package com.bipros.resource.application.service;
 
+import com.bipros.common.event.ResourceCreatedEvent;
+import com.bipros.common.event.ResourceUpdatedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
@@ -12,14 +14,22 @@ import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceRole;
 import com.bipros.resource.domain.model.ResourceStatus;
 import com.bipros.resource.domain.model.ResourceType;
+import com.bipros.resource.domain.model.rate.EquipmentRateMaster;
+import com.bipros.resource.domain.model.rate.ManpowerRateMaster;
+import com.bipros.resource.domain.model.rate.MaterialRateMaster;
+import com.bipros.resource.domain.repository.EquipmentRateMasterRepository;
+import com.bipros.resource.domain.repository.ManpowerRateMasterRepository;
+import com.bipros.resource.domain.repository.MaterialRateMasterRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
 import com.bipros.resource.domain.repository.ResourceRoleRepository;
 import com.bipros.resource.domain.repository.ResourceTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,7 +45,12 @@ public class ResourceService {
   private final EquipmentDetailsService equipmentDetailsService;
   private final MaterialDetailsService materialDetailsService;
   private final ManpowerService manpowerService;
+  private final ManpowerRateMasterRepository manpowerRateMasterRepository;
+  private final EquipmentRateMasterRepository equipmentRateMasterRepository;
+  private final MaterialRateMasterRepository materialRateMasterRepository;
+  private final ResourceAssignmentService resourceAssignmentService;
   private final AuditService auditService;
+  private final ApplicationEventPublisher eventPublisher;
 
   // ─── Code constants ───
   private static final String TYPE_LABOR = "LABOR";
@@ -76,12 +91,14 @@ public class ResourceService {
         .availability(request.availability())
         .costPerUnit(request.costPerUnit())
         .unit(request.unit())
+        .rateMasterId(request.rateMasterId())
         .status(request.status() == null ? ResourceStatus.ACTIVE : request.status())
         .calendarId(request.calendarId())
         .parentId(request.parentId())
-        .userId(request.userId())
         .sortOrder(request.sortOrder() == null ? 0 : request.sortOrder())
         .build();
+
+    applyRateMasterSnapshot(resource, request.rateMasterId(), type.getCode());
 
     Resource saved = resourceRepository.save(resource);
     log.info("Resource created: id={}", saved.getId());
@@ -89,6 +106,11 @@ public class ResourceService {
     persistDetailSection(saved.getId(), type.getCode(), request);
 
     auditService.logCreate("Resource", saved.getId(), ResourceResponse.from(saved));
+
+    eventPublisher.publishEvent(
+        new ResourceCreatedEvent(saved.getId(), saved.getCode(), saved.getName())
+    );
+
     return loadFull(saved);
   }
 
@@ -166,6 +188,9 @@ public class ResourceService {
           "Resource with code " + code + " already exists");
     }
 
+    BigDecimal previousCostPerUnit = resource.getCostPerUnit();
+    String previousUnit = resource.getUnit();
+
     resource.setCode(code);
     resource.setName(request.name());
     resource.setDescription(request.description());
@@ -174,17 +199,34 @@ public class ResourceService {
     if (request.availability() != null) resource.setAvailability(request.availability());
     if (request.costPerUnit() != null) resource.setCostPerUnit(request.costPerUnit());
     if (request.unit() != null) resource.setUnit(request.unit());
+    resource.setRateMasterId(request.rateMasterId());
     if (request.status() != null) resource.setStatus(request.status());
     resource.setCalendarId(request.calendarId());
     resource.setParentId(request.parentId());
-    resource.setUserId(request.userId());
     if (request.sortOrder() != null) resource.setSortOrder(request.sortOrder());
+
+    applyRateMasterSnapshot(resource, request.rateMasterId(), type.getCode());
 
     Resource updated = resourceRepository.save(resource);
 
     persistDetailSection(updated.getId(), type.getCode(), request);
 
+    // Cascade: if cost or unit changed, recompute every existing ResourceAssignment that
+    // references this resource and falls back to its costPerUnit (assignments with a project
+    // pool rateOverride are unaffected by this — the override wins).
+    boolean rateOrUnitChanged =
+        !java.util.Objects.equals(previousCostPerUnit, updated.getCostPerUnit())
+            || !java.util.Objects.equals(previousUnit, updated.getUnit());
+    if (rateOrUnitChanged) {
+      resourceAssignmentService.recomputeAssignmentsForResource(updated.getId());
+    }
+
     auditService.logUpdate("Resource", id, "resource", null, ResourceResponse.from(updated));
+
+    eventPublisher.publishEvent(
+        new ResourceUpdatedEvent(updated.getId(), updated.getCode(), updated.getName())
+    );
+
     return loadFull(updated);
   }
 
@@ -204,6 +246,48 @@ public class ResourceService {
   }
 
   // ─── helpers ───
+
+  /**
+   * If {@code rateMasterId} is set, look up the type-appropriate rate master row and snapshot
+   * its {@code unit} + {@code rate} onto the resource. Caller-supplied unit/cost are overridden —
+   * the rate master is the source of truth when a link exists.
+   *
+   * <p>Called from create and update. Custom resource types with no matching rate master leave
+   * the snapshot untouched.
+   */
+  private void applyRateMasterSnapshot(Resource resource, UUID rateMasterId, String typeCode) {
+    if (rateMasterId == null) return;
+    String code = typeCode == null ? null : typeCode.toUpperCase();
+    String unit;
+    BigDecimal rate;
+    switch (code == null ? "" : code) {
+      case TYPE_LABOR -> {
+        ManpowerRateMaster rm = manpowerRateMasterRepository.findById(rateMasterId)
+            .orElseThrow(() -> new ResourceNotFoundException("ManpowerRateMaster", rateMasterId));
+        unit = rm.getUnit();
+        rate = rm.getRate();
+      }
+      case TYPE_EQUIPMENT -> {
+        EquipmentRateMaster rm = equipmentRateMasterRepository.findById(rateMasterId)
+            .orElseThrow(() -> new ResourceNotFoundException("EquipmentRateMaster", rateMasterId));
+        unit = rm.getUnit();
+        rate = rm.getRate();
+      }
+      case TYPE_MATERIAL -> {
+        MaterialRateMaster rm = materialRateMasterRepository.findById(rateMasterId)
+            .orElseThrow(() -> new ResourceNotFoundException("MaterialRateMaster", rateMasterId));
+        unit = rm.getUnit();
+        rate = rm.getRate();
+      }
+      default -> {
+        // Custom resource types — no rate master defined for this type. Treat the
+        // supplied rateMasterId as a soft hint only and skip the snapshot.
+        return;
+      }
+    }
+    resource.setUnit(unit);
+    resource.setCostPerUnit(rate);
+  }
 
   /**
    * Reject mismatched detail sections: equipment fields only on EQUIPMENT-typed resources, etc.

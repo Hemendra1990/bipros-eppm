@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { AlertTriangle } from "lucide-react";
 import type { RiskRegisterData } from "@/lib/api/reportDataApi";
+import { CHART_TOOLTIP_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_TOOLTIP_ITEM_STYLE } from "@/components/common/dashboard/primitives";
 
 interface RiskRegisterReportProps {
   data: RiskRegisterData;
@@ -18,6 +19,7 @@ export function RiskRegisterReport({ data }: RiskRegisterReportProps) {
   }, [data.risksByCategory]);
 
   const overallRiskLevel = useMemo(() => {
+    if (data.totalRisks === 0) return { level: "No risks logged", color: "bg-surface border border-border text-text-muted" };
     if (data.highRisks > 3 || data.totalRisks > 20) return { level: "Critical", color: "bg-danger/10 text-danger" };
     if (data.highRisks > 0 || data.mediumRisks > 10) return { level: "High", color: "bg-orange-500/10 text-orange-400" };
     return { level: "Moderate", color: "bg-warning/10 text-warning" };
@@ -26,7 +28,7 @@ export function RiskRegisterReport({ data }: RiskRegisterReportProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-red-50 to-orange-50 p-4 rounded-lg border border-red-200">
+      <div className="rounded-lg border border-border bg-surface/50 p-4">
         <div className="flex justify-between items-start">
           <div>
             <h3 className="font-semibold text-lg text-text-primary">{data.projectName}</h3>
@@ -45,17 +47,17 @@ export function RiskRegisterReport({ data }: RiskRegisterReportProps) {
           <p className="text-3xl font-bold text-text-primary">{data.totalRisks}</p>
         </div>
 
-        <div className="bg-surface/50 border border-red-200 rounded-lg p-4">
+        <div className="bg-surface/50 border border-danger/30 rounded-lg p-4">
           <p className="text-xs text-text-muted uppercase tracking-wider">High Risks</p>
           <p className="text-3xl font-bold text-danger">{data.highRisks}</p>
         </div>
 
-        <div className="bg-surface/50 border border-orange-200 rounded-lg p-4">
+        <div className="bg-surface/50 border border-warning/30 rounded-lg p-4">
           <p className="text-xs text-text-muted uppercase tracking-wider">Medium Risks</p>
           <p className="text-3xl font-bold text-orange-600">{data.mediumRisks}</p>
         </div>
 
-        <div className="bg-surface/50 border border-yellow-200 rounded-lg p-4">
+        <div className="bg-surface/50 border border-warning/30 rounded-lg p-4">
           <p className="text-xs text-text-muted uppercase tracking-wider">Low Risks</p>
           <p className="text-3xl font-bold text-warning">{data.lowRisks}</p>
         </div>
@@ -67,15 +69,13 @@ export function RiskRegisterReport({ data }: RiskRegisterReportProps) {
           <h4 className="font-semibold text-text-primary mb-4">Risks by Category</h4>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={categoryChartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="category" stroke="#64748b" style={{ fontSize: "12px" }} />
               <YAxis stroke="#64748b" style={{ fontSize: "12px" }} />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: "#1e293b",
-                  border: "1px solid #334155",
-                  borderRadius: "0.5rem",
-                }}
+                contentStyle={CHART_TOOLTIP_STYLE}
+                labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                itemStyle={CHART_TOOLTIP_ITEM_STYLE}
               />
               <Bar dataKey="count" fill="#ef4444" radius={[8, 8, 0, 0]} />
             </BarChart>

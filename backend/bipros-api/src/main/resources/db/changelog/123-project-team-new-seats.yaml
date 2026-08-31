@@ -1,0 +1,55 @@
+databaseChangeLog:
+  # Four new project-team seats, named in the client requirements workbook (01 Aug 2026):
+  #   PROJECT_CONTROL     — "Project Control Engineer" (Access-Input rows 7-12; the "project
+  #                          control team" the AI_Agent sheet asks to be mailed on DPR, capacity,
+  #                          DBS, costing and EVM)
+  #   QUALITY_ENGINEER    — "Quality Engineer"        (Access-Input rows 6, 14)
+  #   STORE_KEEPER        — "Store keeper"            (Access-Input row 11, material consumption)
+  #   DESIGN_COORDINATOR  — "Design Coordinator"      (Access-Input row 13, approved drawings)
+  #
+  # These take part in notification addressing and the access matrices only. They are NOT part of
+  # the Daily Balance Sheet cost rollup, which remains Supervisor -> Engineer -> CM -> Project,
+  # so no DBS figure changes as a result of this changeset.
+  #
+  # project.project_team.role is a VARCHAR guarded by a derived CHECK constraint. Hibernate's
+  # ddl-auto:update does NOT widen an existing CHECK, so dev environments are handled separately
+  # by DevSchemaFixupRunner.ensureProjectTeamRoleCheckIncludesNewSeats(); this changeset is the
+  # production path.
+  - changeSet:
+      id: 123-project-team-role-check-new-seats
+      author: subrat
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 1
+            sql: >-
+              SELECT count(*) FROM pg_constraint
+               WHERE conname = 'project_team_role_check'
+                 AND conrelid = 'project.project_team'::regclass
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >-
+              ALTER TABLE project.project_team
+                DROP CONSTRAINT project_team_role_check;
+        - sql:
+            splitStatements: false
+            sql: >-
+              ALTER TABLE project.project_team
+                ADD CONSTRAINT project_team_role_check
+                CHECK (role IN ('PM','CONSTRUCTION_MANAGER','SITE_MANAGER','ENGINEER','SUPERVISOR',
+                                'QS','SAFETY','PROJECT_CONTROL','QUALITY_ENGINEER','STORE_KEEPER',
+                                'DESIGN_COORDINATOR'));
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: >-
+              ALTER TABLE project.project_team
+                DROP CONSTRAINT project_team_role_check;
+        - sql:
+            splitStatements: false
+            sql: >-
+              ALTER TABLE project.project_team
+                ADD CONSTRAINT project_team_role_check
+                CHECK (role IN ('PM','CONSTRUCTION_MANAGER','SITE_MANAGER','ENGINEER','SUPERVISOR',
+                                'QS','SAFETY'));

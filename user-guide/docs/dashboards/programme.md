@@ -6,7 +6,7 @@ description: EVM metrics, milestones, and contractor performance tracking
 
 # Programme Dashboard
 
-The **Programme Dashboard** is designed for Programme Directors and PMO heads who need to track schedule and cost performance across multiple projects within a programme.
+The **Programme Dashboard** is designed for **Programme Directors and PMO heads** who need to track schedule and cost performance across multiple projects within a programme. KPIs surfaced here are EVM-led (PV / EV / AC, CPI, SPI, CV, SV) plus contractor scorecards and milestone trackers — for granular Manpower / Equipment cards switch to Operational; for portfolio-level rollups switch to Executive.
 
 ![Programme Dashboard](/img/screenshots/12-dashboard-programme.png)
 

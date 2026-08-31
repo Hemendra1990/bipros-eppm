@@ -18,6 +18,14 @@ export interface ScheduleHealthResponse {
   healthScore: number;
   floatDistribution: FloatDistribution;
   riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  missingLogicPct: number | null;
+  highFloatPct: number | null;
+  deadlineSlipRatio: number | null;
+  deadlineSlipDays: number | null;
+  plannedFinish: string | null;
+  scheduledFinish: string | null;
+  computedAt: string | null;
+  stale: boolean | null;
 }
 
 export const scheduleHealthApi = {

@@ -7,9 +7,34 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   setAuth: (user: UserResponse, accessToken: string, refreshToken: string) => void;
+  /** Refresh the cached user (permissions/profile/scope) without touching tokens. */
+  setUser: (user: UserResponse) => void;
   clearAuth: () => void;
   isAuthenticated: () => boolean;
+  /**
+   * Returns {@code true} when the current user holds the named permission code, e.g.
+   * {@code "PROJECT.READ"}. Admins ({@code ROLE_ADMIN} or {@code ADMIN}) short-circuit to
+   * {@code true} — mirrors the server-side escape hatch in {@code PermissionEvaluator}.
+   * Backend is the source of truth; this is a UX gate only.
+   */
+  hasPermission: (code: string) => boolean;
+  /** Logical OR over {@link hasPermission}. Empty list returns {@code false}. */
+  hasAnyPermission: (codes: readonly string[]) => boolean;
+  /** Shorthand for "is the current user an admin?" — accepts {@code ADMIN} or {@code ROLE_ADMIN}. */
+  isAdmin: () => boolean;
+  /**
+   * Gate-3 row-visibility level from {@code /v1/auth/me}: OWN | PROJECT | ALL. UX gate only
+   * (the server filters regardless) — used to hide supervisor pickers etc. for OWN users.
+   */
+  dataScope: () => "OWN" | "TEAM" | "PROJECT" | "ALL";
 }
+
+const ROLE_PREFIX = "ROLE_";
+const normRole = (r: string) => (r.startsWith(ROLE_PREFIX) ? r : `${ROLE_PREFIX}${r}`);
+const userIsAdmin = (user: UserResponse | null): boolean => {
+  if (!user?.roles?.length) return false;
+  return user.roles.some((r) => normRole(r) === "ROLE_ADMIN");
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -22,12 +47,39 @@ export const useAuthStore = create<AuthState>()(
         localStorage.setItem("refresh_token", refreshToken);
         set({ user, accessToken, refreshToken });
       },
+      setUser: (user) => set({ user }),
       clearAuth: () => {
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
+        // Also clear the access_token cookie — it is the source of truth for the server-side
+        // route guard (proxy.ts). Without this, logout leaves the cookie behind and the proxy
+        // still treats the user as signed in (e.g. it would bounce them off /auth/login).
+        document.cookie = "access_token=; path=/; max-age=0; SameSite=Strict";
         set({ user: null, accessToken: null, refreshToken: null });
       },
       isAuthenticated: () => get().accessToken !== null,
+      hasPermission: (code) => {
+        const u = get().user;
+        if (!u) return false;
+        if (userIsAdmin(u)) return true;
+        return u.permissions?.includes(code) ?? false;
+      },
+      hasAnyPermission: (codes) => {
+        if (!codes?.length) return false;
+        const u = get().user;
+        if (!u) return false;
+        if (userIsAdmin(u)) return true;
+        const perms = u.permissions;
+        if (!perms?.length) return false;
+        return codes.some((c) => perms.includes(c));
+      },
+      isAdmin: () => userIsAdmin(get().user),
+      dataScope: () => {
+        const u = get().user;
+        if (!u) return "PROJECT";
+        if (userIsAdmin(u)) return "ALL";
+        return u.dataScope ?? "PROJECT";
+      },
     }),
     { name: "bipros-auth" }
   )
@@ -35,18 +87,14 @@ export const useAuthStore = create<AuthState>()(
 
 interface AppState {
   currentProjectId: string | null;
-  sidebarCollapsed: boolean;
   setCurrentProjectId: (id: string | null) => void;
-  toggleSidebar: () => void;
 }
 
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       currentProjectId: null,
-      sidebarCollapsed: false,
       setCurrentProjectId: (id) => set({ currentProjectId: id }),
-      toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     }),
     { name: "bipros-app" }
   )

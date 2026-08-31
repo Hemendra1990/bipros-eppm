@@ -10,16 +10,22 @@ import { activityApi } from "@/lib/api/activityApi";
 import type { CreateActivityRequest } from "@/lib/api/activityApi";
 import { workActivityApi } from "@/lib/api/workActivityApi";
 import { calendarApi } from "@/lib/api/calendarApi";
-import type { WbsNodeResponse } from "@/lib/types";
+import { userApi } from "@/lib/api/userApi";
 import { getErrorMessage } from "@/lib/utils/error";
+import { flattenWbsNodes } from "@/lib/utils/wbs";
 import { activityNotifications, notificationHelpers } from "@/lib/notificationHelpers";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
+import { LinkOrCreateWorkActivityDialog } from "@/components/activity/LinkOrCreateWorkActivityDialog";
+import { WorkActivityCoverageChip } from "@/components/activity/WorkActivityCoverageChip";
+import { Plus } from "lucide-react";
+import { useScheduleStaleStore } from "@/lib/state/scheduleStaleStore";
 
 export default function NewActivityPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const params = useParams();
   const projectId = params.projectId as string;
+  const markScheduleStale = useScheduleStaleStore((s) => s.markScheduleStale);
 
   const [formData, setFormData] = useState<{
     code: string;
@@ -33,6 +39,10 @@ export default function NewActivityPage() {
     plannedFinishDate: string;
     workActivityId: string;
     calendarId: string;
+    supervisorUserId: string;
+    supervisorUserName: string;
+    preliminary: boolean;
+    parentActivityId: string;
   }>({
     code: "",
     name: "",
@@ -45,11 +55,16 @@ export default function NewActivityPage() {
     plannedFinishDate: "",
     workActivityId: "",
     calendarId: "",
+    supervisorUserId: "",
+    supervisorUserName: "",
+    preliminary: false,
+    parentActivityId: "",
   });
 
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [masterDialogOpen, setMasterDialogOpen] = useState(false);
 
   const { data: wbsData, isLoading: isLoadingWbs } = useQuery({
     queryKey: ["wbs", projectId],
@@ -76,8 +91,32 @@ export default function NewActivityPage() {
   });
   const projectCalendarId = projectData?.data?.calendarId;
 
+  // Phase 4.4 RBAC: supervisor candidates are Users carrying SUPERVISOR / FOREMAN /
+  // SITE_ENGINEER / SITE_MANAGER. The picker source moved off the project resource pool —
+  // see the SetSupervisorDialog component for the canonical pattern.
+  const { data: supervisorUsers, isLoading: isLoadingPool } = useQuery({
+    queryKey: ["users-by-role", "supervisor-pool"],
+    queryFn: () =>
+      userApi.listByRoles(["SUPERVISOR", "FOREMAN", "SITE_ENGINEER", "SITE_MANAGER"]),
+  });
+  const supervisorOptions = (supervisorUsers ?? []).map((u) => ({
+    value: u.id,
+    label: u.employeeCode ? `${u.employeeCode} — ${u.name}` : u.name,
+  }));
+
   // Flatten WBS tree for dropdown
   const flattenedWbs = flattenWbsNodes(wbsNodes);
+
+  // Parent activity candidates (hierarchy D10) — any project activity. The backend rejects
+  // cycles and parents holding schedule links; the picked parent's code prefixes this one's.
+  const { data: parentCandidatesData } = useQuery({
+    queryKey: ["activities", projectId, "all-for-parent-picker"],
+    queryFn: () => activityApi.listActivities(projectId, 0, 1000),
+  });
+  const parentOptions = (parentCandidatesData?.data?.content ?? []).map((a) => ({
+    value: a.id,
+    label: `${a.code} — ${a.name}`,
+  }));
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -123,6 +162,12 @@ export default function NewActivityPage() {
         plannedFinishDate: formData.plannedFinishDate || undefined,
         workActivityId: formData.workActivityId || undefined,
         calendarId: formData.calendarId || undefined,
+        supervisorUserId: formData.supervisorUserId || undefined,
+        supervisorUserName: formData.supervisorUserName || undefined,
+        // DBS-Phase-2 BOQ Section 1 (Preliminaries) flag. Only send when explicitly ticked so
+        // the backend's null-means-default contract is preserved.
+        preliminary: formData.preliminary || undefined,
+        parentActivityId: formData.parentActivityId || undefined,
       };
 
       const result = await activityApi.createActivity(projectId, createRequest);
@@ -130,8 +175,29 @@ export default function NewActivityPage() {
         setError(result.error?.message ?? "Failed to create activity");
         notificationHelpers.handleApiError(result.error, "Failed to create activity");
       } else {
+        // POST /v1/projects/{id}/activities is part of the multi-supervisor
+        // refactor (commit 182141eb) and silently DROPS the supervisorUserId
+        // field on the request body. If the user picked a supervisor in the
+        // form, immediately follow up with the dedicated supervisor PUT so the
+        // selection actually persists. We do not roll back on failure — the
+        // activity is created; only the supervisor link is missing.
+        const createdId = result.data?.id;
+        if (createdId && formData.supervisorUserId) {
+          try {
+            await activityApi.setSupervisor(projectId, createdId, {
+              supervisorUserId: formData.supervisorUserId,
+              supervisorName: formData.supervisorUserName || null,
+            });
+          } catch (supErr: unknown) {
+            notificationHelpers.handleApiError(
+              supErr,
+              "Activity created, but failed to assign supervisor"
+            );
+          }
+        }
         activityNotifications.created();
         queryClient.invalidateQueries({ queryKey: ["activities", projectId] });
+        markScheduleStale(projectId);
         router.push(`/projects/${projectId}/activities`);
       }
     } catch (err: unknown) {
@@ -281,6 +347,55 @@ export default function NewActivityPage() {
 
           <div className="grid grid-cols-2 gap-6">
             <div>
+              <label className="block text-sm font-medium text-text-secondary">Parent activity</label>
+              <SearchableSelect
+                value={formData.parentActivityId}
+                onChange={(val) => setFormData((prev) => ({ ...prev, parentActivityId: val }))}
+                placeholder="— none (top-level) —"
+                options={parentOptions}
+              />
+              <p className="mt-1 text-xs text-text-muted">
+                Optional. The new activity nests under the parent and its code becomes
+                parentCode.segment. Parents are grouping nodes — they take no DPRs or resource plan.
+              </p>
+            </div>
+            <div />
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">
+                Supervisor
+              </label>
+              <SearchableSelect
+                value={formData.supervisorUserId}
+                onChange={(val) => {
+                  const picked = (supervisorUsers ?? []).find((u) => u.id === val);
+                  setFormData((prev) => ({
+                    ...prev,
+                    supervisorUserId: val,
+                    supervisorUserName: picked?.name ?? "",
+                  }));
+                }}
+                placeholder={
+                  isLoadingPool
+                    ? "Loading users..."
+                    : supervisorOptions.length
+                      ? "Search supervisors..."
+                      : "No users with supervisor roles"
+                }
+                options={[{ value: "", label: "— none —" }, ...supervisorOptions]}
+                disabled={isLoadingPool || supervisorOptions.length === 0}
+              />
+              <p className="mt-1 text-xs text-text-muted">
+                Field-accountable supervisor. Picker lists users carrying SUPERVISOR /
+                FOREMAN / SITE_ENGINEER / SITE_MANAGER roles. Leave empty if no supervisor.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Planned Start Date
               </label>
@@ -312,29 +427,53 @@ export default function NewActivityPage() {
             <label className="block text-sm font-medium text-text-secondary">
               Work Activity (master)
             </label>
-            <SearchableSelect
-              value={formData.workActivityId}
-              onChange={(val) => setFormData((prev) => ({ ...prev, workActivityId: val }))}
-              placeholder={
-                isLoadingWorkActivities
-                  ? "Loading work activities..."
-                  : "Search master library (optional)..."
-              }
-              options={[
-                { value: "", label: "— none —" },
-                ...workActivities.map((wa) => ({
-                  value: wa.id,
-                  label: wa.defaultUnit ? `${wa.name} (${wa.defaultUnit})` : wa.name,
-                })),
-              ]}
-              disabled={isLoadingWorkActivities}
-            />
+            <div className="mt-1 flex items-stretch gap-2">
+              <div className="flex-1">
+                <SearchableSelect
+                  value={formData.workActivityId}
+                  onChange={(val) => setFormData((prev) => ({ ...prev, workActivityId: val }))}
+                  placeholder={
+                    isLoadingWorkActivities
+                      ? "Loading work activities..."
+                      : "Search master library (optional)..."
+                  }
+                  options={[
+                    { value: "", label: "— none —" },
+                    ...workActivities.map((wa) => ({
+                      value: wa.id,
+                      label: wa.defaultUnit ? `${wa.name} (${wa.defaultUnit})` : wa.name,
+                    })),
+                  ]}
+                  disabled={isLoadingWorkActivities}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setMasterDialogOpen(true)}
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-hover px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-active hover:text-text-primary"
+                title="Create a new Master Work Activity from this activity's name/code"
+              >
+                <Plus size={14} /> Create new master
+              </button>
+            </div>
             <p className="mt-1 text-xs text-text-muted">
               Optional: link this activity to a master entry from{" "}
               <em>Admin → Work Activities</em>. Required to derive productivity-norm-driven
               capacity utilisation downstream.
             </p>
+            <WorkActivityCoverageChip workActivityId={formData.workActivityId || null} />
           </div>
+
+          <LinkOrCreateWorkActivityDialog
+            open={masterDialogOpen}
+            onClose={() => setMasterDialogOpen(false)}
+            mode="LINK_OR_CREATE"
+            defaultCode={formData.code}
+            defaultName={formData.name}
+            onMasterSelected={(masterId) =>
+              setFormData((prev) => ({ ...prev, workActivityId: masterId }))
+            }
+          />
 
           <div>
             <label className="block text-sm font-medium text-text-secondary">
@@ -367,6 +506,31 @@ export default function NewActivityPage() {
             </p>
           </div>
 
+          <div className="border-t border-border pt-6">
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="preliminary"
+                checked={formData.preliminary}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, preliminary: e.target.checked }))
+                }
+                className="mt-1 rounded border-border"
+              />
+              <label htmlFor="preliminary" className="text-sm text-text-secondary">
+                <span className="font-medium text-text-primary">
+                  Preliminary item (BOQ Section 1 — mobilization, site setup, diversions, etc.)
+                </span>
+                <p className="mt-1 text-xs text-text-muted">
+                  When checked, this activity&rsquo;s cost is rolled up into the DBS{" "}
+                  <em>Preliminaries</em> bucket instead of <em>Direct Cost</em>. Use for
+                  mobilisation, site facilities, diversions, bonds, insurance and other Section 1
+                  overhead items.
+                </p>
+              </label>
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-6">
             <button
               type="submit"
@@ -389,21 +553,3 @@ export default function NewActivityPage() {
   );
 }
 
-function flattenWbsNodes(
-  nodes: WbsNodeResponse[],
-  level = 0
-): Array<{ id: string; code: string; name: string; indent: string }> {
-  const result: Array<{ id: string; code: string; name: string; indent: string }> = [];
-  for (const node of nodes) {
-    result.push({
-      id: node.id,
-      code: node.code,
-      name: node.name,
-      indent: "  ".repeat(level),
-    });
-    if (node.children && node.children.length > 0) {
-      result.push(...flattenWbsNodes(node.children, level + 1));
-    }
-  }
-  return result;
-}

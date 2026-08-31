@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import type { ResourceAssignmentResponse } from "@/lib/api/resourceApi";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 
 interface Props {
   assignments: ResourceAssignmentResponse[];
@@ -22,21 +23,30 @@ interface RoleGroup {
   actualCost: number;
   remainingCost: number;
   staffedCount: number;
+  /**
+   * Common unit shared by every row in the group, or null when rows mix units (rare — would
+   * happen if one role had two staffed resources with different rate-master units). When null
+   * the group total stays unitless and only the child rows carry their per-row unit.
+   */
+  groupUnit: string | null;
 }
 
 const UNASSIGNED_KEY = "__unassigned__";
 
-function fmt(n: number | null | undefined): string {
-  return (n ?? 0).toLocaleString("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  });
-}
-
 function num(n: number | null | undefined): string {
   if (n == null) return "—";
   return Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+/**
+ * Format a unit count with its unit suffix (e.g. "10 Day", "8 Hour"). Returns just the number
+ * (no suffix) when the value is null/dash, or when the unit is null — keeps role-only rows
+ * and rows with missing unit metadata clean.
+ */
+function withUnit(n: number | null | undefined, unit: string | null | undefined): string {
+  const formatted = num(n);
+  if (formatted === "—" || !unit) return formatted;
+  return `${formatted} ${unit}`;
 }
 
 /**
@@ -74,6 +84,7 @@ function buildGroups(assignments: ResourceAssignmentResponse[]): RoleGroup[] {
         actualCost: 0,
         remainingCost: 0,
         staffedCount: 0,
+        groupUnit: null,
       };
       map.set(key, group);
     }
@@ -101,6 +112,10 @@ function buildGroups(assignments: ResourceAssignmentResponse[]): RoleGroup[] {
       const bName = b.resourceName ?? "";
       return aName.localeCompare(bName);
     });
+    // Compute the shared group unit. If every row has the same non-null unit we surface it on
+    // the group total line; otherwise the group totals stay unitless.
+    const units = new Set(g.rows.map((r) => r.unit ?? null).filter((u): u is string => !!u));
+    g.groupUnit = units.size === 1 ? Array.from(units)[0] : null;
   }
   return groups;
 }
@@ -131,6 +146,8 @@ function ResourceStatusPill({ staffed }: { staffed: boolean }) {
 }
 
 export function ActivityAssignmentsByRole({ assignments, onStaff, onSwap }: Props) {
+  const { money } = useProjectCurrency();
+  const fmt = (n: number | null | undefined): string => money(n ?? 0, { decimals: 0 });
   const groups = useMemo(() => buildGroups(assignments), [assignments]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -204,9 +221,9 @@ export function ActivityAssignmentsByRole({ assignments, onStaff, onSwap }: Prop
                   <td className="py-1.5 pr-3">
                     <GroupStatusPill staffed={g.staffedCount} total={g.rows.length} />
                   </td>
-                  <td className="py-1.5 pr-3 text-right text-text-primary font-medium">{num(g.plannedUnits)}</td>
-                  <td className="py-1.5 pr-3 text-right text-text-primary font-medium">{num(g.actualUnits)}</td>
-                  <td className="py-1.5 pr-3 text-right text-text-primary font-medium">{num(g.remainingUnits)}</td>
+                  <td className="py-1.5 pr-3 text-right text-text-primary font-medium">{withUnit(g.plannedUnits, g.groupUnit)}</td>
+                  <td className="py-1.5 pr-3 text-right text-text-primary font-medium">{withUnit(g.actualUnits, g.groupUnit)}</td>
+                  <td className="py-1.5 pr-3 text-right text-text-primary font-medium">{withUnit(g.remainingUnits, g.groupUnit)}</td>
                   <td className="py-1.5 pr-3 text-right text-text-primary font-medium">{fmt(g.plannedCost)}</td>
                   <td className="py-1.5 pr-3 text-right text-text-primary font-medium">{fmt(g.actualCost)}</td>
                   <td className="py-1.5 pr-3 text-right text-text-primary font-medium">{fmt(g.remainingCost)}</td>
@@ -224,9 +241,9 @@ export function ActivityAssignmentsByRole({ assignments, onStaff, onSwap }: Prop
                       <td className="py-1.5 pr-3">
                         <ResourceStatusPill staffed={a.staffed} />
                       </td>
-                      <td className="py-1.5 pr-3 text-right text-text-primary">{num(a.plannedUnits)}</td>
-                      <td className="py-1.5 pr-3 text-right text-text-primary">{num(a.actualUnits)}</td>
-                      <td className="py-1.5 pr-3 text-right text-text-primary">{num(effRemainingUnits(a))}</td>
+                      <td className="py-1.5 pr-3 text-right text-text-primary">{withUnit(a.plannedUnits, a.unit)}</td>
+                      <td className="py-1.5 pr-3 text-right text-text-primary">{withUnit(a.actualUnits, a.unit)}</td>
+                      <td className="py-1.5 pr-3 text-right text-text-primary">{withUnit(effRemainingUnits(a), a.unit)}</td>
                       <td className="py-1.5 pr-3 text-right text-text-primary">
                         {a.plannedCost != null ? fmt(a.plannedCost) : "—"}
                       </td>

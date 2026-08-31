@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { activityCodeApi, type ActivityCodeResponse } from "@/lib/api/activityCodeApi";
 import type { PagedResponse } from "@/lib/types";
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
 
 interface ActivityCodeForm {
   name: string;
@@ -107,6 +108,42 @@ export default function ActivityCodesPage() {
     setShowForm(false);
   };
 
+  const columns = useMemo<ColumnDef<ActivityCodeResponse>[]>(() => [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+    },
+    {
+      accessorKey: "scope",
+      header: "Scope",
+      cell: ({ row }) => (
+        <span className="inline-block rounded bg-accent/10 px-2 py-1 text-xs font-medium text-blue-300">
+          {row.original.scope}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: ({ row }) => <span className="text-sm text-text-secondary">{row.original.description || "—"}</span>,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <div className="space-x-2 text-right">
+          <button onClick={() => handleEdit(row.original)} className="text-accent hover:underline">
+            Edit
+          </button>
+          <button onClick={() => handleDelete(row.original.id)} className="text-danger hover:underline">
+            Delete
+          </button>
+        </div>
+      ),
+    },
+  ], [handleEdit, handleDelete]);
+
   if (isLoading && codes.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -207,55 +244,11 @@ export default function ActivityCodesPage() {
         </div>
       )}
 
-      <div className="rounded border border-border bg-surface/50">
-        <table className="w-full">
-          <thead className="bg-surface-hover/50">
-            <tr>
-              <th className="px-6 py-3 text-left text-sm font-semibold">Name</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold">Scope</th>
-              <th className="px-6 py-3 text-left text-sm font-semibold">Description</th>
-              <th className="px-6 py-3 text-right text-sm font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {codes.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-4 text-center text-text-muted">
-                  No activity codes found
-                </td>
-              </tr>
-            ) : (
-              codes.map((code) => (
-                <tr key={code.id} className="border-t border-border hover:bg-surface/80">
-                  <td className="px-6 py-4 font-medium">{code.name}</td>
-                  <td className="px-6 py-4">
-                    <span className="inline-block rounded bg-accent/10 px-2 py-1 text-xs font-medium text-blue-300">
-                      {code.scope}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-text-secondary">
-                    {code.description || "—"}
-                  </td>
-                  <td className="space-x-2 px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleEdit(code)}
-                      className="text-accent hover:underline"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(code.id)}
-                      className="text-danger hover:underline"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {codes.length === 0 ? (
+        <div className="py-4 text-center text-text-muted">No activity codes found</div>
+      ) : (
+        <VirtualDataTable columns={columns} data={codes} sortable resizable searchable={false} />
+      )}
 
       {totalElements > 20 && (
         <div className="flex items-center justify-center gap-2">

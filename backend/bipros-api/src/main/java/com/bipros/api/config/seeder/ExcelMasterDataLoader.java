@@ -1033,18 +1033,28 @@ public class ExcelMasterDataLoader implements CommandLineRunner {
         return "IMPORTED-" + typeCode;
     }
 
-    /** Map an Excel free-text unit string to the canonical short code stored in {@code Resource.unit}. */
+    /**
+     * Map an Excel free-text unit string to the canonical short label stored in
+     * {@code Resource.unit}. Output values match {@code RESOURCE_RATE_UNITS} in the frontend
+     * (Day, Hour, MT, Cum, Rm, Each, kg, L, Bag, …) so the UI dropdowns show clean labels and
+     * the backend's {@code DprCostFormulas.deriveBasis()} resolves them correctly.
+     *
+     * <p>Input matching is intentionally tolerant — recognizes legacy "PER_DAY", "/day", etc.
+     * — but the OUTPUT is always canonical.
+     */
     private String mapResourceUnitCode(String text) {
-        if (text == null) return "PER_DAY";
+        if (text == null) return "Day";
         String t = text.toLowerCase(Locale.ROOT).replace(" ", "").replace(".", "");
-        if (t.contains("perday") || t.contains("/day")) return "PER_DAY";
+        if (t.contains("perhour") || t.contains("/hr") || t.contains("/hour") || t.equals("hr") || t.equals("hour")) return "Hour";
+        if (t.contains("perday") || t.contains("/day") || t.equals("day")) return "Day";
         if (t.equals("mt") || t.contains("tonne")) return "MT";
-        if (t.equals("cum") || t.contains("cu.m") || t.contains("cubic")) return "CU_M";
-        if (t.equals("rmt") || t.contains("running")) return "RMT";
-        if (t.equals("nos") || t.equals("no") || t.equals("number")) return "NOS";
-        if (t.equals("kg")) return "KG";
-        if (t.contains("litre") || t.equals("l")) return "LITRE";
-        return "PER_DAY";
+        if (t.equals("cum") || t.contains("cu.m") || t.contains("cubic")) return "Cum";
+        if (t.equals("rmt") || t.contains("running") || t.equals("rm")) return "Rm";
+        if (t.equals("nos") || t.equals("no") || t.equals("number") || t.equals("each")) return "Each";
+        if (t.equals("kg")) return "kg";
+        if (t.contains("litre") || t.equals("l")) return "L";
+        if (t.contains("bag")) return "Bag";
+        return "Day";
     }
 
     // =========================================================================

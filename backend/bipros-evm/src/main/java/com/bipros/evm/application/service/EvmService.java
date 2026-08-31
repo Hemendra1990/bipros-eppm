@@ -1,6 +1,8 @@
 package com.bipros.evm.application.service;
 
+import com.bipros.activity.application.percent.PercentCompleteCalculator;
 import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityStatus;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.model.PercentCompleteType;
 import com.bipros.common.event.EvmRecalculatedEvent;
@@ -21,12 +23,18 @@ import com.bipros.evm.domain.entity.EvmCalculation;
 import com.bipros.evm.domain.entity.EtcMethod;
 import com.bipros.evm.domain.entity.EvmTechnique;
 import com.bipros.evm.domain.repository.EvmCalculationRepository;
+import com.bipros.project.application.service.DprActualCostLookup;
 import com.bipros.project.domain.model.WbsNode;
+import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
+import com.bipros.resource.domain.model.ActivitySubContractorAssignment;
 import com.bipros.resource.domain.model.ResourceAssignment;
+import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.udf.application.service.FormulaEngine;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,33 +50,44 @@ import java.util.stream.Collectors;
 public class EvmService {
 
     private static final int SCALE = 4;
+    private static final Logger log = LoggerFactory.getLogger(EvmService.class);
 
     private final EvmCalculationRepository evmCalculationRepository;
     private final ActivityRepository activityRepository;
     private final ActivityExpenseRepository activityExpenseRepository;
     private final ResourceAssignmentRepository resourceAssignmentRepository;
+    private final ActivitySubContractorAssignmentRepository activitySubContractorAssignmentRepository;
     private final CostAccountRepository costAccountRepository;
     private final WbsNodeRepository wbsNodeRepository;
+    private final ProjectRepository projectRepository;
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
     private final FormulaEngine formulaEngine;
+    private final DprActualCostLookup dprActualCostLookup;
+    private final PercentCompleteCalculator percentCompleteCalculator;
 
-    @Transactional
-    public EvmCalculationResponse calculateEvm(UUID projectId, CalculateEvmRequest request) {
-        LocalDate dataDate = LocalDate.now();
+    @Transactional(readOnly = true)
+    public EvmCalculation computeEvmSnapshot(UUID projectId, EvmTechnique technique, EtcMethod etcMethod) {
+        var project = projectRepository.findById(projectId).orElse(null);
+        LocalDate dataDate = resolveDataDate(project, projectId);
 
         List<Activity> activities = activityRepository.findByProjectId(projectId);
         List<ActivityExpense> allExpenses = activityExpenseRepository.findByProjectId(projectId);
         List<ResourceAssignment> allAssignments = resourceAssignmentRepository.findByProjectId(projectId);
+        List<ActivitySubContractorAssignment> allScAssignments =
+                activitySubContractorAssignmentRepository.findByProjectId(projectId);
 
-        // Group cost data by activity
         Map<UUID, List<ActivityExpense>> expensesByActivity = allExpenses.stream()
                 .filter(e -> e.getActivityId() != null)
                 .collect(Collectors.groupingBy(ActivityExpense::getActivityId));
         Map<UUID, List<ResourceAssignment>> assignmentsByActivity = allAssignments.stream()
                 .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+        Map<UUID, List<ActivitySubContractorAssignment>> scAssignmentsByActivity = allScAssignments.stream()
+                .filter(s -> s.getActivityId() != null)
+                .collect(Collectors.groupingBy(ActivitySubContractorAssignment::getActivityId));
+        Map<UUID, BigDecimal> dprAcByActivity = dprActualCostLookup.sumByActivity(projectId);
 
-        EvmTechniqueStrategy strategy = EvmTechniqueFactory.getStrategy(request.technique());
+        EvmTechniqueStrategy strategy = EvmTechniqueFactory.getStrategy(technique);
 
         BigDecimal totalPv = BigDecimal.ZERO;
         BigDecimal totalEv = BigDecimal.ZERO;
@@ -76,10 +95,16 @@ public class EvmService {
         BigDecimal totalBac = BigDecimal.ZERO;
 
         for (Activity activity : activities) {
-            BigDecimal activityBac = EvmRollupService.getActivityBac(activity, expensesByActivity, assignmentsByActivity);
+            // On-demand percent-complete refresh: covers the gap when DPR listener was a no-op
+            // (e.g. fired before actualStartDate was persisted) and the nightly DurationPercentCompleteJob
+            // hasn't run yet. Without this, the strategy reads a stale 0 and EV is 0 even though
+            // the activity is partway through its planned duration.
+            refreshPercentCompleteIfStale(activity, dataDate);
+            BigDecimal activityBac = EvmRollupService.getActivityBac(activity, expensesByActivity,
+                    assignmentsByActivity, scAssignmentsByActivity);
             BigDecimal activityPv = EvmRollupService.getActivityPv(activity, activityBac, dataDate);
             BigDecimal activityEv = strategy.calculateEarnedValue(activity, activityBac, activityPv);
-            BigDecimal activityAc = EvmRollupService.getActivityAc(activity, expensesByActivity, assignmentsByActivity);
+            BigDecimal activityAc = EvmRollupService.getActivityAc(activity, expensesByActivity, assignmentsByActivity, dprAcByActivity);
 
             totalBac = totalBac.add(activityBac);
             totalPv = totalPv.add(activityPv);
@@ -87,18 +112,51 @@ public class EvmService {
             totalAc = totalAc.add(activityAc);
         }
 
+        // Project-level BAC source of truth: Project.currentBudget (approved, change-controlled)
+        // when set. Activity rollup is the bottom-up forecast (still available via the
+        // CostAccountRollup endpoint for variance reporting).
+        //
+        // DEFECT-11 unit fix: project.currentBudget is stored in the currency's "major-scale"
+        // unit (crores for INR = 1e7, millions for every other currency = 1e6) — this matches
+        // the Set-Budget UI ("Amount (crores)" / "Amount (millions OMR)"), the formatBudget
+        // helper that renders it ("0.02 cr"), and the OmanRoadProjectSeeder. EV/AC/PV in this
+        // method are all in raw currency units (rupees / baisa-less OMR), so we must convert
+        // currentBudget to raw units before slotting it into totalBac. Without this, EVM
+        // returns BAC ≈ 0.02 alongside EV ≈ 62 500, garbage CPI/ETC/EAC.
+        BigDecimal projectBac = project != null
+                ? (project.getCurrentBudget() != null ? project.getCurrentBudget() : project.getOriginalBudget())
+                : null;
+        if (projectBac != null && projectBac.signum() > 0) {
+            String currency = project.getBudgetCurrency();
+            BigDecimal majorUnitFactor = "INR".equalsIgnoreCase(currency)
+                    ? new BigDecimal("10000000")   // 1 crore = 10^7
+                    : new BigDecimal("1000000");   // 1 million = 10^6 (OMR and all others)
+            totalBac = projectBac.multiply(majorUnitFactor);
+        }
+
         var calculation = new EvmCalculation();
         calculation.setProjectId(projectId);
         calculation.setDataDate(dataDate);
-        calculation.setEvmTechnique(request.technique());
-        calculation.setEtcMethod(request.etcMethod());
+        calculation.setEvmTechnique(technique);
+        calculation.setEtcMethod(etcMethod);
         calculation.setBudgetAtCompletion(totalBac);
         calculation.setPlannedValue(totalPv);
         calculation.setEarnedValue(totalEv);
         calculation.setActualCost(totalAc);
 
         EvmServiceHelper.calculateIndices(calculation, formulaEngine);
+        return calculation;
+    }
 
+    /** Default technique/ETC convenience overload used by read-only report surfaces. */
+    @Transactional(readOnly = true)
+    public EvmCalculation computeEvmSnapshot(UUID projectId) {
+        return computeEvmSnapshot(projectId, EvmTechnique.ACTIVITY_PERCENT_COMPLETE, EtcMethod.CPI_BASED);
+    }
+
+    @Transactional
+    public EvmCalculationResponse calculateEvm(UUID projectId, CalculateEvmRequest request) {
+        EvmCalculation calculation = computeEvmSnapshot(projectId, request.technique(), request.etcMethod());
         var saved = evmCalculationRepository.save(calculation);
         auditService.logCreate("EvmCalculation", saved.getId(), EvmCalculationResponse.from(saved));
         eventPublisher.publishEvent(new EvmRecalculatedEvent(
@@ -124,7 +182,8 @@ public class EvmService {
 
     @Transactional(readOnly = true)
     public List<EvmCalculationResponse> getEvmHistory(UUID projectId) {
-        return evmCalculationRepository.findByProjectIdOrderByDataDateDesc(projectId)
+        // Only project-level rows (wbsNodeId IS NULL, activityId IS NULL) belong in the S-curve.
+        return evmCalculationRepository.findProjectLevelByProjectIdOrderByDataDateDesc(projectId)
                 .stream()
                 .map(EvmCalculationResponse::from)
                 .collect(Collectors.toList());
@@ -142,42 +201,65 @@ public class EvmService {
         var activity = activityRepository.findById(activityId)
                 .orElseThrow(() -> new ResourceNotFoundException("Activity", activityId));
 
-        LocalDate dataDate = LocalDate.now();
+        LocalDate dataDate = resolveDataDate(null, projectId);
 
         List<ActivityExpense> expenses = activityExpenseRepository.findByActivityId(activityId);
         List<ResourceAssignment> assignments = resourceAssignmentRepository.findByActivityId(activityId);
+        List<ActivitySubContractorAssignment> scAssignments =
+                activitySubContractorAssignmentRepository.findByProjectIdAndActivityId(projectId, activityId);
 
         Map<UUID, List<ActivityExpense>> expensesByActivity = expenses.stream()
                 .collect(Collectors.groupingBy(e -> activityId));
         Map<UUID, List<ResourceAssignment>> assignmentsByActivity = assignments.stream()
                 .collect(Collectors.groupingBy(r -> activityId));
+        Map<UUID, List<ActivitySubContractorAssignment>> scAssignmentsByActivity =
+                scAssignments.isEmpty() ? Map.of() : Map.of(activityId, scAssignments);
 
-        BigDecimal bac = EvmRollupService.getActivityBac(activity, expensesByActivity, assignmentsByActivity);
-        BigDecimal pv = EvmRollupService.getActivityPv(activity, bac, dataDate);
+        BigDecimal bac = EvmRollupService.getActivityBac(activity, expensesByActivity,
+                assignmentsByActivity, scAssignmentsByActivity);
+        BigDecimal pvRaw = EvmRollupService.getActivityPv(activity, bac, dataDate);
+
+        // Same rule as getCostAccountRollup: getActivityPv returns ZERO both for genuinely zero PV
+        // and for activities whose dates make PV non-computable (no planned start/finish, or data
+        // date before planned start). Those cases must surface as null so the card shows "—"
+        // instead of a contradictory SV = +EV (green) next to SPI = 0.00 (red).
+        boolean pvUnknown = activity.getPlannedFinishDate() == null
+                || activity.getPlannedStartDate() == null
+                || dataDate.isBefore(activity.getPlannedStartDate());
 
         EvmTechnique technique = resolveEvmTechnique(activity.getPercentCompleteType());
         EvmTechniqueStrategy strategy = EvmTechniqueFactory.getStrategy(technique);
-        BigDecimal ev = strategy.calculateEarnedValue(activity, bac, pv);
+        BigDecimal ev = strategy.calculateEarnedValue(activity, bac, pvRaw);
 
-        BigDecimal ac = EvmRollupService.getActivityAc(activity, expensesByActivity, assignmentsByActivity);
+        // Per-activity DPR AC fetch — one query for this activity only, since getActivityEvm is a
+        // single-activity endpoint (not part of the project-wide rollup that uses sumByActivity()).
+        BigDecimal dprAc = dprActualCostLookup.sumByActivity(projectId, activityId);
+        BigDecimal ac = EvmRollupService.getActivityAc(activity, expensesByActivity, assignmentsByActivity,
+                Map.of(activityId, dprAc));
 
         Map<String, BigDecimal> ctx = Map.of(
                 "EV", nvl(ev),
                 "AC", nvl(ac),
-                "PV", nvl(pv)
+                "PV", nvl(pvRaw)
         );
 
         BigDecimal cv = safeEvalBigDecimal("EVM_CV", projectId, ctx, ev.subtract(ac));
-        BigDecimal sv = safeEvalBigDecimal("EVM_SV", projectId, ctx, ev.subtract(pv));
 
         Double cpi = safeEvalDouble("EVM_CPI", projectId, ctx,
                 ac.compareTo(BigDecimal.ZERO) != 0
                         ? ev.divide(ac, 4, RoundingMode.HALF_UP).doubleValue()
                         : null);
-        Double spi = safeEvalDouble("EVM_SPI", projectId, ctx,
-                pv.compareTo(BigDecimal.ZERO) != 0
-                        ? ev.divide(pv, 4, RoundingMode.HALF_UP).doubleValue()
-                        : null);
+
+        // PV-dependent metrics are null when PV is unknown — skip the formula engine too, so a
+        // configured EVM_SV/EVM_SPI formula can't turn "unknown" into a misleading 0.
+        BigDecimal pv = pvUnknown ? null : pvRaw;
+        BigDecimal sv = pvUnknown ? null
+                : safeEvalBigDecimal("EVM_SV", projectId, ctx, ev.subtract(pvRaw));
+        Double spi = pvUnknown ? null
+                : safeEvalDouble("EVM_SPI", projectId, ctx,
+                        pvRaw.compareTo(BigDecimal.ZERO) != 0
+                                ? ev.divide(pvRaw, 4, RoundingMode.HALF_UP).doubleValue()
+                                : null);
 
         Double pct = activity.getPercentComplete();
 
@@ -214,6 +296,51 @@ public class EvmService {
         return value != null ? value : BigDecimal.ZERO;
     }
 
+    /**
+     * Returns the project's {@code dataDate} when set; otherwise falls back to {@code LocalDate.now()}
+     * and logs a warning so the operator knows the computation is anchored to the system clock.
+     *
+     * @param project    already-loaded project entity (may be null — triggers a DB fetch by projectId)
+     * @param projectId  used for the DB fetch when {@code project} is null
+     */
+    private LocalDate resolveDataDate(com.bipros.project.domain.model.Project project, UUID projectId) {
+        var p = (project != null) ? project : projectRepository.findById(projectId).orElse(null);
+        if (p != null && p.getDataDate() != null) {
+            return p.getDataDate();
+        }
+        log.info("EVM[project={}]: project.dataDate is null — defaulting dataDate to LocalDate.now(). "
+                + "Set a dataDate on the project to anchor EVM computations.", projectId);
+        return LocalDate.now();
+    }
+
+    /**
+     * For IN_PROGRESS DURATION/UNITS activities whose stored percentComplete is null or 0
+     * but whose actualStartDate + originalDuration imply progress against the given dataDate,
+     * recompute via {@link PercentCompleteCalculator} so the strategy sees the correct value.
+     * Non-mutating against the DB — only updates the in-memory entity for this calculation.
+     */
+    private void refreshPercentCompleteIfStale(Activity activity, LocalDate dataDate) {
+        if (activity == null || dataDate == null) return;
+        if (activity.getStatus() != ActivityStatus.IN_PROGRESS) return;
+        PercentCompleteType type = activity.getPercentCompleteType();
+        if (type != PercentCompleteType.DURATION) return; // UNITS needs unit sums we don't have here
+        Double current = activity.getPercentComplete();
+        if (current != null && current > 0.0) return; // already non-zero — trust it
+        try {
+            PercentCompleteCalculator.Result result =
+                    percentCompleteCalculator.calculate(activity, null, null, dataDate);
+            if (result == null || result.isKeepPrior() || result.percent() == null) return;
+            if (result.percent() > 0.0) {
+                activity.setPercentComplete(result.percent());
+                if (activity.getDurationPercentComplete() == null) {
+                    activity.setDurationPercentComplete(result.percent());
+                }
+            }
+        } catch (Exception e) {
+            log.debug("refreshPercentCompleteIfStale: activity={} skipped due to {}", activity.getId(), e.toString());
+        }
+    }
+
     private static EvmTechnique resolveEvmTechnique(PercentCompleteType type) {
         if (type == null) return EvmTechnique.ACTIVITY_PERCENT_COMPLETE;
         return switch (type) {
@@ -235,11 +362,13 @@ public class EvmService {
      */
     @Transactional(readOnly = true)
     public List<CostAccountRollupResponse> getCostAccountRollup(UUID projectId) {
-        LocalDate dataDate = LocalDate.now();
+        LocalDate dataDate = resolveDataDate(null, projectId);
 
         List<Activity> activities = activityRepository.findByProjectId(projectId);
         List<ActivityExpense> allExpenses = activityExpenseRepository.findByProjectId(projectId);
         List<ResourceAssignment> allAssignments = resourceAssignmentRepository.findByProjectId(projectId);
+        List<ActivitySubContractorAssignment> allScAssignments =
+                activitySubContractorAssignmentRepository.findByProjectId(projectId);
 
         // Pre-load all WBS nodes for the project to support in-memory inheritance lookup (N+1 safe)
         Map<UUID, WbsNode> wbsById = wbsNodeRepository.findByProjectIdOrderBySortOrder(projectId)
@@ -252,6 +381,10 @@ public class EvmService {
                 .collect(Collectors.groupingBy(ActivityExpense::getActivityId));
         Map<UUID, List<ResourceAssignment>> assignmentsByActivity = allAssignments.stream()
                 .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+        Map<UUID, List<ActivitySubContractorAssignment>> scAssignmentsByActivity = allScAssignments.stream()
+                .filter(s -> s.getActivityId() != null)
+                .collect(Collectors.groupingBy(ActivitySubContractorAssignment::getActivityId));
+        Map<UUID, BigDecimal> dprAcByActivity = dprActualCostLookup.sumByActivity(projectId);
 
         // Accumulator per resolved cost account ID (null = unassigned)
         record Bucket(
@@ -283,10 +416,11 @@ public class EvmService {
             EvmTechnique technique = resolveEvmTechnique(activity.getPercentCompleteType());
             EvmTechniqueStrategy strategy = EvmTechniqueFactory.getStrategy(technique);
 
-            BigDecimal actBac = EvmRollupService.getActivityBac(activity, expensesByActivity, assignmentsByActivity);
+            BigDecimal actBac = EvmRollupService.getActivityBac(activity, expensesByActivity,
+                    assignmentsByActivity, scAssignmentsByActivity);
             BigDecimal actPv = EvmRollupService.getActivityPv(activity, actBac, dataDate);
             BigDecimal actEv = strategy.calculateEarnedValue(activity, actBac, actPv);
-            BigDecimal actAc = EvmRollupService.getActivityAc(activity, expensesByActivity, assignmentsByActivity);
+            BigDecimal actAc = EvmRollupService.getActivityAc(activity, expensesByActivity, assignmentsByActivity, dprAcByActivity);
 
             // Detect null PV: getActivityPv returns ZERO both for genuinely zero PV and for activities
             // whose dates make PV non-computable (no finish date, no start date, or dataDate before

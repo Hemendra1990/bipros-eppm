@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -12,6 +12,8 @@ import {
 import { projectApi } from "@/lib/api/projectApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 type TypeFilter = "ALL" | DeploymentResourceType;
 
@@ -19,7 +21,8 @@ interface ResourceDeploymentForm {
   logDate: string;
   resourceType: DeploymentResourceType;
   resourceDescription: string;
-  nosPlanned: number;
+  /** Empty string is the "Auto" / "let the backend derive" signal. */
+  nosPlanned: number | "";
   nosDeployed: number;
   hoursWorked: number;
   idleHours: number;
@@ -32,7 +35,7 @@ const initialFormState: ResourceDeploymentForm = {
   logDate: today(),
   resourceType: "MANPOWER",
   resourceDescription: "",
-  nosPlanned: 0,
+  nosPlanned: "",
   nosDeployed: 0,
   hoursWorked: 0,
   idleHours: 0,
@@ -93,9 +96,10 @@ export default function ResourceDeploymentPage() {
     enabled: !!projectId && !!appliedFrom && !!appliedTo,
   });
 
-  const logs: DailyResourceDeploymentResponse[] = Array.isArray(listResponse?.data)
-    ? (listResponse?.data ?? [])
-    : [];
+  const logs: DailyResourceDeploymentResponse[] = useMemo(
+    () => (Array.isArray(listResponse?.data) ? (listResponse?.data ?? []) : []),
+    [listResponse],
+  );
 
   const handleApply = () => {
     setAppliedFrom(from);
@@ -117,7 +121,12 @@ export default function ResourceDeploymentPage() {
         logDate: formData.logDate,
         resourceType: formData.resourceType,
         resourceDescription: formData.resourceDescription,
-        nosPlanned: formData.nosPlanned,
+        // Empty string → null (auto-derive on the backend); 0 also signals "not provided"
+        // for back-compat. Any non-zero value is the user's explicit override.
+        nosPlanned:
+          formData.nosPlanned === "" || formData.nosPlanned === 0
+            ? null
+            : Number(formData.nosPlanned),
         nosDeployed: formData.nosDeployed,
         hoursWorked: formData.hoursWorked,
         idleHours: formData.idleHours,
@@ -132,6 +141,26 @@ export default function ResourceDeploymentPage() {
     }
   };
 
+  const handleRecalculateNosPlanned = async () => {
+    setError(null);
+    try {
+      const response = await resourceDeploymentApi.suggestNosPlanned(projectId, {
+        logDate: formData.logDate,
+        resourceType: formData.resourceType,
+      });
+      const suggested = response.data ?? null;
+      if (suggested == null) {
+        setError(
+          "No matching ResourceAssignment found for this date — Nos. Planned will stay blank (saved as auto-null).",
+        );
+        return;
+      }
+      setFormData({ ...formData, nosPlanned: suggested });
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to recalculate planned headcount"));
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this deployment entry?")) return;
     try {
@@ -141,6 +170,75 @@ export default function ResourceDeploymentPage() {
       setError(getErrorMessage(err, "Failed to delete entry"));
     }
   };
+
+  const columns = useMemo<ColumnDef<DailyResourceDeploymentResponse>[]>(() => [
+    { accessorKey: "logDate", header: "Date" },
+    {
+      accessorKey: "resourceType",
+      header: "Type",
+      cell: ({ row }) => (
+        <span
+          className={`px-2 py-1 rounded text-text-primary text-sm ${
+            row.original.resourceType === "MANPOWER"
+              ? "bg-success/10 text-success ring-1 ring-success/20"
+              : "bg-accent/10 text-accent ring-1 ring-accent/20"
+          }`}
+        >
+          {row.original.resourceType}
+        </span>
+      ),
+    },
+    { accessorKey: "resourceDescription", header: "Description" },
+    {
+      accessorKey: "nosPlanned",
+      header: "Nos. Planned",
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1.5">
+          {fmtNum(row.original.nosPlanned)}
+          {row.original.nosPlannedAuto === true && (
+            <span
+              className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-info/15 text-info ring-1 ring-info/30 rounded"
+              title="Derived from ResourceAssignment.plannedUnits"
+            >
+              auto
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "nosDeployed",
+      header: "Nos. Deployed",
+      cell: ({ row }) => fmtNum(row.original.nosDeployed),
+    },
+    {
+      accessorKey: "hoursWorked",
+      header: "Hours Worked",
+      cell: ({ row }) => fmtNum(row.original.hoursWorked),
+    },
+    {
+      accessorKey: "idleHours",
+      header: "Idle Hours",
+      cell: ({ row }) => fmtNum(row.original.idleHours),
+    },
+    {
+      accessorKey: "remarks",
+      header: "Remarks",
+      cell: ({ row }) => row.original.remarks ?? "—",
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <button
+          onClick={() => handleDelete(row.original.id)}
+          className="px-2 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded text-sm hover:bg-danger/20"
+        >
+          Delete
+        </button>
+      ),
+    },
+  ], [handleDelete]);
 
   if (isLoading && logs.length === 0) {
     return <div className="p-6 text-text-muted">Loading resource deployment...</div>;
@@ -260,15 +358,34 @@ export default function ResourceDeploymentPage() {
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
                   Nos. Planned
                 </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={formData.nosPlanned}
-                  onChange={(e) =>
-                    setFormData({ ...formData, nosPlanned: parseInt(e.target.value) || 0 })
-                  }
-                  className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    value={formData.nosPlanned}
+                    placeholder="Auto"
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setFormData({
+                        ...formData,
+                        nosPlanned: raw === "" ? "" : parseInt(raw, 10) || 0,
+                      });
+                    }}
+                    className="flex-1 px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRecalculateNosPlanned}
+                    className="px-3 py-2 bg-surface-hover text-text-primary border border-border rounded-lg text-sm hover:bg-surface-active"
+                    title="Refetch the planned headcount from ResourceAssignment.plannedUnits"
+                  >
+                    Recalculate from plan
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-text-muted">
+                  Leave blank for "Auto" — the backend will derive nosPlanned from the matching
+                  ResourceAssignment.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
@@ -346,74 +463,14 @@ export default function ResourceDeploymentPage() {
           </form>
         )}
 
-        {/* Logs Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Type</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Description</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Nos. Planned</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Nos. Deployed</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Hours Worked</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Idle Hours</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Remarks</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((log) => (
-                <tr key={log.id} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2">{log.logDate}</td>
-                  <td className="border border-border px-4 py-2">
-                    <span
-                      className={`px-2 py-1 rounded text-text-primary text-sm ${
-                        log.resourceType === "MANPOWER"
-                          ? "bg-success/10 text-success ring-1 ring-success/20"
-                          : "bg-accent/10 text-accent ring-1 ring-accent/20"
-                      }`}
-                    >
-                      {log.resourceType}
-                    </span>
-                  </td>
-                  <td className="border border-border px-4 py-2">{log.resourceDescription}</td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.nosPlanned)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.nosDeployed)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.hoursWorked)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {fmtNum(log.idleHours)}
-                  </td>
-                  <td className="border border-border px-4 py-2">{log.remarks ?? "—"}</td>
-                  <td className="border border-border px-4 py-2">
-                    <button
-                      onClick={() => handleDelete(log.id)}
-                      className="px-2 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded text-sm hover:bg-danger/20"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {logs.length === 0 && !isLoading && (
-                <tr>
-                  <td
-                    colSpan={9}
-                    className="border border-border px-4 py-6 text-center text-text-muted"
-                  >
-                    No resource deployment entries for this date range.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={logs}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No resource deployment entries for this date range."
+        />
       </div>
     </div>
   );

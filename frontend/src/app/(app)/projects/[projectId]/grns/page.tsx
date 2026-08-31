@@ -1,17 +1,27 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { grnApi, materialCatalogueApi } from "@/lib/api/materialCatalogueApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import type { GoodsReceiptResponse } from "@/lib/types";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
+import { useAuthStore } from "@/lib/state/store";
+import { useMounted } from "@/lib/hooks/useMounted";
 
 export default function GrnsPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = params.projectId;
+  const { money } = useProjectCurrency();
+  // Storekeeper round (2026-08-19): receipts are STORE.UPDATE writes.
+  const mounted = useMounted();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canWrite = mounted && hasPermission("STORE.UPDATE");
 
   const { data, isLoading } = useQuery({
     queryKey: ["grns", projectId],
@@ -27,30 +37,36 @@ export default function GrnsPage() {
   const matName = (id: string) =>
     materials?.data?.find((m) => m.id === id)?.name ?? id.slice(0, 8);
 
-  const rows = data?.data ?? [];
+  const rows = useMemo(() => data?.data ?? [], [data]);
 
-  const columns: ColumnDef<GoodsReceiptResponse>[] = [
-    { key: "grnNumber", label: "GRN #", sortable: true },
-    { key: "receivedDate", label: "Date" },
+  const columns = useMemo<ColumnDef<GoodsReceiptResponse>[]>(() => [
+    { accessorKey: "grnNumber", header: "GRN #", enableSorting: true },
+    { accessorKey: "receivedDate", header: "Date" },
     {
-      key: "materialId",
-      label: "Material",
-      render: (v) => matName(v as string),
+      accessorKey: "materialId",
+      header: "Material",
+      cell: (info) => matName(info.getValue() as string),
     },
-    { key: "quantity", label: "Qty" },
+    { accessorKey: "quantity", header: "Qty" },
     {
-      key: "unitRate",
-      label: "Unit Rate",
-      render: (v) => (v == null ? "—" : `₹${Number(v).toLocaleString("en-IN")}`),
+      accessorKey: "unitRate",
+      header: "Unit Rate",
+      cell: (info) => {
+        const v = info.getValue();
+        return v == null ? "—" : money(Number(v), { decimals: 0 });
+      },
     },
     {
-      key: "amount",
-      label: "Amount",
-      render: (v) => (v == null ? "—" : `₹${Number(v).toLocaleString("en-IN")}`),
+      accessorKey: "amount",
+      header: "Amount",
+      cell: (info) => {
+        const v = info.getValue();
+        return v == null ? "—" : money(Number(v), { decimals: 0 });
+      },
     },
-    { key: "poNumber", label: "PO #" },
-    { key: "vehicleNumber", label: "Vehicle" },
-  ];
+    { accessorKey: "poNumber", header: "PO #" },
+    { accessorKey: "vehicleNumber", header: "Vehicle" },
+  ], [materials, money]);
 
   return (
     <div className="space-y-6">
@@ -58,12 +74,14 @@ export default function GrnsPage() {
         title="Goods Receipt Notes (GRN)"
         description="Inward receipt entries for material stock."
         actions={
-          <Link
-            href={`/projects/${projectId}/grns/new`}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
-          >
-            New GRN
-          </Link>
+          canWrite ? (
+            <Link
+              href={`/projects/${projectId}/grns/new`}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
+            >
+              New GRN
+            </Link>
+          ) : undefined
         }
       />
 
@@ -72,7 +90,7 @@ export default function GrnsPage() {
       ) : rows.length === 0 ? (
         <EmptyState title="No GRNs logged yet" description="Record a GRN when material arrives on site." />
       ) : (
-        <DataTable columns={columns} data={rows} rowKey="id" searchable searchPlaceholder="Search GRNs…" />
+        <VirtualDataTable columns={columns} data={rows} sortable resizable />
       )}
     </div>
   );

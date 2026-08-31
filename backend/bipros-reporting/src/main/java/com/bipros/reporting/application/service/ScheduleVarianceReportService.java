@@ -97,11 +97,11 @@ public class ScheduleVarianceReportService {
     Boolean isCritical = current != null ? current.getIsCritical() : null;
 
     if (current != null) {
-      if (ba.getEarlyStart() != null && current.getPlannedStartDate() != null) {
-        startVar = ChronoUnit.DAYS.between(ba.getEarlyStart(), current.getPlannedStartDate());
+      if (ba.getEarlyStart() != null && current.currentStartDate() != null) {
+        startVar = ChronoUnit.DAYS.between(ba.getEarlyStart(), current.currentStartDate());
       }
-      if (ba.getEarlyFinish() != null && current.getPlannedFinishDate() != null) {
-        finishVar = ChronoUnit.DAYS.between(ba.getEarlyFinish(), current.getPlannedFinishDate());
+      if (ba.getEarlyFinish() != null && current.currentFinishDate() != null) {
+        finishVar = ChronoUnit.DAYS.between(ba.getEarlyFinish(), current.currentFinishDate());
       }
       if (ba.getOriginalDuration() != null && current.getOriginalDuration() != null) {
         durationVar = current.getOriginalDuration() - ba.getOriginalDuration();
@@ -111,6 +111,9 @@ public class ScheduleVarianceReportService {
     boolean isMilestone = type == ActivityType.START_MILESTONE
         || type == ActivityType.FINISH_MILESTONE;
 
+    boolean comparable = ba.getEarlyFinish() != null
+        && current != null && current.currentFinishDate() != null;
+
     return new ScheduleVarianceReport.Row(
         ba.getActivityId(),
         code,
@@ -119,26 +122,33 @@ public class ScheduleVarianceReportService {
         status,
         percentComplete,
         ba.getEarlyStart(),
-        current != null ? current.getPlannedStartDate() : null,
+        current != null ? current.currentStartDate() : null,
         startVar,
         ba.getEarlyFinish(),
-        current != null ? current.getPlannedFinishDate() : null,
+        current != null ? current.currentFinishDate() : null,
         finishVar,
         ba.getOriginalDuration(),
         current != null ? current.getOriginalDuration() : null,
         durationVar,
         totalFloat,
         isCritical,
-        isMilestone);
+        isMilestone,
+        comparable);
   }
 
   private ScheduleVarianceReport.Summary buildSummary(List<ScheduleVarianceReport.Row> rows) {
-    int slipped = 0, ahead = 0, onTrack = 0, criticalSlipped = 0, milestoneSlipped = 0;
+    int slipped = 0, ahead = 0, onTrack = 0, notComparable = 0, criticalSlipped = 0, milestoneSlipped = 0;
     double sumStart = 0, sumFinish = 0;
     long worst = Long.MIN_VALUE;
     String worstCode = null, worstName = null;
+    int comparableN = 0;
 
     for (ScheduleVarianceReport.Row r : rows) {
+      if (!r.comparable()) {
+        notComparable++;
+        continue;
+      }
+      comparableN++;
       if (r.finishVarianceDays() > 0) {
         slipped++;
         if (Boolean.TRUE.equals(r.isCritical())) criticalSlipped++;
@@ -157,17 +167,16 @@ public class ScheduleVarianceReportService {
       }
     }
 
-    int n = rows.size();
-    double avgStart = n > 0 ? sumStart / n : 0.0;
-    double avgFinish = n > 0 ? sumFinish / n : 0.0;
-    if (n == 0) {
+    double avgStart = comparableN > 0 ? sumStart / comparableN : 0.0;
+    double avgFinish = comparableN > 0 ? sumFinish / comparableN : 0.0;
+    if (comparableN == 0) {
       worst = 0L;
       worstCode = null;
       worstName = null;
     }
 
     return new ScheduleVarianceReport.Summary(
-        n, slipped, ahead, onTrack, criticalSlipped, milestoneSlipped,
+        rows.size(), slipped, ahead, onTrack, notComparable, criticalSlipped, milestoneSlipped,
         round2(avgStart), round2(avgFinish), worst, worstCode, worstName);
   }
 

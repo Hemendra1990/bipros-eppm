@@ -3,12 +3,14 @@ package com.bipros.reporting.presentation.controller;
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.reporting.application.dto.*;
 import com.bipros.reporting.application.service.CapacityUtilizationReportService;
-import com.bipros.reporting.application.service.DailyDeploymentReportService;
-import com.bipros.reporting.application.service.DprReportService;
+import com.bipros.reporting.application.service.CommoditySummaryReportService;
+import com.bipros.reporting.application.service.DprCostingReportService;
 import com.bipros.reporting.application.service.ReportService;
+import com.bipros.reporting.application.service.SupervisorPerformanceReportService;
 import com.bipros.reporting.domain.model.ReportFormat;
 import com.bipros.reporting.domain.model.ReportType;
 import com.bipros.reporting.infrastructure.export.CapacityUtilizationExcelWriter;
+import com.bipros.reporting.infrastructure.export.DprCostingExcelWriter;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.validation.Valid;
@@ -29,50 +31,58 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/reports")
-@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'VIEWER')")
 @RequiredArgsConstructor
 public class ReportController {
 
   private final ReportService reportService;
   private final CapacityUtilizationReportService capacityUtilizationReportService;
-  private final DailyDeploymentReportService dailyDeploymentReportService;
-  private final DprReportService dprReportService;
   private final CapacityUtilizationExcelWriter capacityUtilizationExcelWriter;
+  private final CommoditySummaryReportService commoditySummaryReportService;
+  private final com.bipros.reporting.infrastructure.export.CommoditySummaryExcelWriter commoditySummaryExcelWriter;
+  private final DprCostingReportService dprCostingReportService;
+  private final DprCostingExcelWriter dprCostingExcelWriter;
+  private final SupervisorPerformanceReportService supervisorPerformanceReportService;
 
   @PersistenceContext private EntityManager em;
 
   /** Alias for {@code /reports/definitions}. Dashboards and links that expect the bare
    * {@code /v1/reports} collection endpoint land here instead of receiving a 404. */
   @GetMapping
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<List<ReportDefinitionResponse>> listReports(
       @RequestParam(required = false) ReportType type) {
     return ApiResponse.ok(reportService.listReportDefinitions(type));
   }
 
   @PostMapping("/definitions")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<ReportDefinitionResponse> createReportDefinition(
       @Valid @RequestBody CreateReportDefinitionRequest request) {
     return ApiResponse.ok(reportService.createReportDefinition(request));
   }
 
   @GetMapping("/definitions")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<List<ReportDefinitionResponse>> listReportDefinitions(
       @RequestParam(required = false) ReportType type) {
     return ApiResponse.ok(reportService.listReportDefinitions(type));
   }
 
   @GetMapping("/definitions/{id}")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<ReportDefinitionResponse> getReportDefinition(@PathVariable UUID id) {
     return ApiResponse.ok(reportService.getReportDefinition(id));
   }
 
   @DeleteMapping("/definitions/{id}")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<Void> deleteReportDefinition(@PathVariable UUID id) {
     reportService.deleteReportDefinition(id);
     return ApiResponse.ok(null);
   }
 
   @PostMapping("/execute")
+  @PreAuthorize("hasPermission(null, 'REPORT.EXPORT')")
   public ApiResponse<ReportExecutionResponse> executeReport(
       @Valid @RequestBody ExecuteReportRequest request) {
     return ApiResponse.ok(
@@ -84,17 +94,20 @@ public class ReportController {
   }
 
   @GetMapping("/executions/{id}")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<ReportExecutionResponse> getExecution(@PathVariable UUID id) {
     return ApiResponse.ok(reportService.getExecution(id));
   }
 
   @GetMapping("/executions")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<List<ReportExecutionResponse>> listExecutions(
       @RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.listExecutions(projectId));
   }
 
   @GetMapping("/projects/{projectId}/s-curve")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<List<SCurveDataPoint>> getSCurveData(
       @PathVariable UUID projectId,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
@@ -104,6 +117,7 @@ public class ReportController {
   }
 
   @GetMapping("/projects/{projectId}/resource-histogram")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<List<ResourceHistogramEntry>> getResourceHistogram(
       @PathVariable UUID projectId,
       @RequestParam UUID resourceId,
@@ -113,6 +127,7 @@ public class ReportController {
   }
 
   @GetMapping("/executions/{id}/download")
+  @PreAuthorize("hasPermission(null, 'REPORT.EXPORT')")
   public ResponseEntity<byte[]> downloadReportExecution(@PathVariable UUID id) {
     var execution = reportService.getExecution(id);
 
@@ -131,6 +146,7 @@ public class ReportController {
   }
 
   @GetMapping("/monthly-progress")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<MonthlyProgressData> getMonthlyProgress(
       @RequestParam UUID projectId,
       @RequestParam String period) {
@@ -138,66 +154,190 @@ public class ReportController {
   }
 
   @GetMapping("/evm")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<EvmReportData> getEvmReport(@RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getEvmReport(projectId));
   }
 
   @GetMapping("/cash-flow")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<List<CashFlowEntry>> getCashFlowReport(@RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getCashFlowReport(projectId));
   }
 
   @GetMapping("/contract-status")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<ContractStatusData> getContractStatus(@RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getContractStatus(projectId));
   }
 
   @GetMapping("/risk-register")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<RiskRegisterData> getRiskRegister(@RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getRiskRegister(projectId));
   }
 
   @GetMapping("/resource-utilization")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<ResourceUtilizationData> getResourceUtilization(
       @RequestParam UUID projectId) {
     return ApiResponse.ok(reportService.getResourceUtilization(projectId));
   }
 
   @GetMapping("/capacity-utilization")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ApiResponse<CapacityUtilizationReport> getCapacityUtilization(
       @RequestParam UUID projectId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
       @RequestParam(required = false, defaultValue = "RESOURCE_TYPE") String groupBy,
-      @RequestParam(required = false) String normType) {
+      @RequestParam(required = false) String normType,
+      @RequestParam(required = false) UUID supervisorUserId) {
     return ApiResponse.ok(
-        capacityUtilizationReportService.build(projectId, fromDate, toDate, groupBy, normType));
+        capacityUtilizationReportService.build(projectId, fromDate, toDate, groupBy, normType,
+            supervisorUserId));
   }
 
   /**
-   * Streams the 5-sheet Capacity Utilisation .xlsx workbook (Plant utilization, Manpower
-   * utilization, SUMMARY, Daily Deployment, DPR) for a single project and calendar month.
-   * {@code month} accepts ISO {@code YYYY-MM}; {@code workDays} populates the highlighted Work
-   * days cell (defaults to 26 — typical 6-day-week construction month).
+   * Multi-period aggregate. Slices [fromDate, toDate] into weekly or monthly buckets and returns
+   * the per-role section for each bucket. Frontend renders a pivot table (buckets along the top,
+   * roles down the left).
+   */
+  @GetMapping("/capacity-utilization/aggregate")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
+  public ApiResponse<com.bipros.reporting.application.dto.CapacityUtilizationAggregateReport>
+      getCapacityUtilizationAggregate(
+          @RequestParam UUID projectId,
+          @RequestParam(required = false, defaultValue = "MONTHLY") String periodType,
+          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+          @RequestParam(required = false, defaultValue = "ROLE") String groupBy) {
+    return ApiResponse.ok(
+        capacityUtilizationReportService.aggregate(projectId, periodType, from, to, groupBy));
+  }
+
+  /**
+   * Per-supervisor (or project-wide when {@code supervisorUserId} is null) productivity
+   * rollup mirroring the SC180 Resource Productivity Report — Manpower Utilization by trade,
+   * Equipment Utilization by equipment-type, and a per-activity drill-down with productivity
+   * norms. Reads {@code project.dpr_manpower}/{@code project.dpr_equipment} directly.
+   */
+  @GetMapping("/supervisor-performance")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
+  public ApiResponse<SupervisorPerformanceReport> getSupervisorPerformance(
+      @RequestParam UUID projectId,
+      @RequestParam(required = false) UUID supervisorUserId,
+      @RequestParam(required = false) UUID activityId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+      @RequestParam(required = false, defaultValue = "26") int workDays) {
+    return ApiResponse.ok(supervisorPerformanceReportService.build(
+        projectId, supervisorUserId, activityId, fromDate, toDate, workDays));
+  }
+
+  /**
+   * Side-by-side comparison of N supervisors over the same window. Returns each supervisor's
+   * full report plus pivoted trade/equipment deltas.
+   */
+  @GetMapping("/supervisor-performance/compare")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
+  public ApiResponse<SupervisorPerformanceComparison> compareSupervisorPerformance(
+      @RequestParam UUID projectId,
+      @RequestParam List<UUID> supervisorUserIds,
+      @RequestParam(required = false) UUID activityId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+      @RequestParam(required = false, defaultValue = "26") int workDays) {
+    return ApiResponse.ok(supervisorPerformanceReportService.compare(
+        projectId, supervisorUserIds, activityId, fromDate, toDate, workDays));
+  }
+
+  /**
+   * Streams the 3-sheet Capacity Utilisation .xlsx workbook (Plant utilization, Manpower
+   * utilization, SUMMARY) in the client's "Resource Capacity Utilization Report" format —
+   * each resource with its per-activity task rows.
+   *
+   * <p>Window: pass either {@code month} (ISO {@code YYYY-MM} — the Reports-page form) or
+   * {@code fromDate}+{@code toDate} (the Capacity Util. tab's filters); with neither, the
+   * current month is used. The "for the day" columns anchor on the window's To date (today
+   * when the range includes today). {@code workDays} populates the highlighted Work days cell.
    */
   @GetMapping("/capacity-utilization/excel")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.EXPORT')")
   public ResponseEntity<byte[]> downloadCapacityUtilizationExcel(
       @RequestParam UUID projectId,
-      @RequestParam String month,
-      @RequestParam(required = false, defaultValue = "26") int workDays) {
-    YearMonth ym = YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"));
-    LocalDate from = ym.atDay(1);
-    LocalDate to = ym.atEndOfMonth();
-    var plant = capacityUtilizationReportService.build(projectId, from, to, "RESOURCE_TYPE", "EQUIPMENT");
-    var manpower = capacityUtilizationReportService.build(projectId, from, to, "RESOURCE_TYPE", "MANPOWER");
-    var daily = dailyDeploymentReportService.build(projectId, ym);
-    var dpr = dprReportService.build(projectId, ym);
+      @RequestParam(required = false) String month,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+      @RequestParam(required = false, defaultValue = "26") int workDays,
+      @RequestParam(required = false) UUID supervisorUserId) {
+    LocalDate from;
+    LocalDate to;
+    if (fromDate != null && toDate != null) {
+      from = fromDate;
+      to = toDate;
+    } else {
+      YearMonth requested = month != null
+          ? YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"))
+          : YearMonth.now();
+      from = requested.atDay(1);
+      to = requested.atEndOfMonth();
+    }
+    var data = capacityUtilizationReportService.clientWorkbook(
+        projectId, from, to, supervisorUserId, workDays);
+    YearMonth ym = YearMonth.from(data.referenceDate());
     String projectName = lookupProjectName(projectId);
 
-    byte[] bytes = capacityUtilizationExcelWriter.generate(
-        plant, manpower, daily, dpr, ym, workDays, projectName);
+    byte[] bytes = capacityUtilizationExcelWriter.generate(data, ym, projectName);
 
     String fileName = "capacity-utilization-" + ym + ".xlsx";
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"" + fileName + "\"")
+        .body(bytes);
+  }
+
+  /**
+   * Executed Commodity Summary workbook — BOQ level / Activity level / Per-supervisor sheets
+   * (AI Agent sheet, DPR row). Quantities only. {@code month} = ISO {@code YYYY-MM}; defaults
+   * to the current month.
+   */
+  @GetMapping("/commodity-summary/excel")
+  @PreAuthorize("hasPermission(null, 'REPORT.EXPORT')")
+  public ResponseEntity<byte[]> downloadCommoditySummaryExcel(
+      @RequestParam UUID projectId,
+      @RequestParam(required = false) String month) {
+    YearMonth ym = month != null
+        ? YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"))
+        : YearMonth.now();
+    var data = commoditySummaryReportService.build(projectId, ym);
+    byte[] bytes = commoditySummaryExcelWriter.generate(data, lookupProjectName(projectId));
+
+    String fileName = "commodity-summary-" + ym + ".xlsx";
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"" + fileName + "\"")
+        .body(bytes);
+  }
+
+  /**
+   * Streams the "Daily Activity Costing" .xlsx for a project and date range — one sheet per
+   * calendar month, APPROVED DPRs only. Mirrors the site teams' DPR-monthwise template.
+   */
+  @GetMapping("/dpr/excel")
+  @PreAuthorize("hasPermission(null, 'DPR.EXPORT')")
+  public ResponseEntity<byte[]> downloadDprCostingExcel(
+      @RequestParam UUID projectId,
+      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+    var report = dprCostingReportService.build(projectId, from, to);
+    byte[] bytes = dprCostingExcelWriter.generate(report);
+
+    String fileName = "dpr-costing-" + from + "_" + to + ".xlsx";
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
@@ -217,7 +357,7 @@ public class ReportController {
   }
 
   @GetMapping("/trend-analysis")
-  @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'COST_ENGINEER')")
+  @PreAuthorize("hasPermission(null, 'REPORT.READ')")
   public ApiResponse<TrendAnalysisData> getTrendAnalysis(
       @RequestParam UUID projectId,
       @RequestParam(defaultValue = "6") int months) {

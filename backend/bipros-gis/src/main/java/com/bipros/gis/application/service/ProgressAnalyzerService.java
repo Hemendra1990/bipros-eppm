@@ -40,6 +40,7 @@ public class ProgressAnalyzerService {
     private final ConstructionProgressSnapshotRepository snapshotRepository;
     private final ProgressAnalyzerRegistry analyzerRegistry;
     private final RasterStorage rasterStorage;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     /**
      * Run analysis and persist a ConstructionProgressSnapshot. Propagation REQUIRES_NEW so the
@@ -91,12 +92,17 @@ public class ProgressAnalyzerService {
         snapshot.setAnalysisCostMicros(result.costMicros());
         snapshot.setRemarks(result.remarks());
         snapshot.setAlertFlag(deriveAlert(result.progressPercent(), contractorClaimedPercent));
-        // Variance is |claimed - ai|; set only when both present.
+        // Signed variance = derived − claimed (matches ConstructionProgressService); negative = contractor
+        // over-claim. Set only when both present. (Was Math.abs(...), which lost the over/under-claim direction
+        // for AI-segmentation snapshots, so the GIS tab and the AI agent couldn't tell over- from under-claim.)
         if (result.progressPercent() != null && contractorClaimedPercent != null) {
-            snapshot.setVariancePercent(Math.abs(contractorClaimedPercent - result.progressPercent()));
+            snapshot.setVariancePercent(result.progressPercent() - contractorClaimedPercent);
         }
 
         snapshotRepository.save(snapshot);
+        // Notify the GIS Intelligence agent (best-effort; the nightly sweep is the fallback).
+        eventPublisher.publishEvent(
+            new com.bipros.common.event.GisSnapshotAnalyzedEvent(image.getProjectId(), snapshot.getId()));
         log.info("[Analyzer] snapshot for polygon={} progress={}% variance={}% duration={}ms",
             polygon.getWbsCode(),
             result.progressPercent(),

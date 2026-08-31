@@ -132,4 +132,15 @@ public class ForecastCompletionTool extends ProjectScopedTool {
         if (val instanceof Number n) return BigDecimal.valueOf(n.doubleValue());
         return new BigDecimal(val.toString());
     }
+
+    @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of(
+                "PROJECT_MANAGER",
+                "PORTFOLIO_MANAGER",
+                "RISK_MANAGER",
+                "COST_CONTROLLER",
+                "EXECUTIVE_VIEWER"
+        );
+    }
 }

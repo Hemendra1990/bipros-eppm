@@ -24,6 +24,40 @@ export interface BoqItemResponse {
   // PMS MasterData Screen 03
   chapter: string | null;
   status: BoqStatus | null;
+  /** Workstream B2: TRUE when the user has pinned actualRate manually — auto-recalc skips. */
+  manualOverride: boolean | null;
+  /** Stage 4: null = unsplit; the split mode when the line is split into operations. */
+  splitMode: "WEIGHTED_OPERATIONS" | "QUANTITY_PARTITION" | null;
+  /** Stage 4: the split line's weighted completion fraction 0..1 (null = unsplit). */
+  earnedFraction: number | null;
+}
+
+/** One operation of a split BOQ line (Stage 4). */
+export interface BoqOperationDto {
+  id: string | null;
+  opCode: string;
+  name: string;
+  unit: string | null;
+  targetQty: number | null;
+  weightPct: number | null;
+  isMeasure: boolean | null;
+  isLegacy: boolean | null;
+  sortOrder: number | null;
+  workActivityId: string | null;
+  /** Response-only: approved DPR qty attributed to this operation. */
+  executedQty: number | null;
+}
+
+export interface SplitBoqItemRequest {
+  splitMode: "WEIGHTED_OPERATIONS" | "QUANTITY_PARTITION";
+  /** Weight of the auto-created LEGACY history operation — required (weighted mode) when the
+   *  line already has executed qty. */
+  legacyWeight?: number | null;
+  operations: Partial<BoqOperationDto>[];
+  /** activityId → opCode for every activity linked to the line (split cannot save otherwise). */
+  activityAssignments: Record<string, string>;
+  /** Reweight only: mandatory once weights are frozen (DPRs recorded against the split). */
+  reason?: string | null;
 }
 
 export interface BoqSummaryResponse {
@@ -55,6 +89,8 @@ export interface UpdateBoqItemRequest {
   description?: string | null;
   unit?: string | null;
   wbsNodeId?: string | null;
+  /** null/omitted wbsNodeId means "leave unchanged" — set this true to unlink the WBS. */
+  clearWbsNode?: boolean;
   boqQty?: number | null;
   boqRate?: number | null;
   budgetedRate?: number | null;
@@ -93,4 +129,44 @@ export const boqApi = {
 
   delete: (projectId: string, itemId: string) =>
     apiClient.delete(`/v1/projects/${projectId}/boq/${itemId}`),
+
+  /**
+   * Workstream B1: BOQ candidates for an activity, so the DPR form can suggest / pre-select
+   * a BOQ link when an activity is picked. Returns an empty array when no matches exist or
+   * when the project has no BOQ defined yet.
+   */
+  listForActivity: (projectId: string, activityId: string) =>
+    apiClient
+      .get<ApiResponse<BoqItemResponse[]>>(
+        `/v1/projects/${projectId}/boq/by-activity?activityId=${activityId}`
+      )
+      .then((r) => r.data),
+
+  // ── Stage 4: split lifecycle ─────────────────────────────────────────────
+
+  listOperations: (projectId: string, itemId: string) =>
+    apiClient
+      .get<ApiResponse<BoqOperationDto[]>>(
+        `/v1/projects/${projectId}/boq/${itemId}/operations`
+      )
+      .then((r) => r.data),
+
+  split: (projectId: string, itemId: string, request: SplitBoqItemRequest) =>
+    apiClient
+      .post<ApiResponse<BoqOperationDto[]>>(
+        `/v1/projects/${projectId}/boq/${itemId}/operations`,
+        request
+      )
+      .then((r) => r.data),
+
+  reweight: (projectId: string, itemId: string, request: SplitBoqItemRequest) =>
+    apiClient
+      .put<ApiResponse<BoqOperationDto[]>>(
+        `/v1/projects/${projectId}/boq/${itemId}/operations`,
+        request
+      )
+      .then((r) => r.data),
+
+  unsplit: (projectId: string, itemId: string) =>
+    apiClient.delete(`/v1/projects/${projectId}/boq/${itemId}/operations`),
 };

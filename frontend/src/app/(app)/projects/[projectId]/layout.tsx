@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";
-import { ChevronDown, Database } from "lucide-react";
+import { BarChart3, ChevronDown, Database } from "lucide-react";
 import { projectApi } from "@/lib/api/projectApi";
 import { cn } from "@/lib/utils/cn";
+import { useAuthStore } from "@/lib/state/store";
+import { useRecentProjects } from "@/hooks/useRecentProjects";
+import { ProjectCurrencyProvider } from "@/lib/currency/ProjectCurrencyProvider";
 
-export default function ProjectDetailLayout({
+function ProjectDetailLayoutInner({
   children,
 }: {
   children: React.ReactNode;
@@ -17,88 +20,143 @@ export default function ProjectDetailLayout({
   const router = useRouter();
   const pathname = usePathname();
   const projectId = params.projectId as string;
+  const hasPermission = useAuthStore((s) => s.hasPermission);
   // Check if we're on a sub-route (not the base project page with ?tab= params)
   const isOnSubRoute = pathname !== `/projects/${projectId}` && !pathname.endsWith(`/projects/${projectId}`);
   const activeTab = isOnSubRoute ? null : (searchParams.get("tab") || "overview");
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
   const [masterDataOpen, setMasterDataOpen] = useState(false);
+  const [insightsHeaderOpen, setInsightsHeaderOpen] = useState(false);
 
-  const { data: projectData, isLoading } = useQuery({
+  const { data: projectData, isLoading, error } = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => projectApi.getProject(projectId),
+    // 403/404 is a final state — retrying just delays the explanatory message.
+    retry: (failureCount, err) => {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403 || status === 404) return false;
+      return failureCount < 2;
+    },
   });
 
   const project = projectData?.data;
+  const status = (error as { response?: { status?: number } } | null)?.response?.status;
+
+  // Record this visit in the per-user MRU list so the home hub's "Recent
+  // projects" strip can surface it. Re-running only when the project identity
+  // changes; navigating between sub-tabs of the same project doesn't re-record.
+  const { recordVisit } = useRecentProjects();
+  useEffect(() => {
+    if (project?.id && project?.code && project?.name) {
+      recordVisit({ id: project.id, code: project.code, name: project.name });
+    }
+  }, [project?.id, project?.code, project?.name, recordVisit]);
 
   if (isLoading) {
-    return <div className="p-6 text-center text-text-muted">Loading...</div>;
+    return <div className="p-6 text-center text-text-muted">Loading project…</div>;
+  }
+
+  if (status === 403) {
+    return (
+      <div className="p-6 text-center">
+        <p className="text-sm font-semibold uppercase tracking-widest text-accent">No access</p>
+        <p className="mt-2 text-text-primary">
+          You&apos;re not a member of this project.
+        </p>
+        <p className="mt-1 text-sm text-text-muted">
+          Ask the project manager to add you under <em>Project &rsaquo; Members</em>.
+        </p>
+      </div>
+    );
   }
 
   if (!project) {
     return <div className="p-6 text-center text-danger">Project not found</div>;
   }
 
-  // Tab-based navigation (query parameter)
-  const tabs = [
-    { id: "overview", label: "Overview", href: null },
-    { id: "wbs", label: "WBS", href: null },
-    { id: "activities", label: "Activities", href: `/projects/${projectId}/activities` },
-    { id: "resources", label: "Resources", href: null },
-    { id: "gantt", label: "Gantt", href: null },
-    { id: "network", label: "Network", href: null },
-    { id: "baselines", label: "Baselines", href: null },
-    { id: "costs", label: "Costs", href: null },
-    { id: "evm", label: "EVM", href: null },
-    { id: "period-performance", label: "Period Performance", href: null },
-    { id: "cost-accounts", label: "Cost Accounts", href: null },
-    { id: "dpr", label: "DPR", href: `/projects/${projectId}/dpr` },
-    { id: "daily-outputs", label: "Daily Outputs", href: `/projects/${projectId}/daily-outputs` },
-    { id: "capacity", label: "Capacity Util.", href: `/projects/${projectId}/capacity-utilization` },
-    { id: "risks", label: "Risks", href: `/projects/${projectId}/risks` },
-    // These navigate to separate route pages:
-    { id: "contracts", label: "Contracts", href: `/projects/${projectId}/contracts` },
-    { id: "documents", label: "Documents", href: `/projects/${projectId}/documents` },
-    { id: "gis", label: "GIS", href: `/projects/${projectId}/gis-viewer` },
+  // Tab-based navigation (query parameter). Each tab can declare a `permission`
+  // gate — tabs whose perm the current user lacks are filtered out before render
+  // so SUPERVISOR-tier users don't see finance/contract surfaces.
+  type ProjectTab = { id: string; label: string; href: string | null; permission?: string };
+  // Order follows the runbook flow: plan → commercial+org → execution → daily P&L →
+  // financial analysis → schedule views → cross-cutting. WBS, Activities and Team live in
+  // the More dropdown (client workbook Web sheet, 2026-08-17: "Tabs should go under More —
+  // WBS, Team, Activity").
+  // Access-control round (2026-08-11): EVERY tab is gated by its module's READ code, so the
+  // screens a user sees are exactly what their profile grants (nothing hardcoded).
+  const allTabs: ProjectTab[] = [
+    { id: "overview",           label: "Overview",            href: null,                                            permission: "PROJECT.READ" },
+    { id: "boq",                label: "BOQ",                 href: `/projects/${projectId}/boq`,                    permission: "PROJECT.READ" },
+    { id: "general-expenses",   label: "General Expenses",    href: `/projects/${projectId}/general-expenses`,       permission: "COST.READ" },
+    { id: "dpr",                label: "DPR",                 href: `/projects/${projectId}/dpr`,                    permission: "DPR.READ" },
+    { id: "capacity",           label: "Capacity Util.",      href: `/projects/${projectId}/capacity-utilization`,   permission: "REPORT.READ" },
+    { id: "dbs",                label: "DBS",                 href: `/projects/${projectId}/dbs`,                    permission: "DBS.READ" },
+    { id: "costs",              label: "Costs",               href: null, permission: "COST.READ" },
+    { id: "evm",                label: "EVM",                 href: `/projects/${projectId}/evm`,                    permission: "EVM.READ" },
+    { id: "risks",              label: "Risks",               href: `/projects/${projectId}/risks`, permission: "RISK.READ" },
+    { id: "material-consumption", label: "Material Consumptions", href: `/projects/${projectId}/material-consumption`, permission: "STORE.READ" },
+    { id: "ai",                 label: "AI",                  href: `/projects/${projectId}/ai`, permission: "AI.READ" },
   ];
+
+  const tabs = allTabs.filter((t) => !t.permission || hasPermission(t.permission));
 
   // PMS Master Data — the 5 project-scoped reference entities from TESTING_GUIDE.md §2
   const masterDataLinks = [
-    { label: "BOQ & Budget", href: `/projects/${projectId}/boq` },
-    { label: "Stretches", href: `/projects/${projectId}/stretches` },
-    { label: "Material Sources", href: `/projects/${projectId}/material-sources` },
-    { label: "Material Catalogue", href: `/projects/${projectId}/materials` },
-    { label: "Stock Register", href: `/projects/${projectId}/stock-register` },
-  ];
+    { label: "BOQ & Budget", href: `/projects/${projectId}/boq`, permission: "PROJECT.READ" },
+    { label: "Stretches", href: `/projects/${projectId}/stretches`, permission: "PROJECT.READ" },
+    { label: "Material Sources", href: `/projects/${projectId}/material-sources`, permission: "RESOURCE.READ" },
+    // Store surfaces run on STORE.* (2026-08-19): storekeeper-only entry without
+    // disturbing the RESOURCE.* deployment-log grants.
+    { label: "Material Catalogue", href: `/projects/${projectId}/materials`, permission: "STORE.READ" },
+    { label: "Stock Register", href: `/projects/${projectId}/stock-register`, permission: "STORE.READ" },
+  ].filter((l) => hasPermission(l.permission));
 
-  const moreLinks = [
-    { label: "Budget Changes", href: `/projects/${projectId}/budget-changes` },
-    { label: "Relationships", href: `/projects/${projectId}/relationships` },
-    { label: "Daily Cost Report", href: `/projects/${projectId}/daily-cost-report` },
-    { label: "Material Consumption", href: `/projects/${projectId}/material-consumption` },
-    { label: "Material Reconciliation", href: `/projects/${projectId}/material-reconciliation` },
-    { label: "Resource Deployment", href: `/projects/${projectId}/resource-deployment` },
-    { label: "Weather Log", href: `/projects/${projectId}/weather-log` },
-    { label: "Next Day Plan", href: `/projects/${projectId}/next-day-plan` },
-    { label: "Schedule Health", href: `/projects/${projectId}/schedule-health` },
-    { label: "Schedule Compression", href: `/projects/${projectId}/schedule-compression` },
-    { label: "Risk Analysis", href: `/projects/${projectId}/risk-analysis` },
-    { label: "Activity Correlations", href: `/projects/${projectId}/activity-correlations` },
-    { label: "Predictions", href: `/projects/${projectId}/predictions` },
-    { label: "RA Bills", href: `/projects/${projectId}/ra-bills` },
-    { label: "Drawings", href: `/projects/${projectId}/drawings` },
-    { label: "RFIs", href: `/projects/${projectId}/rfis` },
-    { label: "Equipment Logs", href: `/projects/${projectId}/equipment-logs` },
-    { label: "Labour Returns", href: `/projects/${projectId}/labour-returns` },
-    { label: "GRNs", href: `/projects/${projectId}/grns` },
-    { label: "Issues", href: `/projects/${projectId}/issues` },
+  const moreLinks: { label: string; href: string; permission?: string }[] = [
+    // Client workbook (Web sheet): WBS, Team and Activities moved here from the top tab row.
+    { label: "WBS", href: `/projects/${projectId}?tab=wbs`, permission: "PROJECT.READ" },
+    { label: "Activities", href: `/projects/${projectId}/activities`, permission: "ACTIVITY.READ" },
+    { label: "Team", href: `/projects/${projectId}/team`, permission: "PROJECT_MEMBER.READ" },
+    { label: "GIS", href: `/projects/${projectId}/gis-viewer`, permission: "PROJECT.READ" },
+    { label: "Quality", href: `/projects/${projectId}/quality`, permission: "NCR.READ" },
+    { label: "Procurement", href: `/projects/${projectId}/procurement`, permission: "RESOURCE.READ" },
+    { label: "Insights", href: `/projects/${projectId}/insights`, permission: "REPORT.READ" },
+    { label: "Budget Changes", href: `/projects/${projectId}/budget-changes`, permission: "COST.READ" },
+    { label: "Relationships", href: `/projects/${projectId}/relationships`, permission: "ACTIVITY.READ" },
+    // { label: "Daily Cost Report", href: `/projects/${projectId}/daily-cost-report` },  // hidden per request
+    { label: "Performance (D/W/M)", href: `/projects/${projectId}/performance`, permission: "COST.READ" },
+    // /pnl/** routes are gated by project-scoped COST.READ on the backend — hide the
+    // links from roles that would only get a 403 on click.
+    { label: "P&L vs Budgeted Rates", href: `/projects/${projectId}/pnl/budgeted`, permission: "COST.READ" },
+    { label: "P&L vs BOQ Rates", href: `/projects/${projectId}/pnl/boq`, permission: "COST.READ" },
+    { label: "Material Consumption Report", href: `/projects/${projectId}/reports/material-consumption`, permission: "REPORT.READ" },
+    /* { label: "Material Reconciliation", href: `/projects/${projectId}/material-reconciliation` },
+    { label: "Resource Deployment", href: `/projects/${projectId}/resource-deployment` }, */
+    { label: "Weather Log", href: `/projects/${projectId}/weather-log`, permission: "DPR.READ" },
+    { label: "Next Day Plan", href: `/projects/${projectId}/next-day-plan`, permission: "DPR.READ" },
+    { label: "Schedule Health", href: `/projects/${projectId}/schedule-health`, permission: "SCHEDULE.READ" },
+    { label: "Schedule Compression", href: `/projects/${projectId}/schedule-compression`, permission: "SCHEDULE.READ" },
+    { label: "Risk Analysis", href: `/projects/${projectId}/risk-analysis`, permission: "RISK.READ" },
+    // { label: "Activity Correlations", href: `/projects/${projectId}/activity-correlations` },
+    // { label: "Predictions", href: `/projects/${projectId}/predictions` },
+    // { label: "RA Bills", href: `/projects/${projectId}/ra-bills` },
+    // { label: "Drawings", href: `/projects/${projectId}/drawings` },
+    // { label: "RFIs", href: `/projects/${projectId}/rfis` },
+    // { label: "Equipment Logs", href: `/projects/${projectId}/equipment-logs` },
+    // { label: "Labour Returns", href: `/projects/${projectId}/labour-returns` },
+    // Store chain (Material agent row, Mode A): catalogue → receipts in → issue slips out → stock.
+    // STORE.* (2026-08-19): storekeeper-only entry; PM/CM hold STORE.READ for visibility.
+    { label: "Material Catalogue", href: `/projects/${projectId}/materials`, permission: "STORE.READ" },
+    { label: "GRNs (Goods Received)", href: `/projects/${projectId}/grns`, permission: "STORE.READ" },
+    { label: "Material Issues (Store)", href: `/projects/${projectId}/material-issues`, permission: "STORE.READ" },
+    { label: "Stock Register", href: `/projects/${projectId}/stock-register`, permission: "STORE.READ" },
+    { label: "Issues", href: `/projects/${projectId}/issues`, permission: "ISSUE.READ" },
+    { label: "Baselines", href: `/projects/${projectId}?tab=baselines`, permission: "BASELINE.READ" },
+    { label: "Contracts", href: `/projects/${projectId}/contracts`, permission: "CONTRACT.READ" },
   ];
 
   // Check if any dropdown link is active (check first so we can exclude them below)
   const isMasterDataActive = masterDataLinks.some((link) => pathname.includes(link.href));
   const isMoreActive = moreLinks.some((link) => pathname.includes(link.href));
-
-  // Check if any href-based tab matches
-  const isAnyHrefTabActive = tabs.some((t) => t.href && pathname.includes(t.href));
 
   // Determine if a tab is active
   const isTabActive = (tab: typeof tabs[0]): boolean => {
@@ -109,20 +167,71 @@ export default function ProjectDetailLayout({
     if (activeTab !== null) {
       return activeTab === tab.id;
     }
-    // On a sub-route: check if the pathname contains /activities/, /activity-codes/ etc.
-    // that should map back to the query-based tab
-    if (isOnSubRoute && !isMasterDataActive && !isMoreActive && !isAnyHrefTabActive) {
-      const subRouteSegment = pathname.replace(`/projects/${projectId}`, "").split("/")[1];
-      if (tab.id === "activities" && (subRouteSegment === "activities" || subRouteSegment === "activity-codes")) return true;
-    }
     return false;
   };
 
   return (
+    <ProjectCurrencyProvider currency={project.budgetCurrency}>
     <div className="min-w-0" style={{ ["--tab-nav-h" as string]: "53px" }}>
-      <div className="mb-6 px-6 pt-6">
-        <h1 className="text-2xl font-bold text-text-primary">{project.name}</h1>
-        <p className="text-sm text-text-secondary">{project.code}</p>
+      <div className="mb-6 flex items-start justify-between gap-4 px-6 pt-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-text-primary">{project.name}</h1>
+          <p className="text-sm text-text-secondary">{project.code}</p>
+        </div>
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setInsightsHeaderOpen(!insightsHeaderOpen);
+              setMasterDataOpen(false);
+              setMoreDropdownOpen(false);
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-gold/45 bg-gold-tint/40 px-3 py-2 text-sm font-semibold text-gold-deep transition-colors hover:border-gold hover:bg-gold-tint"
+            aria-haspopup="menu"
+            aria-expanded={insightsHeaderOpen}
+          >
+            <BarChart3 size={15} strokeWidth={1.75} />
+            Open dashboards
+            <ChevronDown
+              size={14}
+              className={cn("transition-transform duration-200", insightsHeaderOpen && "rotate-180")}
+            />
+          </button>
+          {insightsHeaderOpen && (
+            <div className="absolute right-0 top-full mt-1 w-56 rounded-md border border-border bg-surface shadow-lg z-50 max-h-[70vh] overflow-y-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(`/projects/${projectId}/insights/operational`);
+                  setInsightsHeaderOpen(false);
+                }}
+                className="block w-full rounded-t-md px-4 py-2 text-left text-sm text-text-secondary transition-colors hover:bg-surface-hover/50 hover:text-text-primary"
+              >
+                Operational
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(`/projects/${projectId}/insights/field`);
+                  setInsightsHeaderOpen(false);
+                }}
+                className="block w-full px-4 py-2 text-left text-sm text-text-secondary transition-colors hover:bg-surface-hover/50 hover:text-text-primary"
+              >
+                Field
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(`/projects/${projectId}/capacity-utilization`);
+                  setInsightsHeaderOpen(false);
+                }}
+                className="block w-full rounded-b-md border-t border-border px-4 py-2 text-left text-sm text-text-secondary transition-colors hover:bg-surface-hover/50 hover:text-text-primary"
+              >
+                Capacity Utilisation
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="sticky top-0 z-30 border-b border-border bg-ivory px-6">
@@ -153,7 +262,8 @@ export default function ProjectDetailLayout({
             })}
           </div>
 
-          {/* Master Data Dropdown */}
+          {/* Master Data Dropdown — hidden per request */}
+          {/*
           <div className="relative shrink-0">
             <button
               onClick={() => {
@@ -179,7 +289,7 @@ export default function ProjectDetailLayout({
             </button>
 
             {masterDataOpen && (
-              <div className="absolute right-0 mt-0 w-56 bg-surface border border-border rounded-md shadow-lg z-50">
+              <div className="absolute right-0 mt-0 w-56 bg-surface border border-border rounded-md shadow-lg z-50 max-h-[70vh] overflow-y-auto">
                 {masterDataLinks.map((link) => (
                   <button
                     key={link.href}
@@ -200,6 +310,7 @@ export default function ProjectDetailLayout({
               </div>
             )}
           </div>
+          */}
 
           {/* More Dropdown */}
           <div className="relative shrink-0">
@@ -226,8 +337,10 @@ export default function ProjectDetailLayout({
             </button>
 
             {moreDropdownOpen && (
-              <div className="absolute right-0 mt-0 w-48 bg-surface border border-border rounded-md shadow-lg z-50">
-                {moreLinks.map((link) => (
+              <div className="absolute right-0 mt-0 w-48 bg-surface border border-border rounded-md shadow-lg z-50 max-h-[70vh] overflow-y-auto">
+                {moreLinks
+                  .filter((link) => !link.permission || hasPermission(link.permission))
+                  .map((link) => (
                   <button
                     key={link.href}
                     onClick={() => {
@@ -247,5 +360,18 @@ export default function ProjectDetailLayout({
 
       <div className="mt-6 min-w-0">{children}</div>
     </div>
+    </ProjectCurrencyProvider>
+  );
+}
+
+export default function ProjectDetailLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-text-muted">Loading…</div>}>
+      <ProjectDetailLayoutInner>{children}</ProjectDetailLayoutInner>
+    </Suspense>
   );
 }

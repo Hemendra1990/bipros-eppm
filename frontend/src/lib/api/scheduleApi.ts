@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { ApiResponse, ActivityResponse } from "../types";
+import type { ApiResponse } from "../types";
 
 export interface ScheduleResultResponse {
   id: string;
@@ -24,19 +24,52 @@ export interface ScheduleResultResponse {
   completedActivities: number | null;
 }
 
+// === What-If scenario simulation ===
+
+/** One activity duration change fed into a what-if run. Positive = delay, negative = crash. */
+export interface WhatIfChange {
+  activityId: string;
+  deltaDays: number;
+}
+
+export interface WhatIfRequest {
+  scenarioLabel: string;
+  changes: WhatIfChange[];
+}
+
+/** Per-activity impact row returned by a what-if run. */
+export interface WhatIfActivityImpact {
+  activityId: string;
+  activityName: string;
+  baselineFinish: string | null;
+  scenarioFinish: string | null;
+  shiftDays: number;
+  critical: boolean;
+}
+
+export interface WhatIfResponse {
+  scenarioLabel: string;
+  baselineFinish: string | null;
+  scenarioFinish: string | null;
+  /** Working-day slip of the project finish. >0 = project finishes later; <=0 = no slip / recovered. */
+  deltaWorkingDays: number;
+  baselineCriticalCount: number;
+  scenarioCriticalCount: number;
+  newlyCritical: WhatIfActivityImpact[];
+  changedActivities: WhatIfActivityImpact[];
+}
+
 export const scheduleApi = {
-  runSchedule: (projectId: string, option = "RETAINED_LOGIC") =>
-    apiClient.post<ApiResponse<ScheduleResultResponse>>(`/v1/projects/${projectId}/schedule`, { projectId, option }).then(r => r.data),
-
-  getLatestSchedule: (projectId: string) =>
-    apiClient.get<ApiResponse<ScheduleResultResponse>>(`/v1/projects/${projectId}/schedule`).then(r => r.data),
-
-  getCriticalPath: (projectId: string) =>
-    apiClient.get<ApiResponse<ActivityResponse[]>>(`/v1/projects/${projectId}/schedule/critical-path`).then(r => r.data),
-
-  getFloatPaths: (projectId: string) =>
-    apiClient.get<ApiResponse<ActivityResponse[]>>(`/v1/projects/${projectId}/schedule/float-paths`).then(r => r.data),
-
-  getAllScheduledActivities: (projectId: string) =>
-    apiClient.get<ApiResponse<ActivityResponse[]>>(`/v1/projects/${projectId}/schedule/activities`).then(r => r.data),
+  /**
+   * Run a non-persisted "what-if" schedule pass: apply the given duration deltas to a scratch
+   * copy of the network and report how the project finish and critical path move. Nothing is
+   * written back to the live schedule.
+   */
+  whatIf: (projectId: string, request: WhatIfRequest) =>
+    apiClient
+      .post<ApiResponse<WhatIfResponse>>(
+        `/v1/projects/${projectId}/schedule/what-if`,
+        request
+      )
+      .then((r) => r.data),
 };

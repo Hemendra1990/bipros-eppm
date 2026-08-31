@@ -1,0 +1,80 @@
+/* "Sky-in-a-card" forecast tiles. Each day's background is a condition-driven gradient built from
+   alpha tints, so it composites over whatever surface the Card provides and reads correctly in both
+   light and dark themes. The animated WeatherIcon is the star; a temp-range bar and a staggered
+   rise-in add motion without noise. All motion collapses under prefers-reduced-motion. */
+
+.card {
+  position: relative;
+  min-width: 96px;
+  flex: 1 1 0;
+  overflow: hidden;
+  border-radius: 12px;
+  padding: 10px 10px 12px;
+  text-align: center;
+  border: 1px solid rgba(100, 116, 139, 0.16);
+  background: var(--surface, #fff);
+  animation: riseIn 0.5s ease both;
+  animation-delay: calc(var(--i, 0) * 0.06s);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+}
+
+/* Condition sky gradients — alpha over the card surface = theme-aware. */
+.clearWarm { background-image: linear-gradient(160deg, rgba(245, 197, 88, 0.24), rgba(96, 165, 250, 0.12)); }
+.overcast  { background-image: linear-gradient(160deg, rgba(148, 163, 184, 0.22), rgba(148, 163, 184, 0.06)); }
+.wet       { background-image: linear-gradient(160deg, rgba(59, 130, 246, 0.22), rgba(96, 165, 250, 0.08)); }
+.storm     { background-image: linear-gradient(160deg, rgba(99, 102, 241, 0.28), rgba(30, 41, 59, 0.16)); }
+.frozen    { background-image: linear-gradient(160deg, rgba(186, 230, 253, 0.34), rgba(224, 242, 254, 0.10)); }
+
+/* Adverse-day signal: a thin colored bar pinned to the top edge (hue set inline). */
+.accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  animation: accentPulse 2.4s ease-in-out infinite;
+}
+
+.stage {
+  display: flex;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+/* Temperature range bar: cool→warm gradient; the filled segment spans this day's low→high
+   relative to the whole week (left/width set inline). Structure that carries real information. */
+.tempTrack {
+  position: relative;
+  height: 4px;
+  margin: 7px 4px 0;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.18);
+  overflow: hidden;
+}
+.tempFill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  min-width: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #38bdf8, #fbbf24, #ef4444);
+}
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(9px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes accentPulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card { animation: none; }
+  .card:hover { transform: none; }
+  .accent { animation: none; opacity: 1; }
+}

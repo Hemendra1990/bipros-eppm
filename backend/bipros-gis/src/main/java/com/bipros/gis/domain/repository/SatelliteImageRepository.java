@@ -14,6 +14,12 @@ public interface SatelliteImageRepository extends JpaRepository<SatelliteImage, 
     List<SatelliteImage> findByProjectIdAndCaptureDateBetween(UUID projectId, LocalDate fromDate, LocalDate toDate);
     List<SatelliteImage> findByLayerIdOrderByCaptureDate(UUID layerId);
 
+    /** Scenes owned by a single polygon — used by the cascade delete. */
+    List<SatelliteImage> findByWbsPolygonId(UUID wbsPolygonId);
+
     /** Used by ingestion to dedupe scenes that a prior run already pulled. */
     boolean existsBySceneId(String sceneId);
+
+    /** Per-polygon dedupe: a scene is persisted once per polygon it overlaps. */
+    boolean existsBySceneIdAndWbsPolygonId(String sceneId, UUID wbsPolygonId);
 }

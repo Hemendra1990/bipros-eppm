@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   boqApi,
   type BoqItemResponse,
@@ -10,10 +11,17 @@ import {
   type CreateBoqItemRequest,
   type UpdateBoqItemRequest,
 } from "@/lib/api/boqApi";
+import { projectApi } from "@/lib/api/projectApi";
 import { TabTip } from "@/components/common/TabTip";
+import { SplitBoqDialog } from "@/components/boq/SplitBoqDialog";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import { SearchableSelect, type SelectOption } from "@/components/common/SearchableSelect";
+import { AlertBanner } from "@/components/common/AlertBanner";
+import { boqStatusVariant } from "@/components/common/StatusBadge";
 import { getErrorMessage } from "@/lib/utils/error";
-
-const UNIT_OPTIONS = ["Cum", "MT", "Rm", "Each", "Sqm", "LS"] as const;
+import { cn } from "@/lib/utils/cn";
+import { unitOptionsWithFallback, STANDARD_UNITS } from "@/lib/constants/units";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 
 type EditableField = "qtyExecutedToDate" | "actualRate";
 
@@ -29,6 +37,7 @@ interface BoqForm {
   itemNo: string;
   description: string;
   unit: string;
+  wbsNodeId: string;
   boqQty: string;
   boqRate: string;
   budgetedRate: string;
@@ -39,13 +48,17 @@ interface BoqForm {
 const initialFormState: BoqForm = {
   itemNo: "",
   description: "",
-  unit: "Cum",
+  unit: "",
+  wbsNodeId: "",
   boqQty: "",
   boqRate: "",
   budgetedRate: "",
   qtyExecutedToDate: "",
   actualRate: "",
 };
+
+/** Sentinel for the "unassigned" choice in the WBS filter dropdown. */
+const WBS_FILTER_NONE = "__none__";
 
 function formatAmount(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";
@@ -57,11 +70,24 @@ function formatPercent(value: number | null | undefined): string {
   return (value * 100).toFixed(2) + "%";
 }
 
+function varianceClass(value: number | null | undefined): string {
+  if (value === null || value === undefined || value === 0) return "";
+  return value > 0 ? "text-danger" : "text-success";
+}
+
 export default function BoqPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.projectId as string;
   const queryClient = useQueryClient();
+  const { money } = useProjectCurrency();
+  // Money columns (rates, amounts, variance) render with the project's currency symbol;
+  // quantity columns keep the bare-number formatAmount (no symbol).
+  const formatMoney = (value: number | null | undefined): string =>
+    value === null || value === undefined ? "—" : money(value, { decimals: 0 });
+  // Actual Rate is shown with 3 decimals so fine-grained site rates aren't rounded to whole units.
+  const formatRate = (value: number | null | undefined): string =>
+    value === null || value === undefined ? "—" : money(value, { decimals: 3 });
 
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<BoqForm>(initialFormState);
@@ -69,6 +95,11 @@ export default function BoqPage() {
   const [editingCell, setEditingCell] = useState<{ itemId: string; field: EditableField } | null>(null);
   const [editingValue, setEditingValue] = useState<string>("");
   const [overrunOnly, setOverrunOnly] = useState(false);
+  // Row whose WBS cell is in edit mode (inline SearchableSelect), and the table filter.
+  const [editingWbsItemId, setEditingWbsItemId] = useState<string | null>(null);
+  const [wbsFilter, setWbsFilter] = useState<string>("");
+  // Stage 4: line whose split/operations dialog is open.
+  const [splitDialogItem, setSplitDialogItem] = useState<BoqItemResponse | null>(null);
 
   const {
     data: summaryResponse,
@@ -79,12 +110,34 @@ export default function BoqPage() {
     queryFn: () => boqApi.list(projectId),
   });
 
+  // WBS nodes for the column labels, the Add-form picker and the filter.
+  const { data: wbsResponse } = useQuery({
+    queryKey: ["wbs", projectId],
+    queryFn: () => projectApi.getWbsTree(projectId),
+  });
+  const wbsNodes = useMemo(() => wbsResponse?.data ?? [], [wbsResponse]);
+  const wbsById = useMemo(() => {
+    const m = new Map<string, { code: string; name: string }>();
+    for (const n of wbsNodes) m.set(n.id, { code: n.code, name: n.name });
+    return m;
+  }, [wbsNodes]);
+  const wbsOptions: SelectOption[] = useMemo(
+    () => wbsNodes.map((n) => ({ value: n.id, label: `${n.code} — ${n.name}` })),
+    [wbsNodes],
+  );
+
   const summary: BoqSummaryResponse | null | undefined = summaryResponse?.data;
   const allItems: BoqItemResponse[] = summary?.items ?? [];
   const overrunItems = allItems.filter((i) => i.status === "OVERRUN");
   const overrunCount = overrunItems.length;
   const overrunUnbilled = overrunItems.reduce((sum, item) => sum + unbilledOverrunValue(item), 0);
-  const items = overrunOnly ? overrunItems : allItems;
+  const overrunScoped = overrunOnly ? overrunItems : allItems;
+  const items =
+    wbsFilter === ""
+      ? overrunScoped
+      : overrunScoped.filter((i) =>
+          wbsFilter === WBS_FILTER_NONE ? !i.wbsNodeId : i.wbsNodeId === wbsFilter,
+        );
 
   const updateMutation = useMutation({
     mutationFn: ({ itemId, request }: { itemId: string; request: UpdateBoqItemRequest }) =>
@@ -151,6 +204,7 @@ export default function BoqPage() {
       itemNo: formData.itemNo.trim(),
       description: formData.description.trim(),
       unit: formData.unit,
+      wbsNodeId: formData.wbsNodeId || undefined,
       boqQty: formData.boqQty === "" ? undefined : Number(formData.boqQty),
       boqRate: formData.boqRate === "" ? undefined : Number(formData.boqRate),
       budgetedRate: formData.budgetedRate === "" ? undefined : Number(formData.budgetedRate),
@@ -160,10 +214,329 @@ export default function BoqPage() {
     createMutation.mutate(request);
   };
 
-  const varianceClass = (value: number | null | undefined): string => {
-    if (value === null || value === undefined || value === 0) return "";
-    return value > 0 ? "text-danger" : "text-success";
+  // WBS cell — label when idle, inline SearchableSelect on click (same interaction
+  // pattern as the editable number cells). Clearing the select unlinks the item.
+  const renderWbsCell = (item: BoqItemResponse) => {
+    if (editingWbsItemId === item.id) {
+      return (
+        <div onClick={(e) => e.stopPropagation()}>
+          <SearchableSelect
+            options={wbsOptions}
+            value={item.wbsNodeId ?? ""}
+            onChange={(v) => {
+              setEditingWbsItemId(null);
+              if ((item.wbsNodeId ?? "") !== v) {
+                // Empty selection = unlink. The backend treats wbsNodeId:null as "leave
+                // unchanged", so unlinking needs the explicit clearWbsNode flag.
+                updateMutation.mutate({
+                  itemId: item.id,
+                  request: v ? { wbsNodeId: v } : { clearWbsNode: true },
+                });
+              }
+            }}
+            placeholder="Pick WBS…"
+          />
+        </div>
+      );
+    }
+    const wbs = item.wbsNodeId ? wbsById.get(item.wbsNodeId) : null;
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditingWbsItemId(item.id);
+        }}
+        className="block w-full text-left hover:text-gold focus:text-gold focus:outline-none"
+        title="Click to assign WBS"
+      >
+        {wbs ? `${wbs.code} — ${wbs.name}` : <span className="text-text-secondary">—</span>}
+      </button>
+    );
   };
+
+  const renderEditableNumberCell = (item: BoqItemResponse, field: EditableField) => {
+    // Stage 4: a split line's executed qty is DERIVED from its operations — the backend
+    // rejects manual writes (BOQ_SPLIT_QTY_DERIVED), so don't offer the edit.
+    if (field === "qtyExecutedToDate" && item.splitMode) {
+      return (
+        <span title="Derived from the line's operations — record quantity via DPRs">
+          {formatAmount(item[field])}
+        </span>
+      );
+    }
+    const isEditing = editingCell?.itemId === item.id && editingCell.field === field;
+    if (isEditing) {
+      return (
+        <input
+          autoFocus
+          type="number"
+          step="any"
+          value={editingValue}
+          onChange={(e) => setEditingValue(e.target.value)}
+          onBlur={commitEdit}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitEdit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              cancelEdit();
+            }
+          }}
+          className="w-full rounded border border-gold/40 bg-paper px-2 py-1 text-left text-sm text-charcoal focus:outline-none focus:ring-1 focus:ring-gold dark:text-[#F5F2E8]"
+        />
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          beginEdit(item, field);
+        }}
+        className="block w-full text-left hover:text-gold focus:text-gold focus:outline-none"
+        title="Click to edit"
+      >
+        {field === "actualRate" ? formatRate(item[field]) : formatAmount(item[field])}
+      </button>
+    );
+  };
+
+  const columns = useMemo<ColumnDef<BoqItemResponse>[]>(
+    () => [
+      {
+        accessorKey: "itemNo",
+        header: "Item No.",
+        size: 90,
+        meta: { className: "font-medium" },
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <span>
+              {row.itemNo}
+              {row.splitMode && (
+                <span
+                  className="ml-1 rounded bg-accent/15 px-1 py-0.5 text-[10px] font-semibold text-accent"
+                  title={
+                    row.splitMode === "QUANTITY_PARTITION"
+                      ? "Split: quantity partition"
+                      : "Split: weighted operations"
+                  }
+                >
+                  SPLIT
+                </span>
+              )}
+            </span>
+          );
+        },
+      },
+      {
+        id: "operations",
+        header: "Ops",
+        size: 92,
+        enableSorting: false,
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSplitDialogItem(row);
+              }}
+              className={cn(
+                "rounded border px-2 py-0.5 text-[11px] font-medium",
+                row.splitMode
+                  ? "border-accent/40 text-accent hover:bg-accent/10"
+                  : "border-border text-text-secondary hover:bg-surface-hover",
+              )}
+              title={
+                row.splitMode
+                  ? "View / edit this line's operations"
+                  : "Split this line into operations (screening, compaction, …)"
+              }
+            >
+              {row.splitMode ? "Operations…" : "Split…"}
+            </button>
+          );
+        },
+      },
+      {
+        accessorKey: "chapter",
+        header: "Chapter",
+        size: 110,
+        cell: (info) => {
+          const v = info.getValue() as string | null | undefined;
+          return v ? v : <span className="text-text-secondary">—</span>;
+        },
+      },
+      {
+        accessorKey: "description",
+        header: "Description",
+        size: 280,
+        meta: { className: "whitespace-normal" },
+      },
+      {
+        id: "wbs",
+        // accessorFn (not accessorKey) so the table's global search and sorting operate on
+        // the visible "code — name" label rather than the raw UUID.
+        accessorFn: (row) => {
+          const wbs = row.wbsNodeId ? wbsById.get(row.wbsNodeId) : null;
+          return wbs ? `${wbs.code} — ${wbs.name}` : "";
+        },
+        header: "WBS",
+        size: 170,
+        meta: { className: "whitespace-normal" },
+        cell: (info) => renderWbsCell(info.row.original),
+      },
+      {
+        accessorKey: "unit",
+        header: "Unit",
+        size: 70,
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        size: 110,
+        cell: (info) => {
+          const status = info.getValue() as string | null | undefined;
+          if (!status) return <span className="text-text-secondary">—</span>;
+          return (
+            <span
+              className={cn(
+                "inline-block rounded-full px-2 py-0.5 text-[11px] font-medium",
+                boqStatusVariant(status)
+              )}
+            >
+              {status.replace("_", " ")}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "boqQty",
+        header: () => <span className="flex flex-col leading-tight">BOQ Qty<span className="text-[10px] font-normal text-text-muted">(from client)</span></span>,
+        size: 90,
+        meta: { className: "text-left" },
+        cell: (info) => formatAmount(info.getValue() as number | null | undefined),
+      },
+      {
+        accessorKey: "boqRate",
+        header: () => <span className="flex flex-col leading-tight">BOQ Rate<span className="text-[10px] font-normal text-text-muted">(from client)</span></span>,
+        size: 100,
+        meta: { className: "text-left" },
+        cell: (info) => formatMoney(info.getValue() as number | null | undefined),
+      },
+      {
+        accessorKey: "boqAmount",
+        header: "BOQ Amount",
+        size: 120,
+        meta: { className: "text-left" },
+        cell: (info) => formatMoney(info.getValue() as number | null | undefined),
+      },
+      {
+        accessorKey: "budgetedRate",
+        header: "Budgeted Rate",
+        size: 120,
+        meta: { className: "text-left" },
+        cell: (info) => formatMoney(info.getValue() as number | null | undefined),
+      },
+      {
+        accessorKey: "budgetedAmount",
+        header: "Budgeted Amt",
+        size: 130,
+        meta: { className: "text-left" },
+        cell: (info) => formatMoney(info.getValue() as number | null | undefined),
+      },
+      {
+        accessorKey: "qtyExecutedToDate",
+        header: "Qty Executed",
+        size: 120,
+        meta: { className: "text-left" },
+        cell: (info) => renderEditableNumberCell(info.row.original, "qtyExecutedToDate"),
+      },
+      {
+        accessorKey: "actualRate",
+        header: "Actual Rate",
+        size: 110,
+        meta: { className: "text-left" },
+        cell: (info) => renderEditableNumberCell(info.row.original, "actualRate"),
+      },
+      {
+        accessorKey: "actualAmount",
+        header: "Actual Amount",
+        size: 130,
+        meta: { className: "text-left" },
+        cell: (info) => formatMoney(info.getValue() as number | null | undefined),
+      },
+      {
+        accessorKey: "percentComplete",
+        header: "% Complete",
+        size: 110,
+        meta: { className: "text-left" },
+        cell: (info) => formatPercent(info.getValue() as number | null | undefined),
+      },
+      {
+        accessorKey: "costVariance",
+        header: "Cost Variance",
+        size: 130,
+        meta: { className: "text-left" },
+        cell: (info) => {
+          const v = info.getValue() as number | null | undefined;
+          return <span className={varianceClass(v)}>{formatMoney(v)}</span>;
+        },
+      },
+      {
+        accessorKey: "costVariancePercent",
+        header: "Var %",
+        size: 90,
+        meta: { className: "text-left" },
+        cell: (info) => {
+          const v = info.getValue() as number | null | undefined;
+          return <span className={varianceClass(v)}>{formatPercent(v)}</span>;
+        },
+      },
+    ],
+    // editingCell/editingValue/editingWbsItemId captured via closures inside the cell
+    // renderers — must re-build columns when they change so the inputs re-render.
+    // money is included so cells re-format once the currency master resolves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editingCell, editingValue, editingWbsItemId, wbsById, wbsOptions, money]
+  );
+
+  // Grand-total quantities — Σ across all items. Units are heterogeneous
+  // (Km / Nos / m³), so these are plain summed numbers, not a single unit.
+  const boqQtyGrandTotal = summary
+    ? summary.items.reduce((sum, i) => sum + (i.boqQty ?? 0), 0)
+    : 0;
+  const qtyExecutedGrandTotal = summary
+    ? summary.items.reduce((sum, i) => sum + (i.qtyExecutedToDate ?? 0), 0)
+    : 0;
+
+  const grandTotalFooter = summary ? (
+<tr className="text-text-primary dark:text-[#F5F2E8] font-semibold">
+  <td className="px-4 py-3" colSpan={7}>
+        Grand Total
+      </td>
+      <td className="px-4 py-3 text-left">{formatAmount(boqQtyGrandTotal)}</td>
+      <td className="px-4 py-3" />
+      <td className="px-4 py-3 text-left">{formatMoney(summary.boqGrandTotal)}</td>
+      <td className="px-4 py-3" />
+      <td className="px-4 py-3 text-left">{formatMoney(summary.budgetedGrandTotal)}</td>
+      <td className="px-4 py-3 text-left">{formatAmount(qtyExecutedGrandTotal)}</td>
+      <td className="px-4 py-3" />
+      <td className="px-4 py-3 text-left">{formatMoney(summary.actualGrandTotal)}</td>
+      <td className="px-4 py-3 text-left">{formatPercent(summary.overallPercentComplete)}</td>
+      <td className={cn("px-4 py-3 text-left", varianceClass(summary.grandCostVariance))}>
+        {formatMoney(summary.grandCostVariance)}
+      </td>
+      <td className={cn("px-4 py-3 text-left", varianceClass(summary.grandCostVariancePercent))}>
+        {formatPercent(summary.grandCostVariancePercent)}
+      </td>
+    </tr>
+  ) : null;
 
   if (isLoading) {
     return <div className="p-6 text-text-muted">Loading BOQ...</div>;
@@ -181,44 +554,65 @@ export default function BoqPage() {
         <h1 className="text-3xl font-bold mb-4 text-text-primary">Bill of Quantities</h1>
 
         {overrunCount > 0 && (
-          <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-sm text-amber-200">
+          <AlertBanner
+            tone="warning"
+            message={
+              <>
                 <strong>{overrunCount}</strong>{" "}
                 {overrunCount === 1 ? "item has" : "items have"} overrun their contracted
                 quantities.{" "}
-                <strong>₹{overrunUnbilled.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</strong>{" "}
+                <strong>{money(overrunUnbilled)}</strong>{" "}
                 of work executed cannot be billed until a Variation Order is approved.
-              </div>
-              <div className="flex gap-2">
+              </>
+            }
+            actions={
+              <>
                 <button
                   type="button"
                   onClick={() => setOverrunOnly((v) => !v)}
-                  className="px-3 py-1.5 text-xs rounded border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-100"
+                  className="px-3 py-1.5 text-xs rounded border border-warning/40 bg-warning/10 hover:bg-warning/20 text-warning font-medium"
                 >
                   {overrunOnly ? "Show all items" : "Show only overrun"}
                 </button>
                 <button
                   type="button"
                   onClick={() => router.push(`/projects/${projectId}/variation-orders`)}
-                  className="px-3 py-1.5 text-xs rounded bg-amber-500 text-black font-medium hover:bg-amber-400"
+                  className="px-3 py-1.5 text-xs rounded bg-warning text-white font-medium hover:bg-warning/90"
                 >
                   Create VO
                 </button>
-              </div>
-            </div>
-          </div>
+              </>
+            }
+          />
         )}
 
-        <button
-          onClick={() => {
-            setShowForm(!showForm);
-            setFormError(null);
-          }}
-          className="mb-6 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
-        >
-          {showForm ? "Cancel" : "Add BOQ Item"}
-        </button>
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => {
+              setShowForm(!showForm);
+              setFormError(null);
+            }}
+            className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
+          >
+            {showForm ? "Cancel" : "Add BOQ Item"}
+          </button>
+          <div className="w-72">
+            <SearchableSelect
+              options={[
+                { value: WBS_FILTER_NONE, label: "Unassigned (no WBS)" },
+                ...wbsOptions,
+              ]}
+              value={wbsFilter}
+              onChange={setWbsFilter}
+              placeholder="Filter by WBS — all items"
+            />
+          </div>
+          {wbsFilter !== "" && (
+            <span className="text-xs text-text-muted">
+              {items.length} of {overrunScoped.length} items
+            </span>
+          )}
+        </div>
 
         {errorMessage && <div className="text-danger mb-4">{errorMessage}</div>}
         {formError && <div className="text-danger mb-4">{formError}</div>}
@@ -253,12 +647,23 @@ export default function BoqPage() {
                   onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                   className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
                 >
-                  {UNIT_OPTIONS.map((u) => (
+                  <option value="">— select a unit —</option>
+                  {unitOptionsWithFallback(formData.unit).map((u) => (
                     <option key={u} value={u}>
                       {u}
+                      {!(STANDARD_UNITS as readonly string[]).includes(u) ? " (legacy)" : ""}
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-text-secondary">WBS Node (optional)</label>
+                <SearchableSelect
+                  options={wbsOptions}
+                  value={formData.wbsNodeId}
+                  onChange={(v) => setFormData({ ...formData, wbsNodeId: v })}
+                  placeholder="— none —"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-text-secondary">BOQ Qty</label>
@@ -315,7 +720,7 @@ export default function BoqPage() {
               <button
                 type="submit"
                 disabled={createMutation.isPending}
-                className="px-4 py-2 bg-green-600 text-text-primary rounded-lg hover:bg-green-600 disabled:opacity-50"
+                className="px-4 py-2 bg-success text-white rounded-lg hover:bg-success/90 disabled:opacity-50"
               >
                 {createMutation.isPending ? "Saving..." : "Save Item"}
               </button>
@@ -333,169 +738,25 @@ export default function BoqPage() {
           </form>
         )}
 
-        {/* BOQ Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Item No.</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Chapter</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Description</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Unit</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Status</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">BOQ Qty</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">BOQ Rate</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">BOQ Amount</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Budgeted Rate</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Budgeted Amount</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Qty Executed</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Actual Rate</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Actual Amount</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">% Complete</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Cost Variance</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Var %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => {
-                const isEditingQty =
-                  editingCell?.itemId === item.id && editingCell.field === "qtyExecutedToDate";
-                const isEditingRate =
-                  editingCell?.itemId === item.id && editingCell.field === "actualRate";
-                return (
-                  <tr key={item.id} className="hover:bg-surface-hover/30 text-text-primary">
-                    <td className="border border-border px-4 py-2">{item.itemNo}</td>
-                    <td className="border border-border px-4 py-2 text-text-secondary">{item.chapter ?? "—"}</td>
-                    <td className="border border-border px-4 py-2">{item.description}</td>
-                    <td className="border border-border px-4 py-2">{item.unit}</td>
-                    <td className="border border-border px-4 py-2">
-                      {item.status ? (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            item.status === "COMPLETED"
-                              ? "bg-blue-500/20 text-blue-300"
-                              : item.status === "ACTIVE"
-                                ? "bg-success/20 text-success"
-                                : item.status === "ON_HOLD"
-                                  ? "bg-amber-500/20 text-warning"
-                                  : item.status === "OVERRUN"
-                                    ? "bg-red-500/30 text-red-200"
-                                    : "bg-slate-500/20 text-slate-300"
-                          }`}
-                        >
-                          {item.status.replace("_", " ")}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="border border-border px-4 py-2 text-right">{formatAmount(item.boqQty)}</td>
-                    <td className="border border-border px-4 py-2 text-right">{formatAmount(item.boqRate)}</td>
-                    <td className="border border-border px-4 py-2 text-right">{formatAmount(item.boqAmount)}</td>
-                    <td className="border border-border px-4 py-2 text-right">{formatAmount(item.budgetedRate)}</td>
-                    <td className="border border-border px-4 py-2 text-right">{formatAmount(item.budgetedAmount)}</td>
-                    <td
-                      className="border border-border px-4 py-2 text-right cursor-pointer"
-                      onClick={() => {
-                        if (!isEditingQty) beginEdit(item, "qtyExecutedToDate");
-                      }}
-                    >
-                      {isEditingQty ? (
-                        <input
-                          autoFocus
-                          type="number"
-                          step="any"
-                          value={editingValue}
-                          onChange={(e) => setEditingValue(e.target.value)}
-                          onBlur={commitEdit}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              commitEdit();
-                            } else if (e.key === "Escape") {
-                              e.preventDefault();
-                              cancelEdit();
-                            }
-                          }}
-                          className="w-full px-2 py-1 border border-border bg-surface-hover text-text-primary rounded text-right"
-                        />
-                      ) : (
-                        formatAmount(item.qtyExecutedToDate)
-                      )}
-                    </td>
-                    <td
-                      className="border border-border px-4 py-2 text-right cursor-pointer"
-                      onClick={() => {
-                        if (!isEditingRate) beginEdit(item, "actualRate");
-                      }}
-                    >
-                      {isEditingRate ? (
-                        <input
-                          autoFocus
-                          type="number"
-                          step="any"
-                          value={editingValue}
-                          onChange={(e) => setEditingValue(e.target.value)}
-                          onBlur={commitEdit}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              commitEdit();
-                            } else if (e.key === "Escape") {
-                              e.preventDefault();
-                              cancelEdit();
-                            }
-                          }}
-                          className="w-full px-2 py-1 border border-border bg-surface-hover text-text-primary rounded text-right"
-                        />
-                      ) : (
-                        formatAmount(item.actualRate)
-                      )}
-                    </td>
-                    <td className="border border-border px-4 py-2 text-right">{formatAmount(item.actualAmount)}</td>
-                    <td className="border border-border px-4 py-2 text-right">{formatPercent(item.percentComplete)}</td>
-                    <td className={`border border-border px-4 py-2 text-right ${varianceClass(item.costVariance)}`}>
-                      {formatAmount(item.costVariance)}
-                    </td>
-                    <td className={`border border-border px-4 py-2 text-right ${varianceClass(item.costVariancePercent)}`}>
-                      {formatPercent(item.costVariancePercent)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            {summary && (
-              <tfoot>
-                <tr className="sticky bottom-0 bg-surface/95 backdrop-blur text-text-primary font-semibold">
-                  <td className="border border-border px-4 py-2" colSpan={7}>
-                    Grand Total
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatAmount(summary.boqGrandTotal)}
-                  </td>
-                  <td className="border border-border px-4 py-2" />
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatAmount(summary.budgetedGrandTotal)}
-                  </td>
-                  <td className="border border-border px-4 py-2" />
-                  <td className="border border-border px-4 py-2" />
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatAmount(summary.actualGrandTotal)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatPercent(summary.overallPercentComplete)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(summary.grandCostVariance)}`}>
-                    {formatAmount(summary.grandCostVariance)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(summary.grandCostVariancePercent)}`}>
-                    {formatPercent(summary.grandCostVariancePercent)}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+        <VirtualDataTable
+          data={items}
+          columns={columns}
+          getRowId={(row) => row.id}
+          searchable
+          sortable
+          resizable
+          maxHeight={640}
+          emptyMessage={overrunOnly ? "No overrun items." : "No BOQ items yet. Click “Add BOQ Item” to start."}
+          footer={grandTotalFooter}
+        />
+
+        {/* Stage 4: split lifecycle dialog (split form / operations view). */}
+        <SplitBoqDialog
+          open={splitDialogItem !== null}
+          onClose={() => setSplitDialogItem(null)}
+          projectId={projectId}
+          item={splitDialogItem}
+        />
       </div>
     </div>
   );

@@ -204,7 +204,7 @@ public class ProjectBudgetService {
         if (request.changeType() == ChangeType.TRANSFER) {
             if (request.fromWbsNodeId() == null || request.toWbsNodeId() == null) {
                 throw new BusinessRuleException("TRANSFER_REQUIRES_WBS",
-                    "Transfer changes require both fromWbsNodeId and toWbsNodeId.");
+                    "Please select both a From WBS Node and a To WBS Node for a transfer.");
             }
             if (request.fromWbsNodeId().equals(request.toWbsNodeId())) {
                 throw new BusinessRuleException("TRANSFER_SAME_WBS",
@@ -214,12 +214,12 @@ public class ProjectBudgetService {
 
         if (request.changeType() == ChangeType.REDUCTION && request.fromWbsNodeId() == null) {
             throw new BusinessRuleException("REDUCTION_REQUIRES_WBS",
-                "Reduction changes require fromWbsNodeId.");
+                "Please select a From WBS Node for a reduction.");
         }
 
         if (request.changeType() == ChangeType.ADDITION && request.toWbsNodeId() == null) {
             throw new BusinessRuleException("ADDITION_REQUIRES_WBS",
-                "Addition changes require toWbsNodeId.");
+                "Please select a To WBS Node for an addition.");
         }
     }
 
@@ -262,6 +262,7 @@ public class ProjectBudgetService {
         BigDecimal approvedAdditions = BigDecimal.ZERO;
         BigDecimal approvedReductions = BigDecimal.ZERO;
         int pendingCount = 0;
+        int approvedCount = 0;
 
         for (BudgetChangeLog c : changes) {
             if (c.getStatus() == ChangeStatus.PENDING) {
@@ -272,6 +273,7 @@ public class ProjectBudgetService {
                     case TRANSFER -> { /* no net effect */ }
                 }
             } else if (c.getStatus() == ChangeStatus.APPROVED) {
+                approvedCount++;
                 switch (c.getChangeType()) {
                     case ADDITION -> approvedAdditions = approvedAdditions.add(c.getAmount());
                     case REDUCTION -> approvedReductions = approvedReductions.add(c.getAmount());
@@ -288,6 +290,7 @@ public class ProjectBudgetService {
             approvedAdditions,
             approvedReductions,
             pendingCount,
+            approvedCount,
             project.getBudgetCurrency(),
             project.getBudgetUpdatedAt()
         );

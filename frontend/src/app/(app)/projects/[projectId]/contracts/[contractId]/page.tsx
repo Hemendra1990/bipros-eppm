@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { contractApi } from "@/lib/api/contractApi";
+import { budgetApi } from "@/lib/api/budgetApi";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import { ContractForm } from "@/components/contracts/ContractForm";
 import { AttachmentList } from "@/components/contracts/AttachmentList";
 import { AttachmentUploadForm } from "@/components/contracts/AttachmentUploadForm";
@@ -22,13 +24,6 @@ import type {
   VariationOrderResponse,
 } from "@/lib/types";
 
-function formatRupees(v: number | null | undefined): string {
-  const n = v ?? 0;
-  if (Math.abs(n) >= 10_000_000) return `₹${(n / 10_000_000).toFixed(2)} Cr`;
-  if (Math.abs(n) >= 100_000) return `₹${(n / 100_000).toFixed(2)} L`;
-  return `₹${n.toLocaleString()}`;
-}
-
 /** Triggers a save-as for a Blob using a temporary anchor. Mirrors the documents page pattern. */
 function saveBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -42,12 +37,21 @@ function saveBlob(blob: Blob, fileName: string) {
 }
 
 export default function ContractDetailPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-text-muted">Loading…</div>}>
+      <ContractDetailPageInner />
+    </Suspense>
+  );
+}
+
+function ContractDetailPageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
   const projectId = params.projectId as string;
   const contractId = params.contractId as string;
   const activeTab = searchParams.get("tab") || "milestones";
   const queryClient = useQueryClient();
+  const { moneyCompact } = useProjectCurrency();
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -56,6 +60,13 @@ export default function ContractDetailPage() {
     queryFn: () => contractApi.getContract(projectId, contractId),
     select: (response) => response.data,
   });
+
+  const { data: budgetData } = useQuery({
+    queryKey: ["project-budget", projectId],
+    queryFn: () => budgetApi.getBudgetSummary(projectId),
+    staleTime: 5 * 60 * 1000,
+  });
+  const projectCurrency = budgetData?.data?.budgetCurrency ?? "INR";
 
   const { data: milestones = [] } = useQuery({
     queryKey: ["contract-milestones", contractId],
@@ -199,15 +210,12 @@ export default function ContractDetailPage() {
           <div className="bg-surface/80 rounded-xl p-3 border border-border">
             <p className="text-xs text-text-secondary">Contract Value</p>
             <p className="text-lg font-semibold text-text-primary">
-              {formatRupees(contractData.contractValue)}
-              {contractData.currency && contractData.currency !== "INR"
-                ? ` ${contractData.currency}`
-                : ""}
+              {moneyCompact(contractData.contractValue)}
             </p>
             {contractData.revisedValue != null &&
             contractData.revisedValue !== contractData.contractValue ? (
               <p className="text-xs text-text-secondary mt-0.5">
-                Revised: {formatRupees(contractData.revisedValue)}
+                Revised: {moneyCompact(contractData.revisedValue)}
               </p>
             ) : null}
           </div>
@@ -243,6 +251,7 @@ export default function ContractDetailPage() {
             submitLabel="Save changes"
             onSubmit={(data) => updateContractMutation.mutate(data)}
             onCancel={() => setIsEditing(false)}
+            defaultCurrency={projectCurrency}
           />
           {updateContractMutation.isError ? (
             <p className="text-sm text-danger mt-3">

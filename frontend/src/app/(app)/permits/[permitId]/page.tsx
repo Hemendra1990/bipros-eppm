@@ -8,6 +8,8 @@ import { ArrowLeft, Lock, Printer, ShieldOff, X } from "lucide-react";
 import { permitApi, type ApprovalDto } from "@/lib/api/permitApi";
 import { useAuth } from "@/lib/auth/useAuth";
 import { ApprovalTimeline, PermitStatusBadge, PermitTypeBadge, RiskBadge } from "@/components/permits";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 export default function PermitDetailPage() {
   const params = useParams<{ permitId: string }>();
@@ -217,28 +219,18 @@ export default function PermitDetailPage() {
 
       <section className="rounded-xl border border-hairline bg-paper p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-charcoal">All Workers ({permit.workers.length})</h2>
-        <table className="mt-3 w-full text-sm">
-          <thead className="text-left text-xs font-semibold uppercase tracking-wider text-slate">
-            <tr>
-              <th className="py-2">Name</th>
-              <th className="py-2">Civil ID</th>
-              <th className="py-2">Trade</th>
-              <th className="py-2">Nationality</th>
-              <th className="py-2">Role</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-hairline">
-            {permit.workers.map((w) => (
-              <tr key={w.id}>
-                <td className="py-2 text-charcoal">{w.fullName}</td>
-                <td className="py-2 text-slate">{w.civilId || "—"}</td>
-                <td className="py-2 text-slate">{w.trade || "—"}</td>
-                <td className="py-2 text-slate">{w.nationality || "—"}</td>
-                <td className="py-2 text-xs font-semibold text-charcoal">{w.roleOnPermit}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="mt-3">
+          <SimpleTable
+            columns={[
+              { accessorKey: "fullName", header: "Name", cell: ({ row }) => <span className="text-charcoal">{row.original.fullName}</span> },
+              { accessorKey: "civilId", header: "Civil ID", cell: ({ row }) => <span className="text-slate">{row.original.civilId || "—"}</span> },
+              { accessorKey: "trade", header: "Trade", cell: ({ row }) => <span className="text-slate">{row.original.trade || "—"}</span> },
+              { accessorKey: "nationality", header: "Nationality", cell: ({ row }) => <span className="text-slate">{row.original.nationality || "—"}</span> },
+              { accessorKey: "roleOnPermit", header: "Role", cell: ({ row }) => <span className="text-xs font-semibold text-charcoal">{row.original.roleOnPermit}</span> },
+            ]}
+            data={permit.workers}
+          />
+        </div>
       </section>
 
       {permit.gasTests.length > 0 && (

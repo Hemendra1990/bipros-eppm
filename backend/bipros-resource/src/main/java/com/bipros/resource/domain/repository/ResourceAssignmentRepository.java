@@ -2,11 +2,14 @@ package com.bipros.resource.domain.repository;
 
 import com.bipros.resource.domain.model.ResourceAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +18,21 @@ import java.util.UUID;
 public interface ResourceAssignmentRepository extends JpaRepository<ResourceAssignment, UUID> {
 
   List<ResourceAssignment> findByActivityId(UUID activityId);
+
+  long countByRoleId(UUID roleId);
+
+  long countByManpowerRoleRateId(UUID manpowerRoleRateId);
+
+  long countByEquipmentRoleVariantId(UUID equipmentRoleVariantId);
+
+  long countByMaterialRoleVariantId(UUID materialRoleVariantId);
+
+  List<ResourceAssignment> findByActivityIdIn(List<UUID> activityIds);
+
+  @Modifying
+  void deleteByActivityIdIn(Collection<UUID> activityIds);
+
+  long countByActivityIdIn(Collection<UUID> activityIds);
 
   List<ResourceAssignment> findByResourceId(UUID resourceId);
 
@@ -29,6 +47,15 @@ public interface ResourceAssignmentRepository extends JpaRepository<ResourceAssi
   Optional<ResourceAssignment> findByActivityIdAndResourceIdIsNullAndRoleId(
       UUID activityId, UUID roleId);
 
+  Optional<ResourceAssignment> findFirstByActivityIdAndRoleIdAndManpowerRoleRateId(
+      UUID activityId, UUID roleId, UUID manpowerRoleRateId);
+
+  Optional<ResourceAssignment> findFirstByActivityIdAndRoleIdAndEquipmentRoleVariantId(
+      UUID activityId, UUID roleId, UUID equipmentRoleVariantId);
+
+  Optional<ResourceAssignment> findFirstByActivityIdAndRoleIdAndMaterialRoleVariantId(
+      UUID activityId, UUID roleId, UUID materialRoleVariantId);
+
   List<ResourceAssignment> findByProjectIdAndResourceId(UUID projectId, UUID resourceId);
 
   @Query("select coalesce(sum(ra.plannedUnits), 0) from ResourceAssignment ra where ra.activityId = :activityId")
@@ -39,4 +66,27 @@ public interface ResourceAssignmentRepository extends JpaRepository<ResourceAssi
 
   @Query("select coalesce(sum(ra.actualUnits), 0) from ResourceAssignment ra where ra.activityId = :activityId")
   Double sumActualUnitsByActivityId(@Param("activityId") UUID activityId);
+
+  /** Sum of {@code plannedCost} across all ResourceAssignments for a project. Mirrors the BAC
+   *  contribution that {@code EvmRollupService.getActivityBac} rolls up per-activity, so Cost
+   *  Summary and EVM BAC agree on the planned-cost component. Returns 0 when none exist. */
+  @Query("select coalesce(sum(ra.plannedCost), 0) from ResourceAssignment ra where ra.projectId = :projectId")
+  BigDecimal sumPlannedCostByProjectId(@Param("projectId") UUID projectId);
+
+  /**
+   * Sum of {@code actualCost} across all ResourceAssignments for a project. NOTE: currently has no
+   * production caller. Resource-assignment actual cost is kept in lock-step with the DPR ledger by
+   * {@code ResourceAssignmentCostRollupListener} (same money), so the actual-cost paths source AC
+   * from DPR and deliberately EXCLUDE this sum to avoid double-counting — both
+   * {@code CostService.getCostSummary} and {@code EvmRollupService.getActivityAc} omit it. Retained
+   * for potential diagnostics/admin tooling. Returns 0 when none exist.
+   */
+  @Query("select coalesce(sum(ra.actualCost), 0) from ResourceAssignment ra where ra.projectId = :projectId")
+  BigDecimal sumActualCostByProjectId(@Param("projectId") UUID projectId);
+
+  /** Sum of committed resource cost for one activity. Coalesces budgetedCost → plannedCost → 0,
+   *  matching ActivityCostCalculator's documented fallback for legacy rows. Returns 0 when none. */
+  @Query("select coalesce(sum(coalesce(ra.budgetedCost, ra.plannedCost, 0)), 0) "
+       + "from ResourceAssignment ra where ra.activityId = :activityId")
+  BigDecimal sumBudgetedCostByActivityId(@Param("activityId") UUID activityId);
 }

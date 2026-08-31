@@ -7,13 +7,18 @@ import java.util.UUID;
 /**
  * Published by {@code DailyProgressReportService} after a DPR row is committed (CREATED,
  * UPDATED, or DELETED). Triggers BOQ qty sync (via {@code DprBoqSyncListener}) and analytics
- * ETL into {@code fact_dpr_logs} / {@code fact_activity_progress_daily}.
+ * ETL into {@code fact_dpr_logs} / {@code fact_activity_progress_daily} (and the per-resource
+ * fact tables when {@code resourceCounts} is non-zero).
  *
  * <p>For UPDATED, {@code qtyExecuted} / {@code boqItemNo} are the new values; {@code oldQty}
  * / {@code oldBoqItemNo} hold the prior values so a listener can apply a delta. For DELETED,
  * the new values mirror the deleted row (so the listener can subtract its qty from BOQ); the
  * {@code dprId} still resolves to a (now-removed) row and the event carries enough state to
  * skip a follow-up read.
+ *
+ * <p>{@code manpowerCount}/{@code equipmentCount}/{@code materialCount}/{@code issueCount} let
+ * the analytics listener know whether to fetch and ETL the new per-resource child rows or issue
+ * rows (avoids a needless extra query when there are none).
  */
 public record DprSubmittedEvent(
     UUID projectId,
@@ -24,6 +29,64 @@ public record DprSubmittedEvent(
     BigDecimal qtyExecuted,
     String oldBoqItemNo,
     BigDecimal oldQty,
-    DprMutationType eventType
+    DprMutationType eventType,
+
+    int manpowerCount,
+    int equipmentCount,
+    int materialCount,
+    int issueCount,
+    BigDecimal totalManpowerHours,
+    BigDecimal totalEquipmentHours,
+    BigDecimal totalFuelLitres,
+
+    /**
+     * Soft FK to {@code public.users.id}. The supervisor (an application user, not a Resource)
+     * who oversees this DPR. Replaces the legacy {@code supervisorResourceId} on the analytics
+     * feed; the OLTP DPR column it mirrors was renamed in Liquibase 087 (added supervisor_user_id)
+     * and Liquibase 091 (drops supervisor_resource_id). Null when the DPR has free-text "Other".
+     */
+    UUID supervisorUserId,
+
+    /**
+     * Soft FK to {@code activity.activities.id}. Used by
+     * {@code ActivityStartOnFirstDprListener} to bootstrap NOT_STARTED → IN_PROGRESS
+     * on the first DPR filed against an activity. Null for legacy DPRs created before
+     * the activity_id column existed.
+     */
+    UUID activityId,
+
+    /**
+     * Soft FK to {@code project.boq_items.id} — the new canonical linkage (Workstream B1).
+     * Replaces the legacy {@code boqItemNo} string-match fallback. Null when the DPR has no
+     * BOQ binding (or legacy rows that pre-date the column).
+     */
+    UUID boqItemId,
+
+    /** Prior {@code boqItemId} on UPDATE events; mirrors the new value on CREATE/DELETE. */
+    UUID oldBoqItemId
 ) {
+    /** Back-compat helper for callers that don't have child counts on hand (e.g. DELETE). */
+    public static DprSubmittedEvent withoutChildren(
+            UUID projectId, UUID dprId, LocalDate reportDate, String activityName,
+            String boqItemNo, BigDecimal qtyExecuted, String oldBoqItemNo, BigDecimal oldQty,
+            DprMutationType eventType, UUID activityId) {
+        return new DprSubmittedEvent(
+                projectId, dprId, reportDate, activityName, boqItemNo, qtyExecuted,
+                oldBoqItemNo, oldQty, eventType,
+                0, 0, 0, 0, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                null, activityId, null, null);
+    }
+
+    /** Variant that includes the new {@code boqItemId} linkage (Workstream B1). */
+    public static DprSubmittedEvent withoutChildren(
+            UUID projectId, UUID dprId, LocalDate reportDate, String activityName,
+            String boqItemNo, BigDecimal qtyExecuted, String oldBoqItemNo, BigDecimal oldQty,
+            DprMutationType eventType, UUID activityId,
+            UUID boqItemId, UUID oldBoqItemId) {
+        return new DprSubmittedEvent(
+                projectId, dprId, reportDate, activityName, boqItemNo, qtyExecuted,
+                oldBoqItemNo, oldQty, eventType,
+                0, 0, 0, 0, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                null, activityId, boqItemId, oldBoqItemId);
+    }
 }

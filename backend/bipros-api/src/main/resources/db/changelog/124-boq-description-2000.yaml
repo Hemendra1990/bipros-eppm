@@ -1,0 +1,25 @@
+databaseChangeLog:
+  # Widen project.boq_items.description 500 -> 2000. The client's BOQ (01 Aug 2026
+  # workbook) contains descriptions up to ~760 characters; 4 of its 553 rows exceed
+  # the old limit. Dev environments widen silently via ddl-auto:update, but the prod
+  # profile runs ddl-auto:validate and would fail to boot without this changeset.
+  - changeSet:
+      id: 124-boq-description-2000
+      author: subrat
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            schemaName: project
+            tableName: boq_items
+      changes:
+        - modifyDataType:
+            schemaName: project
+            tableName: boq_items
+            columnName: description
+            newDataType: varchar(2000)
+      rollback:
+        - modifyDataType:
+            schemaName: project
+            tableName: boq_items
+            columnName: description
+            newDataType: varchar(500)

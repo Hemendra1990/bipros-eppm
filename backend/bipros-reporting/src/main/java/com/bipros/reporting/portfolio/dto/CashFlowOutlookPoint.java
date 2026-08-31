@@ -7,7 +7,8 @@ import java.math.BigDecimal;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record CashFlowOutlookPoint(
     String yearMonth,
-    BigDecimal plannedOutflowCrores,
-    BigDecimal plannedInflowCrores,
-    BigDecimal netCrores,
-    BigDecimal cumulativeCrores) {}
+    BigDecimal plannedOutflowRaw,
+    BigDecimal plannedInflowRaw,
+    BigDecimal netRaw,
+    BigDecimal cumulativeRaw,
+    String currency) {}

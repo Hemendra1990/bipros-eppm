@@ -6,13 +6,16 @@ import { Plus, Search, Trash2, Edit2, Download, Archive } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { projectApi } from "@/lib/api/projectApi";
-import { formatDate, getPriorityInfo } from "@/lib/utils/format";
+import { formatDate, getPriorityInfo, PRIORITY_LABELS } from "@/lib/utils/format";
 import { getErrorMessage } from "@/lib/utils/error";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
 
 const STATUS_OPTIONS = ["All", "PLANNED", "ACTIVE", "INACTIVE", "COMPLETED"] as const;
-const PRIORITY_OPTIONS = ["All", "CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
+// Options mirror the labels getPriorityInfo() actually renders, so every project the table can
+// show is filterable and the filter never disagrees with the displayed priority.
+const PRIORITY_OPTIONS = ["All", ...PRIORITY_LABELS];
 
 function statusVariant(status: string) {
   switch (status) {
@@ -75,9 +78,9 @@ export default function ProjectsPage() {
     }
     if (statusFilter !== "All") out = out.filter((p) => p.status === statusFilter);
     if (priorityFilter !== "All") {
-      out = out.filter(
-        (p) => (p.priority ?? "").toString().toUpperCase() === priorityFilter
-      );
+      // priority is a numeric 1-100 value; match on the bucketed label so the filter agrees with
+      // what getPriorityInfo() renders in the table (e.g. 50 → "Medium").
+      out = out.filter((p) => getPriorityInfo(p.priority).label === priorityFilter);
     }
     return out;
   }, [allProjects, searchQuery, statusFilter, priorityFilter]);
@@ -88,6 +91,86 @@ export default function ProjectsPage() {
     const completed = allProjects.filter((p) => p.status === "COMPLETED").length;
     return { active, planned, completed };
   }, [allProjects]);
+
+  const columns = useMemo<ColumnDef<(typeof allProjects)[number]>[]>(() => [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => (
+        <Link
+          href={`/projects/${row.original.id}`}
+          className="font-mono text-[12px] font-medium text-gold-deep hover:text-gold-ink"
+        >
+          {row.original.code}
+        </Link>
+      ),
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => (
+        <Link
+          href={`/projects/${row.original.id}`}
+          className="font-semibold text-charcoal hover:text-gold-ink hover:underline underline-offset-2"
+        >
+          {row.original.name}
+        </Link>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <Badge variant={statusVariant(row.original.status)} withDot>
+          {row.original.status}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "plannedStartDate",
+      header: "Start",
+      cell: ({ row }) => <span className="text-slate">{formatDate(row.original.plannedStartDate)}</span>,
+    },
+    {
+      accessorKey: "plannedFinishDate",
+      header: "Finish",
+      cell: ({ row }) => <span className="text-slate">{formatDate(row.original.plannedFinishDate)}</span>,
+    },
+    {
+      accessorKey: "priority",
+      header: "Priority",
+      cell: ({ row }) => {
+        const priority = getPriorityInfo(row.original.priority);
+        return <span className={`font-semibold ${priority.color}`}>{priority.label}</span>;
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <Link
+            href={`/projects/${row.original.id}`}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
+            aria-label="Edit"
+          >
+            <Edit2 size={14} strokeWidth={1.5} />
+          </Link>
+          <button
+            onClick={() =>
+              setDeleteConfirm({ open: true, projectId: row.original.id, projectName: row.original.name })
+            }
+            disabled={archiveMutation.isPending}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Archive"
+            title="Archive"
+          >
+            <Trash2 size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      ),
+    },
+  ], [archiveMutation.isPending]);
 
   return (
     <div>
@@ -160,7 +243,7 @@ export default function ProjectsPage() {
         >
           {PRIORITY_OPTIONS.map((p) => (
             <option key={p} value={p}>
-              {p === "All" ? "All priorities" : p.charAt(0) + p.slice(1).toLowerCase()}
+              {p === "All" ? "All priorities" : p}
             </option>
           ))}
         </select>
@@ -222,80 +305,7 @@ export default function ProjectsPage() {
 
       {projects.length > 0 && (
         <>
-          <div className="overflow-hidden rounded-xl border border-hairline bg-paper">
-            <table className="w-full border-collapse text-sm">
-              <thead className="border-b border-hairline bg-ivory">
-                <tr>
-                  {["Code","Name","Status","Start","Finish","Priority","Actions"].map((h) => (
-                    <th
-                      key={h}
-                      className={`px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep ${h === "Actions" ? "text-right" : ""}`}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {projects.map((project) => {
-                  const priority = getPriorityInfo(project.priority);
-                  return (
-                    <tr
-                      key={project.id}
-                      className="border-b border-hairline transition-colors last:border-b-0 hover:bg-ivory"
-                    >
-                      <td className="px-4 py-3.5">
-                        <Link
-                          href={`/projects/${project.id}`}
-                          className="font-mono text-[12px] font-medium text-gold-deep hover:text-gold-ink"
-                        >
-                          {project.code}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <Link
-                          href={`/projects/${project.id}`}
-                          className="font-semibold text-charcoal hover:text-gold-ink hover:underline underline-offset-2"
-                        >
-                          {project.name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <Badge variant={statusVariant(project.status)} withDot>
-                          {project.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3.5 text-slate">{formatDate(project.plannedStartDate)}</td>
-                      <td className="px-4 py-3.5 text-slate">{formatDate(project.plannedFinishDate)}</td>
-                      <td className={`px-4 py-3.5 font-semibold ${priority.color}`}>{priority.label}</td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <Link
-                            href={`/projects/${project.id}`}
-                            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
-                            aria-label="Edit"
-                          >
-                            <Edit2 size={14} strokeWidth={1.5} />
-                          </Link>
-                          <button
-                            onClick={() =>
-                              setDeleteConfirm({ open: true, projectId: project.id, projectName: project.name })
-                            }
-                            disabled={archiveMutation.isPending}
-                            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy disabled:cursor-not-allowed disabled:opacity-50"
-                            aria-label="Archive"
-                            title="Archive"
-                          >
-                            <Trash2 size={14} strokeWidth={1.5} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <VirtualDataTable columns={columns} data={projects} sortable resizable searchable={false} />
           <div className="pt-3 text-center text-xs text-slate">
             Showing <span className="font-semibold text-charcoal">{projects.length} of {allProjects.length}</span>
           </div>

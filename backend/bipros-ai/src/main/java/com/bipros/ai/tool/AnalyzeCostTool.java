@@ -35,7 +35,21 @@ public class AnalyzeCostTool extends ProjectScopedTool {
     public String description() {
         return "Analyze cost variance. With a current project_id, breaks down by WBS / cost_account / "
                 + "activity. With no current project_id (general mode), aggregates per project across the "
-                + "user's scope so the agent can compare projects.";
+                + "user's scope so the agent can compare projects. "
+                + "NOTE: this tool queries the analytics warehouse (fact_cost_daily) which carries no "
+                + "rate-basis or pool-override metadata. For per-resource rate questions or 'is this "
+                + "rate the project override?' prefer list_activity_resources / find_resource_deployment "
+                + "/ get_resource_profile (live JPA tools that emit effective_rate + override_applied). "
+                + "SUB-CONTRACTOR NOTE: actual_cost in fact_cost_daily already includes sub-contractor "
+                + "cost alongside manpower/equipment/material — do not add SC cost on top. To isolate "
+                + "sub-contractor cost vs company cost, call get_subcontractor_kpis. For BOQ-item cost "
+                + "variance specifically, prefer query_boq — its cost_variance comes directly from "
+                + "BoqItem.costVariance = actualAmount − earnedBudget, where earnedBudget is "
+                + "earnedFraction × boqQty × BUDGETED rate on a split line, else "
+                + "min(qtyExecutedToDate, boqQty) × BUDGETED rate. actualAmount is the real incurred "
+                + "cost from approved DPRs, NOT qtyExecutedToDate × actualRate — a split line can "
+                + "carry cost with zero measured quantity. Do NOT use the BOQ/client rate and do NOT "
+                + "recompute client-side.";
     }
 
     @Override
@@ -115,7 +129,25 @@ public class AnalyzeCostTool extends ProjectScopedTool {
         String summary = crossProject
                 ? "Cost variance per project across portfolio (" + from + ".." + to + ")"
                 : "Cost variance by " + groupBy;
-        return ToolResult.table(summary, arr,
-                new String[]{"group_key", "actual", "planned", "earned", "variance"});
+        ObjectNode wrapper = objectMapper.createObjectNode();
+        wrapper.set("rows", arr);
+        ArrayNode cols = objectMapper.createArrayNode();
+        for (String c : new String[]{"group_key", "actual", "planned", "earned", "variance"}) cols.add(c);
+        wrapper.set("columns", cols);
+        ArrayNode notes = objectMapper.createArrayNode();
+        notes.add("warehouse_snapshot_basis_blind");
+        wrapper.set("formula_overrides", notes);
+        return ToolResult.ok(summary, wrapper);
+    }
+
+    @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of(
+                "PROJECT_MANAGER",
+                "PORTFOLIO_MANAGER",
+                "RISK_MANAGER",
+                "COST_CONTROLLER",
+                "EXECUTIVE_VIEWER"
+        );
     }
 }

@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { dailyCostReportApi, type DailyCostReportResponse } from "@/lib/api/dailyCostReportApi";
+import { dailyCostReportApi, type DailyCostReportResponse, type DailyCostReportRow } from "@/lib/api/dailyCostReportApi";
 import { projectApi } from "@/lib/api/projectApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
-
-function formatCurrency(value: number | null): string {
-  if (value === null || value === undefined) return "—";
-  return value.toLocaleString("en-IN");
-}
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 
 function formatPercent(value: number | null): string {
   if (value === null || value === undefined) return "—";
@@ -26,6 +24,7 @@ function varianceClass(value: number | null): string {
 export default function DailyCostReportPage() {
   const params = useParams();
   const projectId = params.projectId as string;
+  const { money, symbol } = useProjectCurrency();
 
   // Date range is data-driven — we wait for the project to load, then seed From/To with the
   // project's planned start/finish so the user sees data on first render regardless of when
@@ -41,6 +40,17 @@ export default function DailyCostReportPage() {
   const [toDraft, setToDraft] = useState<string>("");
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
+
+  /**
+   * Workstream B3: row-level drilldown. Clicking a row opens a side drawer that calls the new
+   * drilldown endpoint and lists every DPR row that contributed to the BOQ item's actual cost
+   * in the current window.
+   */
+  const [drilldownBoq, setDrilldownBoq] = useState<{
+    boqItemId: string;
+    boqItemNo: string | null;
+    activity: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!project) return;
@@ -61,12 +71,81 @@ export default function DailyCostReportPage() {
   });
 
   const report: DailyCostReportResponse | undefined = data?.data ?? undefined;
-  const rows = report?.rows ?? [];
+  const rows = useMemo(() => report?.rows ?? [], [report]);
+
+  const { data: drilldownData, isLoading: drilldownLoading } = useQuery({
+    queryKey: ["daily-cost-report-drilldown", projectId, drilldownBoq?.boqItemId, from, to],
+    queryFn: () =>
+      dailyCostReportApi.drilldown(projectId, drilldownBoq!.boqItemId, { from, to }),
+    enabled: !!projectId && !!drilldownBoq && !!from && !!to,
+  });
+  const drilldownReport: DailyCostReportResponse | undefined =
+    drilldownData?.data ?? undefined;
 
   const handleApply = () => {
     setFrom(fromDraft);
     setTo(toDraft);
   };
+
+  const columns = useMemo<ColumnDef<DailyCostReportRow>[]>(() => [
+    { accessorKey: "date", header: "Date" },
+    { accessorKey: "activity", header: "Activity" },
+    {
+      accessorKey: "qtyExecuted",
+      header: "Qty Executed",
+      cell: ({ row }) => row.original.qtyExecuted.toLocaleString("en-IN"),
+    },
+    { accessorKey: "unit", header: "Unit" },
+    {
+      accessorKey: "budgetedUnitRate",
+      header: `Budgeted Unit Rate (${symbol})`,
+      cell: ({ row }) => money(row.original.budgetedUnitRate),
+    },
+    {
+      accessorKey: "actualUnitRate",
+      header: `Actual Unit Rate (${symbol})`,
+      cell: ({ row }) => money(row.original.actualUnitRate),
+    },
+    {
+      accessorKey: "budgetedCost",
+      header: `Budgeted Cost (${symbol})`,
+      cell: ({ row }) => money(row.original.budgetedCost),
+    },
+    {
+      accessorKey: "actualCost",
+      header: `Actual Cost (${symbol})`,
+      cell: ({ row }) => money(row.original.actualCost),
+    },
+    {
+      accessorKey: "variance",
+      header: `Variance (${symbol})`,
+      cell: ({ row }) => (
+        <span className={varianceClass(row.original.variance)}>
+          {money(row.original.variance)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "variancePercent",
+      header: "Variance %",
+      cell: ({ row }) => (
+        <span className={varianceClass(row.original.variance)}>
+          {formatPercent(row.original.variancePercent)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "etc",
+      header: `ETC (${symbol})`,
+      cell: ({ row }) => money(row.original.etc),
+    },
+    {
+      accessorKey: "eac",
+      header: `EAC (${symbol})`,
+      cell: ({ row }) => money(row.original.eac),
+    },
+    { accessorKey: "supervisor", header: "Supervisor" },
+  ], [money, symbol]);
 
   if (isLoading && !report) {
     return <div className="p-6 text-text-muted">Loading cost report...</div>;
@@ -76,7 +155,7 @@ export default function DailyCostReportPage() {
     <div className="p-6">
       <TabTip
         title="Daily Cost Report"
-        description="Cross-joins the Supervisor Daily Report with BOQ-item rates and computes budgeted vs actual cost per day — same formulas as the workbook's Section B."
+        description="Cross-joins the Supervisor Daily Report with BOQ-item rates and computes budgeted vs actual cost per day — same formulas as the workbook's Section B. Click any row to see the source DPRs for that BOQ item."
       />
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-4 text-text-primary">Daily Cost Report</h1>
@@ -120,89 +199,116 @@ export default function DailyCostReportPage() {
         )}
 
         {/* Report Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Activity</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Qty Executed</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Unit</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Budgeted Unit Rate (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Actual Unit Rate (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Budgeted Cost (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Actual Cost (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Variance (₹)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Variance %</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Supervisor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.dprId} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2">{row.date}</td>
-                  <td className="border border-border px-4 py-2">{row.activity}</td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {row.qtyExecuted.toLocaleString("en-IN")}
-                  </td>
-                  <td className="border border-border px-4 py-2">{row.unit}</td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(row.budgetedUnitRate)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(row.actualUnitRate)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(row.budgetedCost)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(row.actualCost)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(row.variance)}`}>
-                    {formatCurrency(row.variance)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(row.variance)}`}>
-                    {formatPercent(row.variancePercent)}
-                  </td>
-                  <td className="border border-border px-4 py-2">{row.supervisor}</td>
-                </tr>
-              ))}
-              {rows.length === 0 && !isLoading && (
-                <tr>
-                  <td
-                    colSpan={11}
-                    className="border border-border px-4 py-6 text-center text-text-muted"
-                  >
-                    No cost report data for the selected period.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            {report && rows.length > 0 && (
-              <tfoot className="sticky bottom-0 bg-surface/95 backdrop-blur font-semibold">
-                <tr className="text-text-primary">
-                  <td className="border border-border px-4 py-2" colSpan={6}>
-                    PERIOD TOTAL
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(report.periodBudgetedCost)}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {formatCurrency(report.periodActualCost)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(report.periodVariance)}`}>
-                    {formatCurrency(report.periodVariance)}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${varianceClass(report.periodVariance)}`}>
-                    {formatPercent(report.periodVariancePercent)}
-                  </td>
-                  <td className="border border-border px-4 py-2"></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={rows}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No cost report data for the selected period."
+          onRowClick={(row) => {
+            if (!row.boqItemId) return;
+            setDrilldownBoq({
+              boqItemId: row.boqItemId,
+              boqItemNo: row.boqItemNo,
+              activity: row.activity,
+            });
+          }}
+        />
+        {report && rows.length > 0 && (
+          <div className="mt-2 rounded-lg border border-border bg-surface/95 backdrop-blur font-semibold text-text-primary px-4 py-3 flex flex-wrap gap-4 text-sm">
+            <span className="font-medium">PERIOD TOTAL</span>
+            <span className="ml-auto">Budgeted: {money(report.periodBudgetedCost)}</span>
+            <span>Actual: {money(report.periodActualCost)}</span>
+            <span className={varianceClass(report.periodVariance)}>
+              Variance: {money(report.periodVariance)}
+            </span>
+            <span className={varianceClass(report.periodVariance)}>
+              {formatPercent(report.periodVariancePercent)}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* Side drawer — drilldown */}
+      {drilldownBoq && (
+        <div
+          className="fixed inset-0 z-50 flex"
+          onClick={() => setDrilldownBoq(null)}
+        >
+          <div className="flex-1 bg-black/40" aria-hidden="true" />
+          <aside
+            className="w-full max-w-2xl bg-surface text-text-primary shadow-2xl overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface px-5 py-4">
+              <div>
+                <h2 className="text-lg font-semibold">Source DPRs</h2>
+                <p className="text-sm text-text-secondary">
+                  BOQ {drilldownBoq.boqItemNo ?? "—"} · {drilldownBoq.activity}
+                </p>
+              </div>
+              <button
+                onClick={() => setDrilldownBoq(null)}
+                className="px-3 py-1 text-sm rounded border border-border hover:bg-surface-hover"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              {drilldownLoading && (
+                <div className="text-sm text-text-muted">Loading source rows…</div>
+              )}
+              {!drilldownLoading && drilldownReport && drilldownReport.rows.length === 0 && (
+                <div className="text-sm text-text-muted">
+                  No DPR rows contributed to this BOQ item in the selected window.
+                </div>
+              )}
+              {!drilldownLoading && drilldownReport && drilldownReport.rows.length > 0 && (
+                <>
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-xs uppercase tracking-wide text-text-secondary">
+                      <tr>
+                        <th className="py-2 pr-3">Date</th>
+                        <th className="py-2 pr-3">Supervisor</th>
+                        <th className="py-2 pr-3 text-right">Qty</th>
+                        <th className="py-2 pr-3 text-right">Unit cost ({symbol})</th>
+                        <th className="py-2 pr-3 text-right">Line cost ({symbol})</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drilldownReport.rows.map((r) => (
+                        <tr key={r.dprId} className="border-t border-border">
+                          <td className="py-2 pr-3">{r.date}</td>
+                          <td className="py-2 pr-3">{r.supervisor}</td>
+                          <td className="py-2 pr-3 text-right">
+                            {r.qtyExecuted.toLocaleString("en-IN")} {r.unit}
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            {money(r.actualUnitRate)}
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            {money(r.actualCost)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="mt-3 flex flex-wrap gap-4 border-t border-border pt-3 text-sm font-semibold">
+                    <span>SUBTOTAL</span>
+                    <span className="ml-auto">
+                      Actual: {money(drilldownReport.periodActualCost)}
+                    </span>
+                    <span className={varianceClass(drilldownReport.periodVariance)}>
+                      Variance: {money(drilldownReport.periodVariance)}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

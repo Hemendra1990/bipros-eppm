@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { materialSourceApi } from "@/lib/api/materialSourceApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -51,34 +52,40 @@ export default function MaterialSourcesPage() {
 
   const rows = data?.data ?? [];
 
-  const columns: ColumnDef<MaterialSourceResponse>[] = [
-    { key: "sourceCode", label: "Source ID", sortable: true },
-    { key: "name", label: "Name" },
+  const columns = useMemo<ColumnDef<MaterialSourceResponse>[]>(() => [
+    { accessorKey: "sourceCode", header: "Source ID", enableSorting: true },
+    { accessorKey: "name", header: "Name" },
     {
-      key: "sourceType",
-      label: "Type",
-      render: (v) => (v as string).replace("_", " "),
+      accessorKey: "sourceType",
+      header: "Type",
+      cell: (info) => (info.getValue() as string).replace("_", " "),
     },
-    { key: "village", label: "Village / Location" },
-    { key: "district", label: "District" },
+    { accessorKey: "village", header: "Village / Location" },
+    { accessorKey: "district", header: "District" },
     {
-      key: "distanceKm",
-      label: "Distance (km)",
-      render: (v) => (v == null ? "—" : `${v}`),
+      accessorKey: "distanceKm",
+      header: "Distance (km)",
+      cell: (info) => {
+        const v = info.getValue();
+        return v == null ? "—" : `${v}`;
+      },
     },
     {
-      key: "approvedQuantity",
-      label: "Approved Qty",
-      render: (v, row) =>
-        v == null ? "—" : `${v} ${row.approvedQuantityUnit ?? ""}`.trim(),
+      accessorKey: "approvedQuantity",
+      header: "Approved Qty",
+      cell: (info) => {
+        const row = info.row.original;
+        const v = info.getValue();
+        return v == null ? "—" : `${v} ${row.approvedQuantityUnit ?? ""}`.trim();
+      },
     },
-    { key: "cbrAveragePercent", label: "CBR %" },
-    { key: "mddGcc", label: "MDD (g/cc)" },
+    { accessorKey: "cbrAveragePercent", header: "CBR %" },
+    { accessorKey: "mddGcc", header: "MDD (g/cc)" },
     {
-      key: "labTestStatus",
-      label: "Lab Status",
-      render: (v) => {
-        const s = v as LabTestStatus | null;
+      accessorKey: "labTestStatus",
+      header: "Lab Status",
+      cell: (info) => {
+        const s = info.getValue() as LabTestStatus | null;
         if (!s) return "—";
         return (
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${LAB_STATUS_COLORS[s]}`}>
@@ -88,23 +95,26 @@ export default function MaterialSourcesPage() {
       },
     },
     {
-      key: "_actions",
-      label: "",
-      render: (_v, row) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmId(row.id);
-          }}
-          className="rounded p-1 text-text-secondary hover:bg-surface-hover hover:text-danger"
-          aria-label="Delete"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      ),
+      accessorKey: "_actions",
+      header: "",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmId(row.id);
+            }}
+            className="rounded p-1 text-text-secondary hover:bg-surface-hover hover:text-danger"
+            aria-label="Delete"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        );
+      },
     },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">
@@ -146,13 +156,12 @@ export default function MaterialSourcesPage() {
           description="Register approved borrow areas, quarries and depots here so they're available for daily material receipts."
         />
       ) : (
-        <DataTable
+        <VirtualDataTable
           columns={columns}
           data={rows}
-          rowKey="id"
+          sortable
+          resizable
           onRowClick={(row) => router.push(`/projects/${projectId}/material-sources/${row.id}`)}
-          searchable
-          searchPlaceholder="Search by code, name, village…"
         />
       )}
 

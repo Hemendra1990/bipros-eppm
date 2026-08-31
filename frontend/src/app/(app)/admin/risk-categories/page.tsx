@@ -1,5 +1,7 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -272,6 +274,61 @@ export default function RiskCategoriesAdminPage() {
 
   const selectedType = types.find((t) => t.id === selectedTypeId) ?? null;
 
+  const columns = useMemo<ColumnDef<RiskCategoryMasterResponse>[]>(() => [
+              {
+                accessorKey: "code",
+                header: "Code",
+                cell: ({ row }) => (
+                  <span className="font-mono text-xs">{row.original.code}</span>
+                ),
+              },
+              {
+                accessorKey: "name",
+                header: "Name",
+                cell: ({ row }) => <span>{row.original.name}</span>,
+              },
+              {
+                accessorKey: "industry",
+                header: "Industry",
+                cell: ({ row }) => <span className="text-xs">{row.original.industry}</span>,
+              },
+              {
+                accessorKey: "active",
+                header: "Active",
+                cell: ({ row }) => <span className="text-xs">{row.original.active ? "Yes" : "No"}</span>,
+              },
+              {
+                accessorKey: "systemDefault",
+                header: "Default",
+                cell: ({ row }) =>
+                  row.original.systemDefault ? <Shield size={14} className="text-text-muted" /> : "",
+              },
+              {
+                id: "actions",
+                header: "Actions",
+                cell: ({ row }) => (
+                  <div className="text-right">
+                    <button
+                      onClick={() => openEditCategory(row.original)}
+                      className="rounded p-1 text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Delete category ${row.original.name}?`)) deleteCategory.mutate(row.original.id);
+                      }}
+                      disabled={row.original.systemDefault}
+                      title={row.original.systemDefault ? "System default — cannot delete" : ""}
+                      className="ml-1 rounded p-1 text-text-secondary hover:bg-surface-hover hover:text-danger disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ),
+              },
+            ], [openEditCategory, deleteCategory]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -373,49 +430,8 @@ export default function RiskCategoriesAdminPage() {
           ) : categories.length === 0 ? (
             <EmptyState icon={Tag} title="No categories yet" description="Create the first category in this type." />
           ) : (
-            <div className="flex-1 overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10 border-b border-border bg-surface text-text-secondary">
-                <tr>
-                  <th className="px-4 py-2 text-left">Code</th>
-                  <th className="px-4 py-2 text-left">Name</th>
-                  <th className="px-4 py-2 text-left">Industry</th>
-                  <th className="px-4 py-2 text-left">Active</th>
-                  <th className="px-4 py-2 text-left">Default</th>
-                  <th className="px-4 py-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {categories.map((c) => (
-                  <tr key={c.id} className="border-b border-border/60 hover:bg-surface-hover/30">
-                    <td className="px-4 py-2 font-mono text-xs">{c.code}</td>
-                    <td className="px-4 py-2">{c.name}</td>
-                    <td className="px-4 py-2 text-xs">{c.industry}</td>
-                    <td className="px-4 py-2 text-xs">{c.active ? "Yes" : "No"}</td>
-                    <td className="px-4 py-2 text-xs">{c.systemDefault ? <Shield size={14} className="text-text-muted" /> : ""}</td>
-                    <td className="px-4 py-2 text-right">
-                      <button
-                        onClick={() => openEditCategory(c)}
-                        className="rounded p-1 text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (window.confirm(`Delete category ${c.name}?`)) deleteCategory.mutate(c.id);
-                        }}
-                        disabled={c.systemDefault}
-                        title={c.systemDefault ? "System default — cannot delete" : ""}
-                        className="ml-1 rounded p-1 text-text-secondary hover:bg-surface-hover hover:text-danger disabled:cursor-not-allowed disabled:opacity-30"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
+          
+            <VirtualDataTable columns={columns} data={categories} sortable resizable searchable={false} />
           )}
         </div>
       </div>

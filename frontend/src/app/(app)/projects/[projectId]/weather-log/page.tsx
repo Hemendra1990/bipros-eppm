@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -11,6 +11,10 @@ import {
 import { projectApi } from "@/lib/api/projectApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
+import { formatDate } from "@/lib/utils/format";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useAuthStore } from "@/lib/state/store";
 
 interface WeatherForm {
   logDate: string;
@@ -24,7 +28,8 @@ interface WeatherForm {
   remarks: string;
 }
 
-const CONDITION_PRESETS = ["Clear", "Cloudy", "Rain", "Hot", "Sunny", "Overcast"];
+// Canonical weather list (client workbook, 01 Aug 2026) — same list as the DPR form.
+const CONDITION_PRESETS = ["Clear", "Cloudy", "Rain", "Thunderstorm", "Foggy", "Sandstorm"];
 
 const todayIso = () => new Date().toISOString().split("T")[0];
 
@@ -47,6 +52,8 @@ const toNumberOrNull = (value: string): number | null => {
 };
 
 export default function WeatherLogPage() {
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canWrite = hasPermission("DPR.UPDATE");
   const params = useParams();
   const projectId = params.projectId as string;
 
@@ -63,6 +70,7 @@ export default function WeatherLogPage() {
   const [toDate, setToDate] = useState("");
   const [appliedFrom, setAppliedFrom] = useState("");
   const [appliedTo, setAppliedTo] = useState("");
+  const [rangeError, setRangeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!project) return;
@@ -87,9 +95,14 @@ export default function WeatherLogPage() {
     enabled: !!projectId && !!appliedFrom && !!appliedTo,
   });
 
-  const entries: DailyWeatherResponse[] = data?.data ?? [];
+  const entries: DailyWeatherResponse[] = useMemo(() => data?.data ?? [], [data]);
 
   const handleApply = () => {
+    if (fromDate && toDate && fromDate > toDate) {
+      setRangeError("From date cannot be later than To date.");
+      return;
+    }
+    setRangeError(null);
     setAppliedFrom(fromDate);
     setAppliedTo(toDate);
   };
@@ -133,6 +146,60 @@ export default function WeatherLogPage() {
     }
   };
 
+  const columns = useMemo<ColumnDef<DailyWeatherResponse>[]>(() => [
+    { accessorKey: "logDate", header: "Date", cell: ({ getValue }) => formatDate(getValue<string>()) },
+    {
+      accessorKey: "tempMaxC",
+      header: "Temp Max (°C)",
+      cell: ({ row }) => row.original.tempMaxC ?? "—",
+    },
+    {
+      accessorKey: "tempMinC",
+      header: "Temp Min (°C)",
+      cell: ({ row }) => row.original.tempMinC ?? "—",
+    },
+    {
+      accessorKey: "rainfallMm",
+      header: "Rainfall (mm)",
+      cell: ({ row }) => row.original.rainfallMm ?? "—",
+    },
+    {
+      accessorKey: "windKmh",
+      header: "Wind (km/h)",
+      cell: ({ row }) => row.original.windKmh ?? "—",
+    },
+    {
+      accessorKey: "weatherCondition",
+      header: "Condition",
+      cell: ({ row }) => row.original.weatherCondition ?? "—",
+    },
+    {
+      accessorKey: "workingHours",
+      header: "Working Hrs",
+      cell: ({ row }) => row.original.workingHours ?? "—",
+    },
+    {
+      accessorKey: "remarks",
+      header: "Remarks",
+      cell: ({ row }) => row.original.remarks ?? "—",
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) =>
+        canWrite ? (
+          <button
+            onClick={() => handleDelete(row.original.id)}
+            className="text-danger hover:underline text-sm"
+          >
+            Delete
+          </button>
+        ) : (
+          <span className="text-text-muted text-sm">—</span>
+        ),
+    },
+  ], [handleDelete, canWrite]);
+
   return (
     <div className="p-6">
       <TabTip
@@ -150,7 +217,8 @@ export default function WeatherLogPage() {
             <input
               type="date"
               value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
+              onChange={(e) => { setFromDate(e.target.value); setRangeError(null); }}
+              max={toDate || undefined}
               className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
             />
           </div>
@@ -159,7 +227,8 @@ export default function WeatherLogPage() {
             <input
               type="date"
               value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
+              onChange={(e) => { setToDate(e.target.value); setRangeError(null); }}
+              min={fromDate || undefined}
               className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
             />
           </div>
@@ -169,17 +238,20 @@ export default function WeatherLogPage() {
           >
             Apply
           </button>
-          <button
-            onClick={() => {
-              setShowForm(!showForm);
-              setError(null);
-            }}
-            className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover ml-auto"
-          >
-            {showForm ? "Cancel" : "Add / Update Entry"}
-          </button>
+          {canWrite && (
+            <button
+              onClick={() => {
+                setShowForm(!showForm);
+                setError(null);
+              }}
+              className="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover ml-auto"
+            >
+              {showForm ? "Cancel" : "Add / Update Entry"}
+            </button>
+          )}
         </div>
 
+        {rangeError && <div className="text-danger mb-4 text-sm">{rangeError}</div>}
         {error && <div className="text-danger mb-4">{error}</div>}
         {isError && (
           <div className="text-danger mb-4">
@@ -331,73 +403,14 @@ export default function WeatherLogPage() {
           </form>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Temp Max (°C)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Temp Min (°C)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Rainfall (mm)</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Wind (km/h)</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Condition</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Working Hrs</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Remarks</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && (
-                <tr>
-                  <td colSpan={9} className="border border-border px-4 py-6 text-center text-text-muted">
-                    Loading weather entries…
-                  </td>
-                </tr>
-              )}
-              {!isLoading && entries.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="border border-border px-4 py-6 text-center text-text-muted">
-                    No weather entries in this date range.
-                  </td>
-                </tr>
-              )}
-              {entries.map((entry) => (
-                <tr key={entry.id} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2">{entry.logDate}</td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {entry.tempMaxC ?? "—"}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {entry.tempMinC ?? "—"}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {entry.rainfallMm ?? "—"}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {entry.windKmh ?? "—"}
-                  </td>
-                  <td className="border border-border px-4 py-2">
-                    {entry.weatherCondition ?? "—"}
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {entry.workingHours ?? "—"}
-                  </td>
-                  <td className="border border-border px-4 py-2 max-w-xs truncate">
-                    {entry.remarks ?? "—"}
-                  </td>
-                  <td className="border border-border px-4 py-2">
-                    <button
-                      onClick={() => handleDelete(entry.id)}
-                      className="text-danger hover:underline text-sm"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={entries}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No weather entries in this date range."
+        />
       </div>
     </div>
   );

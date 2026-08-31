@@ -1,0 +1,28 @@
+databaseChangeLog:
+  - changeSet:
+      id: 146-cm-profile-legacy-role
+      author: claude
+      comment: >
+        The roles table has no CONSTRUCTION_MANAGER row — DataSeeder deliberately seeds
+        SITE_MANAGER as its stand-in (the permission matrix defines them identically) and the
+        frontend's CM surfaces gate on SITE_MANAGER. But both CM profiles (system default
+        CONSTRUCTION_MANAGER and SAROOJ_CONSTRUCTION_MANAGER) carried legacy_role_name =
+        CONSTRUCTION_MANAGER, and UserService.applyProfile syncs user_roles to that name, so
+        every attempt to assign either profile failed with UNKNOWN_ROLE (found in production
+        2026-08-12). Repoint the legacy role to SITE_MANAGER. ProfileSeeder/SaroojProfileSeeder
+        are insert-only, so existing databases need this changeset; fresh installs get the
+        corrected value from the seeders directly.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              UPDATE public.profiles
+                 SET legacy_role_name = 'SITE_MANAGER'
+               WHERE legacy_role_name = 'CONSTRUCTION_MANAGER';
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: |
+              UPDATE public.profiles
+                 SET legacy_role_name = 'CONSTRUCTION_MANAGER'
+               WHERE code IN ('CONSTRUCTION_MANAGER', 'SAROOJ_CONSTRUCTION_MANAGER');

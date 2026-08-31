@@ -5,6 +5,8 @@ import com.bipros.scheduling.application.dto.FloatPathResponse;
 import com.bipros.scheduling.application.dto.ScheduleActivityResultResponse;
 import com.bipros.scheduling.application.dto.ScheduleRequest;
 import com.bipros.scheduling.application.dto.ScheduleResultResponse;
+import com.bipros.scheduling.application.dto.WhatIfRequest;
+import com.bipros.scheduling.application.dto.WhatIfResponse;
 import com.bipros.scheduling.application.service.SchedulingService;
 import com.bipros.scheduling.domain.model.SchedulingOption;
 import jakarta.validation.Valid;
@@ -23,7 +25,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/projects/{projectId}/schedule")
-@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'SCHEDULER')")
 @Slf4j
 @RequiredArgsConstructor
 public class ScheduleController {
@@ -31,6 +32,7 @@ public class ScheduleController {
   private final SchedulingService schedulingService;
 
   @PostMapping
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'SCHEDULE.UPDATE')")
   public ApiResponse<ScheduleResultResponse> scheduleProject(
       @PathVariable UUID projectId,
       @Valid @RequestBody(required = false) ScheduleRequest request) {
@@ -42,7 +44,18 @@ public class ScheduleController {
     return ApiResponse.ok(result);
   }
 
+  @PostMapping("/what-if")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'SCHEDULE.READ')")
+  public ApiResponse<WhatIfResponse> whatIf(
+      @PathVariable UUID projectId,
+      @RequestBody WhatIfRequest request) {
+    log.info("Schedule what-if for project {}: {} change(s)", projectId,
+        request != null && request.changes() != null ? request.changes().size() : 0);
+    return ApiResponse.ok(schedulingService.simulateWhatIf(projectId, request));
+  }
+
   @GetMapping
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'SCHEDULE.READ')")
   public ApiResponse<ScheduleResultResponse> getLatestSchedule(@PathVariable UUID projectId) {
     log.debug("Fetching latest schedule for project: id={}", projectId);
 
@@ -51,6 +64,7 @@ public class ScheduleController {
   }
 
   @GetMapping("/critical-path")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'SCHEDULE.READ')")
   public ApiResponse<List<ScheduleActivityResultResponse>> getCriticalPath(@PathVariable UUID projectId) {
     log.debug("Fetching critical path for project: id={}", projectId);
 
@@ -59,6 +73,7 @@ public class ScheduleController {
   }
 
   @GetMapping("/float-paths")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'SCHEDULE.READ')")
   public ApiResponse<List<FloatPathResponse>> getFloatPaths(@PathVariable UUID projectId) {
     log.debug("Fetching float paths for project: id={}", projectId);
 
@@ -67,6 +82,7 @@ public class ScheduleController {
   }
 
   @GetMapping("/activities")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'SCHEDULE.READ')")
   public ApiResponse<List<ScheduleActivityResultResponse>> getAllScheduledActivities(
       @PathVariable UUID projectId) {
     log.debug("Fetching all scheduled activities for project: id={}", projectId);

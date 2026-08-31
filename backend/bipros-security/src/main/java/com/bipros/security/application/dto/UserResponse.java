@@ -36,18 +36,27 @@ public record UserResponse(
         LocalDate joiningDate,
         LocalDate contractEndDate,
         PresenceStatus presenceStatus,
-        List<UUID> assignedStretchIds
+        List<UUID> assignedStretchIds,
+        /** Effective fine-grained permission codes (profile-wins; else role matrix); sorted. */
+        List<String> permissions,
+        /** Row-visibility level for gate 3: OWN | PROJECT | ALL. ALL when the user is ADMIN. */
+        String dataScope
 ) {
     public static UserResponse from(User user, List<String> roles) {
-        return from(user, roles, null, null, List.of());
+        return from(user, roles, null, null, List.of(), List.of(), "PROJECT");
     }
 
     public static UserResponse from(User user, List<String> roles, List<UUID> stretchIds) {
-        return from(user, roles, null, null, stretchIds);
+        return from(user, roles, null, null, stretchIds, List.of(), "PROJECT");
     }
 
     public static UserResponse from(User user, List<String> roles, UUID profileId, String profileName,
                                     List<UUID> stretchIds) {
+        return from(user, roles, profileId, profileName, stretchIds, List.of(), "PROJECT");
+    }
+
+    public static UserResponse from(User user, List<String> roles, UUID profileId, String profileName,
+                                    List<UUID> stretchIds, List<String> permissions, String dataScope) {
         return new UserResponse(
                 user.getId(),
                 user.getUsername(),
@@ -68,7 +77,9 @@ public record UserResponse(
                 user.getJoiningDate(),
                 user.getContractEndDate(),
                 user.getPresenceStatus(),
-                stretchIds != null ? stretchIds : List.of()
+                stretchIds != null ? stretchIds : List.of(),
+                permissions != null ? permissions : List.of(),
+                dataScope != null ? dataScope : "PROJECT"
         );
     }
 }

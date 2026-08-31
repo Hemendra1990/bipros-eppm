@@ -18,6 +18,9 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import { CHART_TOOLTIP_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_TOOLTIP_ITEM_STYLE } from "@/components/common/dashboard/primitives";
+import type { ColumnDef } from "@tanstack/react-table";
 
 const LEVELING_MODES: { value: LevelingMode; label: string; description: string }[] = [
   {
@@ -109,7 +112,7 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
                 onClick={() => { setMode(m.value); setResult(null); }}
                 className={`rounded-lg border p-3 text-left transition-colors ${
                   mode === m.value
-                    ? "border-accent bg-blue-950/50"
+                    ? "border-accent bg-accent/10"
                     : "border-border bg-surface-hover/50 hover:border-border"
                 }`}
               >
@@ -126,11 +129,13 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
             <h3 className="mb-3 text-sm font-semibold text-text-secondary">Resource Utilization Profile</h3>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="date" stroke="#64748b" style={{ fontSize: "10px" }} />
                 <YAxis stroke="#64748b" style={{ fontSize: "11px" }} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "0.5rem" }}
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                  itemStyle={CHART_TOOLTIP_ITEM_STYLE}
                   formatter={(value) => typeof value === "number" ? value.toFixed(2) : value}
                 />
                 <Legend />
@@ -185,30 +190,35 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
             {result.shiftedActivities.length > 0 && (
               <div className="rounded-lg border border-border bg-surface/50 p-4">
                 <h3 className="mb-3 text-sm font-semibold text-text-secondary">Shifted Activities</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left text-text-secondary">
-                        <th className="px-3 py-2">Activity ID</th>
-                        <th className="px-3 py-2">Original Start</th>
-                        <th className="px-3 py-2">New Start</th>
-                        <th className="px-3 py-2 text-right">Delay (days)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.shiftedActivities.map((sa) => (
-                        <tr key={sa.activityId} className="border-b border-border hover:bg-surface-hover/50">
-                          <td className="px-3 py-2 font-mono text-xs text-text-primary">
-                            {sa.activityId.substring(0, 8)}...
-                          </td>
-                          <td className="px-3 py-2 text-text-secondary">{sa.originalStart}</td>
-                          <td className="px-3 py-2 text-blue-300">{sa.newStart}</td>
-                          <td className="px-3 py-2 text-right text-yellow-300">+{sa.delayDays}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable
+                  columns={[
+                    {
+                      accessorKey: "activityId",
+                      header: "Activity ID",
+                      cell: ({ row }) => (
+                        <span className="font-mono text-xs text-text-primary">
+                          {row.original.activityId.substring(0, 8)}...
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "originalStart",
+                      header: "Original Start",
+                      cell: ({ row }) => <span className="text-text-secondary">{row.original.originalStart}</span>,
+                    },
+                    {
+                      accessorKey: "newStart",
+                      header: "New Start",
+                      cell: ({ row }) => <span className="text-blue-300">{row.original.newStart}</span>,
+                    },
+                    {
+                      accessorKey: "delayDays",
+                      header: "Delay (days)",
+                      cell: ({ row }) => <span className="text-right text-yellow-300">+{row.original.delayDays}</span>,
+                    },
+                  ]}
+                  data={result.shiftedActivities}
+                />
               </div>
             )}
 
@@ -228,7 +238,7 @@ export function ResourceLevelingDialog({ projectId, open, onClose }: ResourceLev
 
         {/* Error */}
         {levelMutation.isError && (
-          <div className="mt-4 rounded-lg border border-red-800 bg-red-950/50 p-3 text-sm text-danger">
+          <div className="mt-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
             Leveling failed: {levelMutation.error instanceof Error ? levelMutation.error.message : "Unknown error"}
           </div>
         )}

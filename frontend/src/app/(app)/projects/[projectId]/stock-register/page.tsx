@@ -1,13 +1,16 @@
 "use client";
 
+import { useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { stockApi } from "@/lib/api/materialCatalogueApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import type { MaterialStockRow, StockStatusTag } from "@/lib/types";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 
 const TAG_COLORS: Record<StockStatusTag, string> = {
   OK: "bg-success/20 text-success",
@@ -18,6 +21,7 @@ const TAG_COLORS: Record<StockStatusTag, string> = {
 export default function StockRegisterPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = params.projectId;
+  const { money, symbol } = useProjectCurrency();
 
   const { data, isLoading } = useQuery({
     queryKey: ["stock-register", projectId],
@@ -25,18 +29,19 @@ export default function StockRegisterPage() {
     enabled: !!projectId,
   });
 
-  const rows = data?.data ?? [];
+  const rows = useMemo(() => data?.data ?? [], [data]);
 
-  const columns: ColumnDef<MaterialStockRow>[] = [
-    { key: "materialCode", label: "Code", sortable: true },
-    { key: "materialName", label: "Material" },
-    { key: "openingStock", label: "Opening" },
-    { key: "receivedMonth", label: "Received (Month)" },
-    { key: "issuedMonth", label: "Issued (Month)" },
+  const columns = useMemo<ColumnDef<MaterialStockRow>[]>(() => [
+    { accessorKey: "materialCode", header: "Code", enableSorting: true },
+    { accessorKey: "materialName", header: "Material" },
+    { accessorKey: "openingStock", header: "Opening" },
+    { accessorKey: "receivedMonth", header: "Received (Month)" },
+    { accessorKey: "issuedMonth", header: "Issued (Month)" },
     {
-      key: "currentStock",
-      label: "Current Stock",
-      render: (v, row) => {
+      accessorKey: "currentStock",
+      header: "Current Stock",
+      cell: (info) => {
+        const row = info.row.original;
         const tag = row.stockStatusTag;
         const colour =
           tag === "CRITICAL"
@@ -44,21 +49,24 @@ export default function StockRegisterPage() {
             : tag === "LOW"
               ? "text-warning"
               : "text-text-primary";
-        return <span className={`font-semibold ${colour}`}>{String(v ?? 0)}</span>;
+        return <span className={`font-semibold ${colour}`}>{String(info.getValue() ?? 0)}</span>;
       },
     },
-    { key: "minStockLevel", label: "Min Stock" },
-    { key: "reorderQuantity", label: "Reorder Qty" },
+    { accessorKey: "minStockLevel", header: "Min Stock" },
+    { accessorKey: "reorderQuantity", header: "Reorder Qty" },
     {
-      key: "stockValue",
-      label: "Stock Value (₹)",
-      render: (v) => (v == null ? "—" : `₹${Number(v).toLocaleString("en-IN")}`),
+      accessorKey: "stockValue",
+      header: `Stock Value (${symbol})`,
+      cell: (info) => {
+        const v = info.getValue();
+        return v == null ? "—" : money(Number(v), { decimals: 0 });
+      },
     },
     {
-      key: "stockStatusTag",
-      label: "Status",
-      render: (v) => {
-        const s = v as StockStatusTag | null;
+      accessorKey: "stockStatusTag",
+      header: "Status",
+      cell: (info) => {
+        const s = info.getValue() as StockStatusTag | null;
         if (!s) return "—";
         return (
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TAG_COLORS[s]}`}>
@@ -68,11 +76,14 @@ export default function StockRegisterPage() {
       },
     },
     {
-      key: "wastagePercent",
-      label: "Wastage %",
-      render: (v) => (v == null ? "—" : `${v}%`),
+      accessorKey: "wastagePercent",
+      header: "Wastage %",
+      cell: (info) => {
+        const v = info.getValue();
+        return v == null ? "—" : `${v}%`;
+      },
     },
-  ];
+  ], [money, symbol]);
 
   return (
     <div className="space-y-6">
@@ -105,7 +116,7 @@ export default function StockRegisterPage() {
           description="Log a GRN for any material in the catalogue to start tracking stock."
         />
       ) : (
-        <DataTable columns={columns} data={rows} rowKey="id" searchable searchPlaceholder="Search stock…" />
+        <VirtualDataTable columns={columns} data={rows} sortable resizable />
       )}
     </div>
   );

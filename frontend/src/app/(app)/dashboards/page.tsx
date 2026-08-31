@@ -5,9 +5,8 @@ import {
   ArrowUpRight,
   BarChart3,
   Briefcase,
-  HardHat,
-  LineChart as LineChartIcon,
   Sparkles,
+  Wallet,
 } from "lucide-react";
 
 interface DashboardTier {
@@ -39,28 +38,20 @@ const dashboardTiers: DashboardTier[] = [
     icon: BarChart3,
   },
   {
-    id: "OPERATIONAL",
-    title: "Operational",
-    kicker: "Project controls",
-    description: "RA-bill flow, resource utilisation and WBS-level activity progress for one project at a time.",
-    highlights: ["RA bills", "Resource utilisation", "WBS progress"],
-    icon: LineChartIcon,
-  },
-  {
-    id: "FIELD",
-    title: "Field",
-    kicker: "Site command",
-    description: "Daily worklogs, headcount and equipment hours from the active sites, refreshed every shift.",
-    highlights: ["Daily worklogs", "Active sites", "Live activities"],
-    icon: HardHat,
-  },
-  {
     id: "PORTFOLIO",
     title: "Portfolio",
     kicker: "Cross-project scorecard",
     description: "Cross-project performance — schedule, cost, cash-flow, funding, risks and compliance — at a glance.",
     highlights: ["EVM rollup", "Cost overruns", "Risk heatmap"],
     icon: Briefcase,
+  },
+  {
+    id: "FINANCIAL",
+    title: "Financial",
+    kicker: "Project · cost lens",
+    description: "Budget tracking, cost analysis and billing for a single project — contract value, expenditure, billing raised, S-curve and category breakdown.",
+    highlights: ["Cost S-curve", "Invoice summary", "Budget breakdown"],
+    icon: Wallet,
   },
 ];
 
@@ -79,8 +70,8 @@ export default function DashboardsPage() {
           >
             Dashboards
           </h1>
-          <p className="mt-2 max-w-[600px] text-sm leading-relaxed text-slate">
-            Five lenses on the same programme. Pick the altitude — strategic to site — and dive in.
+          <p className="mt-2 max-w-[640px] text-sm leading-relaxed text-slate">
+            Cross-programme lenses. For per-project performance views (Operational, Field), open a project and use the <span className="font-semibold text-charcoal">Insights</span> tab.
           </p>
         </div>
       </div>

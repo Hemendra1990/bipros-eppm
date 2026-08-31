@@ -1,17 +1,27 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { projectInsightsApi } from "@/lib/api/projectInsightsApi";
 import { KpiTile } from "@/components/common/KpiTile";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   EmptyBlock,
   LoadingBlock,
   SectionCard,
-  formatCrore,
   truncate,
 } from "@/components/common/dashboard/primitives";
+import { useProjectCurrencyOptional } from "@/lib/currency/ProjectCurrencyProvider";
+import { formatMoney } from "@/lib/currency/format";
 
 export function BillsVosSection({ projectId }: { projectId: string }) {
+  // The project-canvas can render on the portfolio reports page (outside a
+  // project route), so fall back to INR when no project currency is in context.
+  const currency = useProjectCurrencyOptional();
+  const moneyCompact = (v: number | null | undefined) =>
+    currency ? currency.moneyCompact(v) : formatMoney(v, { code: "INR" }, { compact: true });
+
   const billsQuery = useQuery({
     queryKey: ["project-ra-bill-summary", projectId],
     queryFn: () => projectInsightsApi.getRaBillSummary(projectId),
@@ -22,6 +32,137 @@ export function BillsVosSection({ projectId }: { projectId: string }) {
     queryFn: () => projectInsightsApi.getVariationOrders(projectId),
     staleTime: 60_000,
   });
+
+  const billColumns = useMemo<
+    ColumnDef<NonNullable<typeof billsQuery.data>["bills"][number]>[]
+  >(
+    () => [
+      {
+        accessorKey: "billNumber",
+        header: "Bill #",
+        cell: (info) => (
+          <span className="font-mono text-text-primary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "billPeriodFrom",
+        header: "Period",
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <span className="text-text-secondary">
+              {row.billPeriodFrom ?? "—"} → {row.billPeriodTo ?? "—"}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => (
+          <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-semibold text-text-secondary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "grossAmount",
+        header: "Gross",
+        cell: (info) => (
+          <span className="block text-right font-mono">
+            {moneyCompact(info.getValue() as number)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "netAmount",
+        header: "Net",
+        cell: (info) => (
+          <span className="block text-right font-mono">
+            {moneyCompact(info.getValue() as number)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "submittedDate",
+        header: "Submitted",
+        cell: (info) => <span>{(info.getValue() as string) ?? "—"}</span>,
+      },
+      {
+        accessorKey: "paidDate",
+        header: "Paid",
+        cell: (info) => <span>{(info.getValue() as string) ?? "—"}</span>,
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currency]
+  );
+
+  const voColumns = useMemo<ColumnDef<NonNullable<typeof vosQuery.data>[number]>[]>(
+    () => [
+      {
+        accessorKey: "voNumber",
+        header: "VO #",
+        cell: (info) => (
+          <span className="font-mono text-text-primary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "description",
+        header: "Description",
+        cell: (info) => (
+          <span className="text-text-primary">
+            {truncate(info.getValue() as string, 90)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "costImpactCrores",
+        header: "Cost impact",
+        cell: (info) => {
+          const v = info.getValue() as number;
+          return (
+            <span
+              className={`block text-right font-mono ${
+                v < 0 ? "text-success" : "text-danger"
+              }`}
+            >
+              {moneyCompact(v * 1e7)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "timeImpactDays",
+        header: "Time (d)",
+        cell: (info) => (
+          <span className="block text-right font-mono">
+            {(info.getValue() as number | null) ?? "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => (
+          <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-semibold text-text-secondary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "approvedDate",
+        header: "Approved",
+        cell: (info) => <span>{(info.getValue() as string) ?? "—"}</span>,
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currency]
+  );
 
   if (billsQuery.isLoading || vosQuery.isLoading)
     return (
@@ -58,49 +199,22 @@ export function BillsVosSection({ projectId }: { projectId: string }) {
       {hasBills && bills && (
         <>
           <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
-            <KpiTile label="Submitted" value={formatCrore(bills.totalSubmittedCrores)} />
-            <KpiTile label="Pending approval" value={formatCrore(bills.pendingApprovalCrores)} tone="warning" />
-            <KpiTile label="Approved" value={formatCrore(bills.approvedCrores)} tone="accent" />
-            <KpiTile label="Paid" value={formatCrore(bills.paidCrores)} tone="success" />
-            <KpiTile label="Rejected" value={formatCrore(bills.rejectedCrores)} tone="danger" />
-            <KpiTile label="Retention" value={formatCrore(bills.retentionHeldCrores)} />
+            <KpiTile label="Submitted" value={moneyCompact(bills.totalSubmittedCrores * 1e7)} />
+            <KpiTile label="Pending approval" value={moneyCompact(bills.pendingApprovalCrores * 1e7)} tone="warning" />
+            <KpiTile label="Approved" value={moneyCompact(bills.approvedCrores * 1e7)} tone="accent" />
+            <KpiTile label="Paid" value={moneyCompact(bills.paidCrores * 1e7)} tone="success" />
+            <KpiTile label="Rejected" value={moneyCompact(bills.rejectedCrores * 1e7)} tone="danger" />
+            <KpiTile label="Retention" value={moneyCompact(bills.retentionHeldCrores * 1e7)} />
           </div>
 
           {bills.bills && bills.bills.length > 0 && (
-            <div className="mb-6 overflow-x-auto">
+            <div className="mb-6">
               <h3 className="mb-2 text-sm font-medium text-text-secondary">Recent bills</h3>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border text-left uppercase tracking-wide text-text-muted">
-                    <th className="px-2 py-2">Bill #</th>
-                    <th className="px-2 py-2">Period</th>
-                    <th className="px-2 py-2">Status</th>
-                    <th className="px-2 py-2 text-right">Gross</th>
-                    <th className="px-2 py-2 text-right">Net</th>
-                    <th className="px-2 py-2">Submitted</th>
-                    <th className="px-2 py-2">Paid</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bills.bills.slice(0, 20).map((b) => (
-                    <tr key={b.id} className="border-b border-border/50">
-                      <td className="px-2 py-2 font-mono text-text-primary">{b.billNumber}</td>
-                      <td className="px-2 py-2 text-text-secondary">
-                        {b.billPeriodFrom ?? "—"} → {b.billPeriodTo ?? "—"}
-                      </td>
-                      <td className="px-2 py-2">
-                        <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-semibold text-text-secondary">
-                          {b.status}
-                        </span>
-                      </td>
-                      <td className="px-2 py-2 text-right font-mono">{b.grossAmount.toLocaleString("en-IN")}</td>
-                      <td className="px-2 py-2 text-right font-mono">{b.netAmount.toLocaleString("en-IN")}</td>
-                      <td className="px-2 py-2">{b.submittedDate ?? "—"}</td>
-                      <td className="px-2 py-2">{b.paidDate ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <SimpleTable
+                columns={billColumns}
+                data={bills.bills.slice(0, 20)}
+                sortable={false}
+              />
             </div>
           )}
         </>
@@ -110,42 +224,7 @@ export function BillsVosSection({ projectId }: { projectId: string }) {
       {!hasVos ? (
         <EmptyBlock label="No variation orders" />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border text-left uppercase tracking-wide text-text-muted">
-                <th className="px-2 py-2">VO #</th>
-                <th className="px-2 py-2">Description</th>
-                <th className="px-2 py-2 text-right">Cost impact</th>
-                <th className="px-2 py-2 text-right">Time (d)</th>
-                <th className="px-2 py-2">Status</th>
-                <th className="px-2 py-2">Approved</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vos.map((v) => (
-                <tr key={v.id} className="border-b border-border/50">
-                  <td className="px-2 py-2 font-mono text-text-primary">{v.voNumber}</td>
-                  <td className="px-2 py-2 text-text-primary">{truncate(v.description, 90)}</td>
-                  <td
-                    className={`px-2 py-2 text-right font-mono ${v.costImpactCrores < 0 ? "text-success" : "text-danger"}`}
-                  >
-                    {formatCrore(v.costImpactCrores)}
-                  </td>
-                  <td className="px-2 py-2 text-right font-mono">
-                    {v.timeImpactDays ?? "—"}
-                  </td>
-                  <td className="px-2 py-2">
-                    <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-semibold text-text-secondary">
-                      {v.status}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2">{v.approvedDate ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <SimpleTable columns={voColumns} data={vos} sortable={false} />
       )}
     </SectionCard>
   );

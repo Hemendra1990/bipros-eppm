@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { getErrorMessage } from "@/lib/utils/error";
 import { documentApi } from "@/lib/api/documentApi";
 import { TabTip } from "@/components/common/TabTip";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 interface DrawingFormData {
   drawingNumber: string;
@@ -98,6 +100,94 @@ export default function DrawingsPage() {
         return "bg-surface-active/50 text-text-secondary ring-1 ring-border/50";
     }
   };
+
+  const drawingColumns = useMemo<ColumnDef<typeof drawings[number]>[]>(
+    () => [
+      {
+        accessorKey: "drawingNumber",
+        header: "Drawing Number",
+        cell: (info) => (
+          <span className="font-medium text-text-primary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "title",
+        header: "Title",
+        cell: (info) => (
+          <span className="text-text-primary">{info.getValue() as string}</span>
+        ),
+      },
+      {
+        accessorKey: "discipline",
+        header: "Discipline",
+        cell: (info) => (
+          <span className="flex items-center gap-2">
+            {getDisciplineIcon(info.getValue() as string)}{" "}
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "revision",
+        header: "Revision",
+        cell: (info) => (
+          <span className="text-text-secondary">{info.getValue() as string}</span>
+        ),
+      },
+      {
+        accessorKey: "revisionDate",
+        header: "Revision Date",
+        cell: (info) => (
+          <span className="text-text-secondary text-xs">
+            {new Date(info.getValue() as string).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => (
+          <span
+            className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
+              info.getValue() as DrawingFormData["status"]
+            )}`}
+          >
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "packageCode",
+        header: "Package",
+        cell: (info) => (
+          <span className="text-text-secondary text-sm">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "scale",
+        header: "Scale",
+        cell: (info) => (
+          <span className="text-text-secondary text-sm">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: () => (
+          <button className="text-accent hover:text-blue-300 text-xs font-medium">
+            View
+          </button>
+        ),
+      },
+    ],
+    []
+  );
 
   const getDisciplineIcon = (discipline: string) => {
     const icons: Record<string, string> = {
@@ -230,70 +320,11 @@ export default function DrawingsPage() {
         </div>
       )}
 
-      <div className="bg-surface/50 rounded-xl border border-border overflow-hidden shadow-xl">
-        {drawings.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface/80 border-b border-border">
-                <tr>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">
-                    Drawing Number
-                  </th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Title</th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Discipline</th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Revision</th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">
-                    Revision Date
-                  </th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Status</th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Package</th>
-                  <th className="px-6 py-3 text-left font-semibold text-text-secondary">Scale</th>
-                  <th className="px-6 py-3 text-center font-semibold text-text-secondary">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {drawings.map((drawing) => (
-                  <tr key={drawing.id} className="hover:bg-surface-hover/30 transition-colors border-border/50">
-                    <td className="px-6 py-4 text-text-primary font-medium">
-                      {drawing.drawingNumber}
-                    </td>
-                    <td className="px-6 py-4 text-text-primary">{drawing.title}</td>
-                    <td className="px-6 py-4">
-                      <span className="flex items-center gap-2">
-                        {getDisciplineIcon(drawing.discipline)} {drawing.discipline}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-text-secondary">{drawing.revision}</td>
-                    <td className="px-6 py-4 text-text-secondary text-xs">
-                      {new Date(drawing.revisionDate).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                          drawing.status
-                        )}`}
-                      >
-                        {drawing.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-text-secondary text-sm">{drawing.packageCode}</td>
-                    <td className="px-6 py-4 text-text-secondary text-sm">{drawing.scale}</td>
-                    <td className="px-6 py-4 text-center">
-                      <button className="text-accent hover:text-blue-300 text-xs font-medium">
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <p className="text-text-muted">No drawings found</p>
-          </div>
-        )}
-      </div>
+      <VirtualDataTable
+        columns={drawingColumns}
+        data={drawings}
+        emptyMessage="No drawings found"
+      />
     </div>
   );
 }

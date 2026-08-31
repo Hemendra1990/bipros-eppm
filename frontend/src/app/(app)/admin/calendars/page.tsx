@@ -1,10 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { calendarApi } from "@/lib/api/calendarApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import type { CalendarResponse } from "@/lib/types";
@@ -26,23 +28,32 @@ export default function CalendarsPage() {
   });
 
   const rawData = calendarsData?.data;
-  const calendars = Array.isArray(rawData) ? rawData : (rawData as any)?.content ?? [];
+  const calendars = useMemo(
+    () => (Array.isArray(rawData) ? rawData : (rawData as any)?.content ?? []),
+    [rawData],
+  );
 
-  const columns: ColumnDef<CalendarResponse>[] = [
-    { key: "name", label: "Name", sortable: true },
+  const columns = useMemo<ColumnDef<CalendarResponse, unknown>[]>(() => [
+    { accessorKey: "name", header: "Name", enableSorting: true },
     {
-      key: "calendarType",
-      label: "Type",
-      sortable: true,
-      render: (value) => <span className="text-sm font-medium">{String(value)}</span>,
+      accessorKey: "calendarType",
+      header: "Type",
+      enableSorting: true,
+      cell: (info) => <span className="text-sm font-medium">{String(info.getValue())}</span>,
     },
-    { key: "standardWorkHoursPerDay", label: "Hours/Day", sortable: true },
-    { key: "standardWorkDaysPerWeek", label: "Days/Week", sortable: true },
-    { key: "createdAt", label: "Created", sortable: true, render: (value: unknown) => {
-      if (!value) return "—";
-      return new Date(value as string).toLocaleDateString();
-    }},
-  ];
+    { accessorKey: "standardWorkHoursPerDay", header: "Hours/Day", enableSorting: true },
+    { accessorKey: "standardWorkDaysPerWeek", header: "Days/Week", enableSorting: true },
+    {
+      accessorKey: "createdAt",
+      header: "Created",
+      enableSorting: true,
+      cell: (info) => {
+        const value = info.getValue();
+        if (!value) return "—";
+        return new Date(value as string).toLocaleDateString();
+      },
+    },
+  ], []);
 
   return (
     <div>
@@ -78,10 +89,11 @@ export default function CalendarsPage() {
       )}
 
       {calendars.length > 0 && (
-        <DataTable
+        <VirtualDataTable
           columns={columns}
           data={calendars}
-          rowKey="id"
+          sortable
+          resizable
           onRowClick={(row) => router.push(`/admin/calendars/${row.id}`)}
         />
       )}

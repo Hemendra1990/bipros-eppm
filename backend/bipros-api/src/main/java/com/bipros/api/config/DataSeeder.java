@@ -32,7 +32,9 @@ import java.time.LocalTime;
 
 @Slf4j
 @Component
-@Profile({"dev", "seed"})
+// "init-prod" lets a fresh prod boot create the admin + roles without also
+// activating the Khasab demo-data seeders (which only fire under "seed").
+@Profile({"dev", "seed", "init-prod"})
 @Order(100)
 @RequiredArgsConstructor
 public class DataSeeder implements CommandLineRunner {
@@ -46,6 +48,11 @@ public class DataSeeder implements CommandLineRunner {
   private final GlobalSettingRepository globalSettingRepository;
   private final PasswordEncoder passwordEncoder;
   private final ProfileSeeder profileSeeder;
+  private final SaroojProfileSeeder saroojProfileSeeder;
+  private final StorePermissionSeeder storePermissionSeeder;
+  private final QcPermissionSeeder qcPermissionSeeder;
+  private final IssuePermissionSeeder issuePermissionSeeder;
+  private final MyProgressPermissionSeeder myProgressPermissionSeeder;
   private final com.bipros.security.domain.repository.ProfileRepository profileRepository;
 
   @Value("${bipros.admin.username:admin}")
@@ -66,6 +73,17 @@ public class DataSeeder implements CommandLineRunner {
 
     // Profiles seeded idempotently every boot so newly-introduced defaults appear without a wipe.
     profileSeeder.seed();
+    // Sarooj client profiles (Access sheets, 2026-08-11) — insert-only, admin-editable after.
+    saroojProfileSeeder.seed();
+    // STORE.* grants (2026-08-19) — self-healing so existing databases pick up the new
+    // family; additive-only so admin profile edits survive.
+    storePermissionSeeder.seed();
+    // NCR.* grants for the QC module (2026-08-19) — same self-healing contract.
+    qcPermissionSeeder.seed();
+    // ISSUE.* grant holes (2026-08-20) — same self-healing contract.
+    issuePermissionSeeder.seed();
+    // MY_PROGRESS.READ for the per-user progress card (2026-08-20) — same contract.
+    myProgressPermissionSeeder.seed();
 
     if (roleRepository.count() > 0 && userRepository.findByUsername(adminUsername).isPresent()) {
       log.info("Bulk data already seeded, skipping calendar/currency/settings");
@@ -89,7 +107,12 @@ public class DataSeeder implements CommandLineRunner {
    * <ul>
    *   <li>Original platform roles: ADMIN, PROJECT_MANAGER, SCHEDULER, RESOURCE_MANAGER, VIEWER</li>
    *   <li>RBAC+ABAC rollout additions: EXECUTIVE, PMO, FINANCE, TEAM_MEMBER, CLIENT</li>
+   *   <li>RBAC Phase 0.1 canonical names: SAFETY_OFFICER (was HSE_OFFICER),
+   *       QA_QC_ENGINEER (was QC_MANAGER), plus PLANNING_ENGINEER, SUPERVISOR,
+   *       STORE_MANAGER, PROCUREMENT_OFFICER, CONTRACTOR.</li>
    * </ul>
+   * Existing dev databases pick up the renames via Liquibase changelog 089;
+   * this seeder only inserts missing names on a fresh boot.
    */
   private void seedRoles() {
     String[][] roles = {
@@ -105,7 +128,16 @@ public class DataSeeder implements CommandLineRunner {
       {"VIEWER", "Viewer with read-only access"},
       {"FOREMAN", "Foreman; raises Permit-to-Work applications"},
       {"SITE_ENGINEER", "Site Engineer; reviews permits in their assigned zones"},
-      {"HSE_OFFICER", "HSE Officer; performs safety clearance and closes permits"}
+      {"SAFETY_OFFICER", "Safety / HSE officer"},
+      {"SITE_MANAGER", "Site Manager; owns daily execution, crew & machine deployment"},
+      {"PROJECT_ENGINEER", "Project Engineer; bridges design and execution, technical sign-off"},
+      {"QA_QC_ENGINEER", "Quality assurance / quality control engineer"},
+      {"BIM_DATA_COORDINATOR", "BIM / Data Coordinator; data integrity and model linkage"},
+      {"PLANNING_ENGINEER", "Schedule & planning engineer"},
+      {"SUPERVISOR", "Labor supervision"},
+      {"STORE_MANAGER", "Inventory and material store management"},
+      {"PROCUREMENT_OFFICER", "Material purchasing"},
+      {"CONTRACTOR", "External work execution contractor"}
     };
     int created = 0;
     for (String[] r : roles) {

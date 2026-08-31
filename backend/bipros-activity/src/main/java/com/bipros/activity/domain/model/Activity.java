@@ -20,7 +20,10 @@ import java.util.UUID;
 @EqualsAndHashCode(callSuper = true)
 public class Activity extends BaseEntity {
 
-  @Column(nullable = false, length = 20)
+  // 120: dotted-path codes (D11 — full code = ancestor segments joined by dots) overflow the
+  // old 20. Existing DBs are widened by Liquibase changeset 126 (prod) and DevSchemaFixupRunner
+  // fixup 126 (dev) — ddl-auto:update never alters a column type.
+  @Column(nullable = false, length = 120)
   private String code;
 
   @Column(nullable = false, length = 100)
@@ -34,6 +37,39 @@ public class Activity extends BaseEntity {
 
   @Column(name = "wbs_node_id", nullable = false)
   private UUID wbsNodeId;
+
+  /**
+   * Optional containment parent (spec D10). A parent is a grouping/rollup node only:
+   * it takes no DPRs, no resource plan, no scheduling relationships — guards enforced
+   * in ActivityService and (cross-module) DailyProgressReportService. Nullable so
+   * existing flat activities are untouched.
+   */
+  @Column(name = "parent_activity_id")
+  private UUID parentActivityId;
+
+  /**
+   * Spec D8/D9: the ONE BOQ line this activity executes. Soft FK to {@code project.boq_items}
+   * (cross-schema, same pattern as {@link #wbsNodeId}). DPRs inherit it — the supervisor no
+   * longer free-picks a BOQ item once the activity is linked. Null = unlinked (legacy flow).
+   */
+  @Column(name = "boq_item_id")
+  private UUID boqItemId;
+
+  /**
+   * Set only when the linked line is split into operations (Stage 4 of the BOQ-split design).
+   * Soft FK to {@code project.boq_operations}. Always null until operations exist.
+   */
+  @Column(name = "boq_operation_id")
+  private UUID boqOperationId;
+
+  /**
+   * Spec §5.3: this activity's own workdone target, in the linked line/operation's unit.
+   * Denominator of the activity's BOQ-driven % — several activities sharing one line each
+   * get an honest percentage instead of all dividing by the whole line quantity. Defaults
+   * to the line's boqQty when this is the only linked activity.
+   */
+  @Column(name = "planned_qty", precision = 18, scale = 3)
+  private java.math.BigDecimal plannedQty;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
@@ -50,6 +86,17 @@ public class Activity extends BaseEntity {
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
   private ActivityStatus status = ActivityStatus.NOT_STARTED;
+
+  /**
+   * Lifecycle / edit-lock status. Default {@code DRAFT} for new in-memory instances;
+   * the DB-level {@code DEFAULT 'LOCKED'} backfills existing rows when this column
+   * is added by Hibernate's {@code ddl-auto: update}, preserving DPR submission for
+   * pre-existing seeded activities.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "edit_status", nullable = false, length = 16,
+      columnDefinition = "VARCHAR(16) DEFAULT 'LOCKED'")
+  private ActivityEditStatus editStatus = ActivityEditStatus.DRAFT;
 
   @Column(name = "original_duration")
   private Double originalDuration;
@@ -153,9 +200,51 @@ public class Activity extends BaseEntity {
    * Soft FK to {@code public.users.id}. Higher-tier accountability (PM/PMO who signs off the
    * activity). Often populated from the project's {@code ownerId} but may differ for delegated
    * supervision.
+   *
+   * <p>Note: dormant — not currently wired into any UI or service flow. Reserved for a future
+   * PM-level approval / sign-off concept. The field-level accountable person is captured via
+   * {@link #responsibleResourceId} below (cached from {@code ResourceAssignment.isSupervisor}).
    */
   @Column(name = "responsible_user_id")
   private UUID responsibleUserId;
+
+  /**
+   * @deprecated Phase 4.5: dropped from the DB by Liquibase 094. The canonical supervisor
+   * identity is now {@link #supervisorUserId} (a soft FK to {@code public.users.id}). This
+   * field is preserved as a {@code @Transient} no-op so that callers reading it via Lombok
+   * getters keep compiling and always observe {@code null}; new code MUST use
+   * {@code supervisorUserId}. Removing the column required dropping the corresponding
+   * {@code @Column} mapping; the field is kept (rather than deleted) only to limit blast
+   * radius until parallel cleanup phases retire all read sites.
+   */
+  @Deprecated(forRemoval = true)
+  @Transient
+  private UUID responsibleResourceId;
+
+  /**
+   * @deprecated Phase 4.5: dropped from the DB by Liquibase 094 (the column carried the cached
+   * display name of the supervisor Resource and is no longer maintained). Read-back is always
+   * {@code null}; downstream UIs should derive the supervisor's display name from the user
+   * profile keyed by {@link #supervisorUserId}.
+   */
+  @Deprecated(forRemoval = true)
+  @Transient
+  private String responsibleResourceName;
+
+  /**
+   * Soft FK to {@code public.users.id}. The supervisor — an application user (not a Resource)
+   * who oversees execution of this activity. Replaces {@link #responsibleResourceId} in the
+   * role-only model. Set/cleared via {@code PUT /v1/activities/{id}/supervisor}; backfilled
+   * by Liquibase 087 for activities whose old responsibleResourceId pointed at a user-linked
+   * Resource.
+   */
+  @Column(name = "supervisor_user_id")
+  private UUID supervisorUserId;
+
+  // Display-snapshot of the supervisor's name at assignment time. Avoids a cross-schema
+  // join to public.users on every activity read. Updated whenever supervisor_user_id changes.
+  @Column(name = "supervisor_user_name")
+  private String supervisorUserName;
 
   /**
    * Soft FK to {@code resource.work_activities.id} — the master / library activity this
@@ -177,4 +266,34 @@ public class Activity extends BaseEntity {
    */
   @Column(name = "cost_account_id")
   private UUID costAccountId;
+
+  /**
+   * DBS-Phase-2: marks this activity as a BOQ <b>Preliminary</b> item (Section 1 in MoRTH-style
+   * road BOQs — mobilisation, site setup, diversions, bonds, insurance, etc.). The DPR flow is
+   * unchanged; the DBS rollup uses this flag to split the day's total into {@code direct_cost}
+   * vs {@code prelim_cost}. Defaults to {@code false} so existing rows (and any activity created
+   * before the operator visits the editor) behave as direct production work.
+   *
+   * <p>Persisted as {@code is_preliminary boolean NOT NULL DEFAULT false}; the corresponding
+   * Liquibase changeset is
+   * {@code db/changelog/changeset-2026-05-add-activity-preliminary.xml}. Hibernate's dev-mode
+   * {@code ddl-auto: update} adds the column from this annotation.
+   */
+  @Column(name = "is_preliminary", nullable = false,
+          columnDefinition = "boolean NOT NULL DEFAULT false")
+  private boolean preliminary = false;
+
+  /** Current effective start: actual if started, else scheduler forecast (early), else planned. */
+  public java.time.LocalDate currentStartDate() {
+    if (actualStartDate != null) return actualStartDate;
+    if (earlyStartDate != null) return earlyStartDate;
+    return plannedStartDate;
+  }
+
+  /** Current effective finish: actual if complete, else scheduler forecast (early), else planned. */
+  public java.time.LocalDate currentFinishDate() {
+    if (actualFinishDate != null) return actualFinishDate;
+    if (earlyFinishDate != null) return earlyFinishDate;
+    return plannedFinishDate;
+  }
 }

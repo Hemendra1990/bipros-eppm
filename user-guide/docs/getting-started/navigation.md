@@ -10,17 +10,33 @@ Bipros EPPM uses a dark-themed interface with a persistent sidebar on the left, 
 
 ## Login Screen
 
-When you first open the application, you are presented with the **Sign In** page.
+When you first open the application, you are presented with the **Sign In** page. The page uses an editorial split-screen layout designed to set context before you even sign in.
 
 ![Login Screen](/img/screenshots/00-login.png)
+
+### Layout
+
+| Region | Contents |
+|---|---|
+| **Top navigation bar** | Branded logo and app name (configurable per organisation — see [Branding](../admin/settings#branding-app-name--logo)) and supporting links. |
+| **Left side — editorial hero** | Headline, supporting copy, and a trust strip listing reference customers. |
+| **Right side — sign-in card** | Username, Password (with show/hide toggle), **Remember me** checkbox, and the **Sign in** button. |
+| **Live programme telemetry strip** | Below the hero, a live mini-Gantt and KPI tiles (active programmes, at-risk programmes, schedule adherence, activities tracked) preview the kind of canvas the user lands on after signing in. |
+| **Features grid** | A four-card section beneath the telemetry strip summarising the platform's core capabilities. |
+| **Footer** | Multi-column footer with product, company, and legal links. |
+
+The sign-in page renders in a fixed light theme regardless of the user's in-app light/dark preference, to keep the marketing rhythm consistent.
+
+### Sign-in fields
 
 | Field | Description |
 |---|---|
 | **Username** | Your assigned username (e.g., `admin`) |
 | **Password** | Your account password |
+| **Remember me** | When checked, your session is preserved across browser restarts |
 | **Sign in** | Submits your credentials and redirects you to the Dashboard on success |
 
-After successful authentication, you are redirected to the **Home Dashboard**.
+After successful authentication, you are redirected to the **Home Dashboard** (or to the page captured in the `next` query parameter if you arrived via a deep link).
 
 ---
 

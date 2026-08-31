@@ -2,26 +2,44 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, HelpCircle, Plus, Search } from "lucide-react";
+import { useEffect, useState } from "react";
+import { HelpCircle, Plus, Search } from "lucide-react";
+import { NotificationBell } from "@/components/common/NotificationBell";
+import { AppSwitcher } from "@/components/common/AppSwitcher";
+import { Brand } from "@/components/common/Brand";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { UserMenu } from "@/components/common/UserMenu";
+import { useAuthStore } from "@/lib/state/store";
 import { cn } from "@/lib/utils/cn";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Acronym + special-case map for URL-slug → breadcrumb label. Without these,
+// segments like "dbs" render as "Dbs" (title-cased) instead of the canonical
+// "DBS". Keep the keys lowercase — the lookup runs on the raw slug.
+const LABEL_OVERRIDES: Record<string, string> = {
+  admin: "Admin",
+  udf: "User Defined Fields",
+  obs: "OBS",
+  eps: "EPS",
+  wbs: "WBS",
+  dpr: "DPR",
+  dbs: "DBS",
+  evm: "EVM",
+  boq: "BOQ",
+  gis: "GIS",
+  qc: "QC",
+  ai: "AI",
+  ncrs: "NCRs",
+  grns: "GRNs",
+  rfis: "RFIs",
+  "ra-bills": "RA Bills",
+};
+
 function humanise(segment: string) {
-  const lookup: Record<string, string> = {
-    admin: "Admin",
-    udf: "User Defined Fields",
-    obs: "OBS",
-    eps: "EPS",
-    dpr: "DPR",
-    boq: "BOQ",
-    grns: "GRNs",
-    rfis: "RFIs",
-    "ra-bills": "RA Bills",
-  };
-  if (lookup[segment]) return lookup[segment];
+  const override = LABEL_OVERRIDES[segment.toLowerCase()];
+  if (override) return override;
   return segment.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -48,6 +66,15 @@ function useBreadcrumbs(pathname: string) {
 export function Header() {
   const pathname = usePathname();
   const crumbs = useBreadcrumbs(pathname);
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  // Zustand persist rehydrates from localStorage synchronously on the client,
+  // so `hasPermission` returns false on the server and true on the first client
+  // frame for authorized users. Gating the "+ New project" CTA on a hydration
+  // flag forces server/client parity (button absent on first paint, appears
+  // after hydration) and avoids the React 19 hydration-mismatch error.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+  const canCreateProject = hydrated && hasPermission("PROJECT.CREATE");
 
   return (
     <header className="relative flex h-16 items-center gap-5 border-b border-hairline bg-paper px-7">
@@ -61,6 +88,14 @@ export function Header() {
           opacity: 0.4,
         }}
       />
+
+      {/* Left cluster: brand + app switcher. Kept tight (gap-1.5) so they read
+          as a unit; the hairline divider separates them from the breadcrumb trail. */}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <Brand />
+        <AppSwitcher />
+      </div>
+      <div aria-hidden className="h-5 w-px shrink-0 bg-hairline" />
 
       {/* Breadcrumbs — `key={pathname}` forces a clean re-render on every navigation so the
           last crumb always reflects the active sub-route (defensive against any dev-mode
@@ -108,19 +143,12 @@ export function Header() {
         </kbd>
       </button>
 
-      {/* Right cluster */}
-      <div className="flex items-center gap-2.5">
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="relative flex h-10 w-10 items-center justify-center rounded-[10px] border border-transparent text-slate transition-colors hover:border-hairline hover:bg-ivory hover:text-gold-deep"
-        >
-          <Bell size={17} strokeWidth={1.5} />
-          <span
-            aria-hidden
-            className="absolute right-2 top-2 h-[7px] w-[7px] rounded-full bg-gold ring-2 ring-paper"
-          />
-        </button>
+      {/* Action cluster: notifications, help, +new project.
+          ml-auto pushes this and everything after it to the right edge — without
+          it the search bar's max-w-[440px] cap leaves dead space on the right
+          on wide viewports, and theme/avatar end up floating mid-header. */}
+      <div className="ml-auto flex items-center gap-2.5">
+        <NotificationBell />
         <button
           type="button"
           aria-label="Help"
@@ -128,15 +156,23 @@ export function Header() {
         >
           <HelpCircle size={17} strokeWidth={1.5} />
         </button>
-        <div className="h-5 w-px bg-hairline" />
+        {canCreateProject && (
+          <Link
+            href="/projects/new"
+            className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-gold px-3.5 text-[13px] font-semibold text-paper transition-all duration-200 hover:bg-gold-deep hover:shadow-[0_4px_14px_rgba(212,175,55,0.3)] hover:-translate-y-px"
+          >
+            <Plus size={14} strokeWidth={2.5} />
+            New project
+          </Link>
+        )}
+      </div>
+
+      <div className="h-5 w-px bg-hairline" />
+
+      {/* Personal cluster: theme + your account, pinned to the right edge */}
+      <div className="flex items-center gap-2.5">
         <ThemeToggle />
-        <Link
-          href="/projects/new"
-          className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-gold px-3.5 text-[13px] font-semibold text-paper transition-all duration-200 hover:bg-gold-deep hover:shadow-[0_4px_14px_rgba(212,175,55,0.3)] hover:-translate-y-px"
-        >
-          <Plus size={14} strokeWidth={2.5} />
-          New project
-        </Link>
+        <UserMenu />
       </div>
     </header>
   );

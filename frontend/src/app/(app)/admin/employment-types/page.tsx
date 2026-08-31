@@ -1,5 +1,7 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Pencil, Trash2 } from "lucide-react";
@@ -117,6 +119,71 @@ export default function EmploymentTypesPage() {
       setError(getErrorMessage(err, "Failed to delete employment type"));
     }
   };
+
+  const columns: ColumnDef<EmploymentTypeMaster>[] = [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => (
+        <span className="font-mono text-[12px] font-medium text-gold-deep">
+          {row.original.code}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => (
+        <span className="font-semibold text-charcoal">{row.original.name}</span>
+      ),
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: ({ row }) => (
+        <span className="text-slate">{row.original.description ?? "—"}</span>
+      ),
+    },
+    {
+      accessorKey: "sortOrder",
+      header: "Sort",
+      cell: ({ row }) => (
+        <span className="text-right text-slate block">{row.original.sortOrder ?? "—"}</span>
+      ),
+    },
+    {
+      accessorKey: "active",
+      header: "Active",
+      cell: ({ row }) =>
+        row.original.active ? (
+          <span className="text-emerald font-medium text-xs">Active</span>
+        ) : (
+          <span className="text-slate text-xs">Inactive</span>
+        ),
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => openEdit(row.original)}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
+            aria-label="Edit"
+          >
+            <Pencil size={14} strokeWidth={1.5} />
+          </button>
+          <button
+            onClick={() => handleDelete(row.original.id)}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy"
+            aria-label="Delete"
+          >
+            <Trash2 size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -276,61 +343,7 @@ export default function EmploymentTypesPage() {
       )}
 
       {!isLoading && filtered.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-hairline bg-paper">
-          <table className="w-full border-collapse text-sm">
-            <thead className="border-b border-hairline bg-ivory">
-              <tr>
-                {["Code", "Name", "Description", "Sort", "Active", ""].map((h, idx) => (
-                  <th
-                    key={`${h}-${idx}`}
-                    className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
-                <tr key={row.id} className="border-b border-hairline last:border-b-0 hover:bg-ivory">
-                  <td className="px-4 py-3.5">
-                    <span className="font-mono text-[12px] font-medium text-gold-deep">
-                      {row.code}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5 font-semibold text-charcoal">{row.name}</td>
-                  <td className="px-4 py-3.5 text-slate">{row.description ?? "—"}</td>
-                  <td className="px-4 py-3.5 text-right text-slate">{row.sortOrder ?? "—"}</td>
-                  <td className="px-4 py-3.5">
-                    {row.active ? (
-                      <span className="text-emerald font-medium text-xs">Active</span>
-                    ) : (
-                      <span className="text-slate text-xs">Inactive</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => openEdit(row)}
-                        className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
-                        aria-label="Edit"
-                      >
-                        <Pencil size={14} strokeWidth={1.5} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(row.id)}
-                        className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy"
-                        aria-label="Delete"
-                      >
-                        <Trash2 size={14} strokeWidth={1.5} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable columns={columns} data={filtered} sortable resizable searchable={false} />
       )}
     </div>
   );

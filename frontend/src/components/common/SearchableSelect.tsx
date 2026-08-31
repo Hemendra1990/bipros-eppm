@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -16,6 +17,22 @@ interface SearchableSelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /**
+   * When provided, the component switches to async mode: the parent owns the
+   * `options` list and receives every keystroke (debounce in the parent).
+   * Local label-based filtering is skipped — parent must apply the filter
+   * server-side and feed back the matching options.
+   */
+  onSearchChange?: (search: string) => void;
+  /** Show a "Loading…" row in the open list. Only meaningful in async mode. */
+  loading?: boolean;
+  /**
+   * Display label for the currently selected `value` when `value` is not
+   * present in `options` (common in async mode where the option list reflects
+   * the current search, not the historical selection). Falls back to a lookup
+   * inside `options` when omitted.
+   */
+  selectedLabel?: string;
 }
 
 export function SearchableSelect({
@@ -25,24 +42,46 @@ export function SearchableSelect({
   placeholder = "Search...",
   disabled = false,
   className,
+  onSearchChange,
+  loading = false,
+  selectedLabel: selectedLabelProp,
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [dropdownPos, setDropdownPos] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  const selectedLabel = options.find((o) => o.value === value)?.label || "";
+  const isAsync = typeof onSearchChange === "function";
+  const selectedLabel =
+    selectedLabelProp ??
+    options.find((o) => o.value === value)?.label ??
+    "";
 
-  const filtered = search
-    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
-    : options;
+  // In async mode the parent owns filtering — feed every keystroke back and
+  // render `options` verbatim. In sync mode keep the original local-filter UX.
+  const filtered = isAsync
+    ? options
+    : search
+      ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+      : options;
 
-  // Close on click outside
+  // Close on click outside (works whether the dropdown is inside containerRef or in the portal —
+  // listRef holds the portaled list, so a click inside the list is treated as inside).
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insideContainer = containerRef.current?.contains(target);
+      const insideList = listRef.current?.contains(target);
+      if (!insideContainer && !insideList) {
         setIsOpen(false);
         setSearch("");
       }
@@ -50,6 +89,41 @@ export function SearchableSelect({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Position the portaled dropdown against the input. Opens below by default; flips above
+  // when the viewport bottom would clip it and there is more room above (the list is
+  // position:fixed, so a clipped tail can never be scrolled into view — e.g. the What-If
+  // panel at the bottom of the Activities page). Max height caps to the available space.
+  // Re-measure on open + on scroll/resize so it tracks the trigger when ancestors scroll
+  // (e.g., the drawer body). We deliberately don't clear dropdownPos on close — the list
+  // is gated on `isOpen` in the JSX, so a stale position is harmless and skipping the
+  // clear keeps this effect strictly synchronizing-with-an-external-system.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const update = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const LIST_MAX = 240; // matches the previous max-h-60
+      const GAP = 4;
+      const spaceBelow = window.innerHeight - rect.bottom - GAP;
+      const spaceAbove = rect.top - GAP;
+      const openUp = spaceBelow < LIST_MAX && spaceAbove > spaceBelow;
+      const maxHeight = Math.min(LIST_MAX, Math.max(120, openUp ? spaceAbove : spaceBelow));
+      setDropdownPos(
+        openUp
+          ? { bottom: window.innerHeight - rect.top + GAP, left: rect.left, width: rect.width, maxHeight }
+          : { top: rect.bottom + GAP, left: rect.left, width: rect.width, maxHeight }
+      );
+    };
+    update();
+    window.addEventListener("scroll", update, true); // capture: catch ancestor scrolls
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [isOpen]);
 
   // Reset highlight when filtered list changes
   useEffect(() => {
@@ -69,8 +143,9 @@ export function SearchableSelect({
       onChange(val);
       setIsOpen(false);
       setSearch("");
+      onSearchChange?.("");
     },
-    [onChange]
+    [onChange, onSearchChange]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -138,7 +213,11 @@ export function SearchableSelect({
             ref={inputRef}
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setSearch(next);
+              onSearchChange?.(next);
+            }}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             className="w-full bg-transparent px-2 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none"
@@ -149,6 +228,7 @@ export function SearchableSelect({
               onClick={() => {
                 if (search) {
                   setSearch("");
+                  onSearchChange?.("");
                 } else {
                   onChange("");
                   setIsOpen(false);
@@ -162,35 +242,51 @@ export function SearchableSelect({
         </div>
       )}
 
-      {/* Dropdown List */}
-      {isOpen && (
-        <ul
-          ref={listRef}
-          className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-surface-hover py-1 shadow-lg"
-        >
-          {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-text-muted">No matches found</li>
-          ) : (
-            filtered.map((option, index) => (
-              <li
-                key={option.value}
-                onClick={() => handleSelect(option.value)}
-                onMouseEnter={() => setHighlightedIndex(index)}
-                className={cn(
-                  "cursor-pointer px-3 py-2 text-sm transition-colors",
-                  index === highlightedIndex
-                    ? "bg-accent text-accent-foreground"
-                    : option.value === value
-                      ? "bg-accent/10 text-accent"
-                      : "text-text-secondary hover:bg-surface-active"
-                )}
-              >
-                {option.label}
-              </li>
-            ))
-          )}
-        </ul>
-      )}
+      {/* Dropdown List — portaled to body so an `overflow:auto` ancestor (e.g., the DPR
+          drawer's table cell) doesn't clip it. Position is fixed and tracked against the
+          trigger via useLayoutEffect above. */}
+      {isOpen && dropdownPos && typeof document !== "undefined" &&
+        createPortal(
+          <ul
+            ref={listRef}
+            data-testid="searchable-select-list"
+            style={{
+              position: "fixed",
+              top: dropdownPos.top,
+              bottom: dropdownPos.bottom,
+              left: dropdownPos.left,
+              width: dropdownPos.width,
+              maxHeight: dropdownPos.maxHeight,
+            }}
+            className="z-[60] overflow-auto rounded-md border border-border bg-surface-hover py-1 shadow-lg"
+          >
+            {loading ? (
+              <li className="px-3 py-2 text-sm text-text-muted">Loading...</li>
+            ) : filtered.length === 0 ? (
+              <li className="px-3 py-2 text-sm text-text-muted">No matches found</li>
+            ) : (
+              filtered.map((option, index) => (
+                <li
+                  key={option.value}
+                  data-testid="searchable-select-option"
+                  onClick={() => handleSelect(option.value)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  className={cn(
+                    "cursor-pointer px-3 py-2 text-sm transition-colors",
+                    index === highlightedIndex
+                      ? "bg-accent text-accent-foreground"
+                      : option.value === value
+                        ? "bg-accent/10 text-accent"
+                        : "text-text-secondary hover:bg-surface-active"
+                  )}
+                >
+                  {option.label}
+                </li>
+              ))
+            )}
+          </ul>,
+          document.body,
+        )}
     </div>
   );
 }

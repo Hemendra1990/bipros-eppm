@@ -5,6 +5,7 @@ import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
+import com.bipros.resource.application.dto.AssignedResourcePickerOption;
 import com.bipros.resource.application.dto.CreateResourceAssignmentRequest;
 import com.bipros.resource.application.dto.ResourceAssignmentResponse;
 import com.bipros.resource.application.dto.ResourceUsageEntry;
@@ -40,6 +41,7 @@ public class ResourceAssignmentService {
   private final ResourceRoleRepository roleRepository;
   private final ActivityRepository activityRepository;
   private final ProjectResourceService projectResourceService;
+  private final RateSnapshotService rateSnapshotService;
   private final AuditService auditService;
 
   /**
@@ -85,15 +87,21 @@ public class ResourceAssignmentService {
           UUID effectiveRoleId = resolveEffectiveRoleId(a, resourceMap);
           ResourceRole effectiveRole = effectiveRoleId == null ? null : roleMap.get(effectiveRoleId);
           ResourceRole assignmentRole = a.getRoleId() == null ? null : roleMap.get(a.getRoleId());
+          Resource resource = a.getResourceId() == null ? null : resourceMap.get(a.getResourceId());
+          // Mirror the single-row hydrate() logic: prefer the resource's own unit (snapshotted
+          // from its rate master) so equipment/material assignments surface "Day", "Bag", "Nos"
+          // even when the role has no productivityUnit. Fall back to the role's productivityUnit
+          // for role-only / unstaffed slots where no resource is yet attached.
+          String unit = (resource != null && resource.getUnit() != null && !resource.getUnit().isBlank())
+              ? resource.getUnit()
+              : (effectiveRole == null ? null : effectiveRole.getProductivityUnit());
           return ResourceAssignmentResponse.from(a,
-              a.getResourceId() == null ? null : resourceMap.get(a.getResourceId()) == null
-                  ? null
-                  : resourceMap.get(a.getResourceId()).getName(),
+              resource == null ? null : resource.getName(),
               a.getActivityId() == null ? null : activityNames.get(a.getActivityId()),
               assignmentRole == null ? null : assignmentRole.getName(),
               effectiveRoleId,
               effectiveRole == null ? null : effectiveRole.getName(),
-              effectiveRole == null ? null : effectiveRole.getProductivityUnit());
+              unit);
         })
         .toList();
   }
@@ -162,7 +170,12 @@ public class ResourceAssignmentService {
         ? null
         : roleRepository.findById(effectiveRoleId).orElse(null);
     String effectiveRoleName = effectiveRole == null ? null : effectiveRole.getName();
-    String unit = effectiveRole == null ? null : effectiveRole.getProductivityUnit();
+    // Prefer the resource's own unit (snapshotted from its rate master). This way the assignment
+    // grid auto-reflects rate-master unit changes via the existing Phase 3 sync chain. Fall back
+    // to the role's productivityUnit only when there's no resource (role-only / unstaffed slots).
+    String unit = (resource != null && resource.getUnit() != null && !resource.getUnit().isBlank())
+        ? resource.getUnit()
+        : (effectiveRole == null ? null : effectiveRole.getProductivityUnit());
 
     return ResourceAssignmentResponse.from(a, rn, an, ron, effectiveRoleId, effectiveRoleName, unit);
   }
@@ -408,6 +421,81 @@ public class ResourceAssignmentService {
     return hydrate(assignmentRepository.findByActivityId(activityId));
   }
 
+  /**
+   * Picker-mode lookup for the DPR drawer. Returns one option per staffed resource assigned to
+   * {@code activityId}, optionally filtered by {@code kind} (MANPOWER / EQUIPMENT / MATERIAL),
+   * with a rate snapshot resolved at {@code reportDate}.
+   *
+   * <p>Role-only assignments (no {@code resource_id}) are excluded — the supervisor needs to pick
+   * a concrete resource for the cost snapshot to make sense.
+   *
+   * <p>{@code MANPOWER} maps to the seeded resource type code {@code LABOR}.
+   */
+  @Transactional(readOnly = true)
+  public List<AssignedResourcePickerOption> getPickerOptionsByActivity(
+      UUID activityId, String kind, LocalDate reportDate) {
+    List<ResourceAssignment> assignments = assignmentRepository.findByActivityId(activityId);
+    if (assignments.isEmpty()) return List.of();
+
+    var resourceIds = assignments.stream()
+        .map(ResourceAssignment::getResourceId)
+        .filter(Objects::nonNull)
+        .distinct()
+        .toList();
+    if (resourceIds.isEmpty()) return List.of();
+
+    Map<UUID, Resource> resourceMap = resourceRepository.findAllById(resourceIds).stream()
+        .collect(Collectors.toMap(Resource::getId, r -> r));
+
+    String requestedTypeCode = mapKindToResourceTypeCode(kind);
+    LocalDate effectiveOn = reportDate != null ? reportDate : LocalDate.now();
+
+    return assignments.stream()
+        .filter(a -> a.getResourceId() != null)
+        .map(a -> {
+          Resource resource = resourceMap.get(a.getResourceId());
+          if (resource == null) return null;
+          String typeCode = resource.getResourceType() == null ? null : resource.getResourceType().getCode();
+          if (requestedTypeCode != null && !requestedTypeCode.equalsIgnoreCase(typeCode)) {
+            return null;
+          }
+          RateSnapshotService.RateSnapshot snap = rateSnapshotService.resolve(a, effectiveOn);
+          return new AssignedResourcePickerOption(
+              a.getId(),
+              resource.getId(),
+              resource.getName(),
+              resource.getCode(),
+              resource.getUnit(),
+              snap.unitRateBasis(),
+              snap.unitRate(),
+              a.getRateType(),
+              a.getPlannedUnits(),
+              a.getActualUnits(),
+              a.getPlannedCost(),
+              a.getActualCost(),
+              resourceTypeCodeToKind(typeCode));
+        })
+        .filter(Objects::nonNull)
+        .toList();
+  }
+
+  /** UI-facing kind ↔ seeded ResourceType code mapping. {@code MANPOWER} ↔ {@code LABOR}. */
+  static String mapKindToResourceTypeCode(String kind) {
+    if (kind == null || kind.isBlank()) return null;
+    String k = kind.trim().toUpperCase();
+    return switch (k) {
+      case "MANPOWER", "LABOR", "LABOUR" -> "LABOR";
+      case "EQUIPMENT" -> "EQUIPMENT";
+      case "MATERIAL" -> "MATERIAL";
+      default -> k;
+    };
+  }
+
+  static String resourceTypeCodeToKind(String typeCode) {
+    if (typeCode == null) return null;
+    return "LABOR".equalsIgnoreCase(typeCode) ? "MANPOWER" : typeCode.toUpperCase();
+  }
+
   public List<ResourceAssignmentResponse> getAssignmentsByResource(UUID resourceId) {
     if (!resourceRepository.existsById(resourceId)) {
       throw new ResourceNotFoundException("Resource", resourceId);
@@ -467,6 +555,19 @@ public class ResourceAssignmentService {
           });
     }
 
+    // Deployment guard: a row with DPR-deployed actuals can't reduce planned units below those
+    // actuals, nor change its role/resource identity (which would orphan the deployed actuals the
+    // DPR rollup keys on). Read the old identity here, before the setters below overwrite it.
+    if (request.plannedUnits() != null) {
+      ResourceDeploymentGuard.assertNotReducedBelowActual(
+          request.plannedUnits(), assignment.getActualUnits());
+    }
+    boolean identityChanged =
+        !java.util.Objects.equals(assignment.getRoleId(), request.roleId())
+            || !java.util.Objects.equals(assignment.getResourceId(), request.resourceId());
+    ResourceDeploymentGuard.assertIdentityUnchangedWhenDeployed(
+        identityChanged, assignment.getActualUnits());
+
     assignment.setActivityId(request.activityId());
     assignment.setResourceId(request.resourceId());
     assignment.setRoleId(request.roleId());
@@ -493,23 +594,95 @@ public class ResourceAssignmentService {
     return response;
   }
 
-  public int recomputeProjectCosts(UUID projectId) {
-    log.info("Recomputing costs for project: projectId={}", projectId);
-    List<ResourceAssignment> assignments = assignmentRepository.findByProjectId(projectId);
+  /**
+   * Recomputes planned/actual/remaining/at-completion cost on every {@link ResourceAssignment}
+   * referencing a given resource, across every project. Called after a Resource's
+   * {@code costPerUnit} or {@code unit} changes — directly, or via {@code RateMasterSyncService}
+   * when an upstream rate-master row is edited.
+   *
+   * <p>The two-tier resolution chain in {@link #computePlannedCost} is honoured: assignments
+   * whose project pool entry has a {@code rateOverride} keep that override (the recompute
+   * resolves to the same value). Only assignments that fall back to {@code Resource.costPerUnit}
+   * actually change.
+   */
+  public int recomputeAssignmentsForResource(UUID resourceId) {
+    if (resourceId == null) return 0;
+    List<ResourceAssignment> assignments = assignmentRepository.findByResourceId(resourceId);
     int updated = 0;
     for (ResourceAssignment a : assignments) {
-      // Unstaffed role-only slots: planned cost is null (no rate to apply until staffed).
-      BigDecimal newPlanned = a.getResourceId() != null
-          ? computePlannedCost(projectId, a.getResourceId(), a.getPlannedUnits())
-          : null;
-      BigDecimal actualRate = a.getResourceId() != null
-          ? resolveActualRate(projectId, a.getResourceId())
-          : null;
+      BigDecimal newPlanned = computePlannedCost(a.getProjectId(), resourceId, a.getPlannedUnits());
+      BigDecimal actualRate = resolveActualRate(a.getProjectId(), resourceId);
       BigDecimal newActual = (actualRate != null && a.getActualUnits() != null)
           ? actualRate.multiply(BigDecimal.valueOf(a.getActualUnits()))
           : null;
       BigDecimal newRemaining = (actualRate != null && a.getRemainingUnits() != null)
           ? actualRate.multiply(BigDecimal.valueOf(a.getRemainingUnits()))
+          : null;
+      BigDecimal newEac = (newActual != null && newRemaining != null)
+          ? newActual.add(newRemaining)
+          : newActual != null ? newActual : newRemaining;
+
+      boolean changed = !Objects.equals(newPlanned, a.getPlannedCost())
+          || !Objects.equals(newActual, a.getActualCost())
+          || !Objects.equals(newRemaining, a.getRemainingCost())
+          || !Objects.equals(newEac, a.getAtCompletionCost());
+      if (changed) {
+        a.setPlannedCost(newPlanned);
+        a.setActualCost(newActual);
+        a.setRemainingCost(newRemaining);
+        a.setAtCompletionCost(newEac);
+        assignmentRepository.save(a);
+        updated++;
+      }
+    }
+    if (updated > 0) {
+      log.info("Resource cost recompute: resourceId={}, assignmentsUpdated={}", resourceId, updated);
+    }
+    return updated;
+  }
+
+  public int recomputeProjectCosts(UUID projectId) {
+    log.info("Recomputing costs for project: projectId={}", projectId);
+    List<ResourceAssignment> assignments = assignmentRepository.findByProjectId(projectId);
+    int updated = 0;
+    for (ResourceAssignment a : assignments) {
+      // Two paths:
+      //   (1) Legacy resource-based assignment (resource_id != null): rate from
+      //       ProjectResource.rateOverride → Resource.costPerUnit.
+      //   (2) Role-based assignment (resource_id null, role_id + variant FK + effective_rate set):
+      //       use the snapshotted effective_rate. Without this fallback, role-only rows would have
+      //       their planned_cost / actual_cost wiped to null on every Recompute click.
+      BigDecimal rate;
+      if (a.getResourceId() != null) {
+        rate = resolveActualRate(projectId, a.getResourceId());
+      } else {
+        rate = a.getEffectiveRate();
+      }
+
+      // Role-based rows: planned cost is headcount × rate (manpower/equipment) or
+      // quantity × rate (material) — duration is not multiplied in. Legacy resource-based
+      // rows keep rate × plannedUnits.
+      BigDecimal newPlanned;
+      if (rate == null) {
+        newPlanned = a.getPlannedCost();
+      } else if (a.getResourceId() == null) {
+        if (a.getHeadcount() != null) {
+          newPlanned = rate.multiply(BigDecimal.valueOf(a.getHeadcount()));
+        } else if (a.getQuantity() != null) {
+          newPlanned = rate.multiply(a.getQuantity());
+        } else {
+          newPlanned = a.getPlannedCost();
+        }
+      } else if (a.getPlannedUnits() != null) {
+        newPlanned = rate.multiply(BigDecimal.valueOf(a.getPlannedUnits()));
+      } else {
+        newPlanned = a.getPlannedCost();
+      }
+      BigDecimal newActual = (rate != null && a.getActualUnits() != null)
+          ? rate.multiply(BigDecimal.valueOf(a.getActualUnits()))
+          : null;
+      BigDecimal newRemaining = (rate != null && a.getRemainingUnits() != null)
+          ? rate.multiply(BigDecimal.valueOf(a.getRemainingUnits()))
           : null;
       BigDecimal newEac = (newActual != null && newRemaining != null)
           ? newActual.add(newRemaining)
@@ -575,9 +748,9 @@ public class ResourceAssignmentService {
   }
 
   public void removeAssignment(UUID assignmentId) {
-    if (!assignmentRepository.existsById(assignmentId)) {
-      throw new ResourceNotFoundException("ResourceAssignment", assignmentId);
-    }
+    ResourceAssignment assignment = assignmentRepository.findById(assignmentId)
+        .orElseThrow(() -> new ResourceNotFoundException("ResourceAssignment", assignmentId));
+    ResourceDeploymentGuard.assertDeletable(assignment.getActualUnits());
     assignmentRepository.deleteById(assignmentId);
     auditService.logDelete("ResourceAssignment", assignmentId);
   }

@@ -1,0 +1,16 @@
+databaseChangeLog:
+  # Capture per-DPR manpower idle hours so KPI 1.2 (Idle Time Ratio) reads from DPR
+  # instead of the deprecated daily_resource_deployments table. Defaults to 0 so
+  # existing rows remain valid for the (later) NOT NULL migration.
+  - changeSet:
+      id: 076-dpr-manpower-idle-hours
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: dpr_manpower
+            columns:
+              - column:
+                  name: idle_hours
+                  type: "DECIMAL(6,2)"
+                  defaultValueNumeric: 0

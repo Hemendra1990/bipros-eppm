@@ -21,6 +21,7 @@ export interface WbsPolygon {
   layerId: UUID;
   wbsCode: string;
   wbsName: string;
+  name?: string;
   polygonGeoJson: string;
   centerLatitude: number;
   centerLongitude: number;
@@ -42,6 +43,8 @@ export interface GeoJsonFeatureCollection {
       fillColor: string;
       strokeColor: string;
       id: string;
+      name?: string;
+      areaInSqMeters?: number;
     };
     geometry: { type: string; coordinates: number[][][] };
   }>;
@@ -51,9 +54,11 @@ export interface SatelliteImage {
   id: UUID;
   projectId: UUID;
   layerId?: UUID;
+  wbsPolygonId?: string;
   imageName: string;
   description?: string;
   captureDate: string;
+  cloudCoverPercent?: number;
   source:
     | "ISRO_CARTOSAT"
     | "PLANET_LABS"
@@ -99,6 +104,12 @@ export interface IngestionResult {
   scenesSkippedDedupe: number;
   snapshotsCreated: number;
   errors: string[];
+}
+
+/** Async ingest dispatch ack — the run is tracked in the ingestion log by runId. */
+export interface IngestionRunAck {
+  runId: string;
+  status: "RUNNING" | "COMPLETED" | "FAILED" | "PARTIAL";
 }
 
 export interface IngestionLogEntry {
@@ -149,6 +160,7 @@ export interface CreatePolygonRequest {
   layerId: UUID;
   wbsCode: string;
   wbsName: string;
+  name?: string;
   polygonGeoJson: string;
   centerLatitude: number;
   centerLongitude: number;
@@ -160,6 +172,7 @@ export interface CreatePolygonRequest {
 export interface UpdatePolygonRequest {
   wbsCode?: string;
   wbsName?: string;
+  name?: string;
   polygonGeoJson?: string;
   centerLatitude?: number;
   centerLongitude?: number;
@@ -274,6 +287,12 @@ export const gisApi = {
   deletePolygon: (projectId: UUID, polygonId: UUID) =>
     apiClient.delete(`/v1/projects/${projectId}/gis/polygons/${polygonId}`),
 
+  batchDeletePolygons: (projectId: UUID, ids: string[]) =>
+    apiClient.post<{ data: number }>(
+      `/v1/projects/${projectId}/gis/polygons/batch-delete`,
+      { ids }
+    ),
+
   // Satellite Images
   getSatelliteImages: (projectId: UUID, fromDate?: string, toDate?: string) => {
     let url = `/v1/projects/${projectId}/gis/satellite-images`;
@@ -354,7 +373,7 @@ export const gisApi = {
     to: string,
     polygonId?: UUID
   ) =>
-    apiClient.post<{ data: IngestionResult }>(
+    apiClient.post<{ data: IngestionRunAck }>(
       `/v1/projects/${projectId}/gis/ingest`,
       null,
       { params: polygonId ? { from, to, polygonId } : { from, to } }

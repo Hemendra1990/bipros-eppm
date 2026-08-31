@@ -1,14 +1,121 @@
 "use client";
 
+import { useMemo } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import type { LabourCategorySummary } from "@/lib/api/labourMasterApi";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import { CATEGORY_ACCENT, formatOMR } from "./labourMasterTokens";
+
+type Row =
+  | LabourCategorySummary
+  | {
+      category: "__TOTAL__";
+      categoryDisplay: string;
+      designationCount: number;
+      workerCount: number;
+      gradeRange: string;
+      dailyRateRange: string;
+      dailyCost: number;
+      keyRolesSummary: string;
+    };
 
 type Props = { rows: LabourCategorySummary[] };
 
 export function WorkforceSummaryTable({ rows }: Props) {
-  const totalDesigs = rows.reduce((a, r) => a + r.designationCount, 0);
-  const totalWorkers = rows.reduce((a, r) => a + r.workerCount, 0);
-  const totalCost = rows.reduce((a, r) => a + r.dailyCost, 0);
+  const data = useMemo<Row[]>(() => {
+    const totalDesigs = rows.reduce((a, r) => a + r.designationCount, 0);
+    const totalWorkers = rows.reduce((a, r) => a + r.workerCount, 0);
+    const totalCost = rows.reduce((a, r) => a + r.dailyCost, 0);
+    return [
+      ...rows,
+      {
+        category: "__TOTAL__",
+        categoryDisplay: "TOTAL",
+        designationCount: totalDesigs,
+        workerCount: totalWorkers,
+        gradeRange: "A – E",
+        dailyRateRange: "—",
+        dailyCost: totalCost,
+        keyRolesSummary: `${rows.length} categories`,
+      },
+    ];
+  }, [rows]);
+
+  const columns = useMemo<ColumnDef<Row>[]>(() => [
+    {
+      accessorKey: "category",
+      header: "Category",
+      cell: ({ row }) => {
+        const r = row.original;
+        if (r.category === "__TOTAL__") {
+          return (
+            <span className="font-medium text-charcoal">
+              {r.categoryDisplay}
+            </span>
+          );
+        }
+        const accent = CATEGORY_ACCENT[r.category];
+        return (
+          <span className="flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full ${accent.stripe}`} />
+            <span className="font-medium text-charcoal">
+              {r.categoryDisplay}
+            </span>
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "designationCount",
+      header: "Designations",
+      cell: ({ row }) => (
+        <span className="font-display text-[15px] text-charcoal">
+          {row.original.designationCount}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "workerCount",
+      header: "Workers",
+      cell: ({ row }) => (
+        <span className="font-display text-[15px] text-charcoal">
+          {row.original.workerCount}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "gradeRange",
+      header: "Grade range",
+      cell: ({ row }) => (
+        <span className="text-slate">{row.original.gradeRange}</span>
+      ),
+    },
+    {
+      accessorKey: "dailyRateRange",
+      header: "Daily rate range (OMR)",
+      cell: ({ row }) => (
+        <span className="text-slate">{row.original.dailyRateRange}</span>
+      ),
+    },
+    {
+      accessorKey: "dailyCost",
+      header: "Daily cost",
+      cell: ({ row }) => (
+        <span className="font-display text-[15px] font-semibold text-gold-deep">
+          {formatOMR(row.original.dailyCost)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "keyRolesSummary",
+      header: "Key roles",
+      cell: ({ row }) => (
+        <span className="text-[12px] text-slate">
+          {row.original.keyRolesSummary}
+        </span>
+      ),
+    },
+  ], []);
 
   return (
     <div className="overflow-hidden rounded-xl border border-hairline bg-paper">
@@ -22,60 +129,12 @@ export function WorkforceSummaryTable({ rows }: Props) {
           </h3>
         </div>
       </header>
-      <div className="overflow-auto">
-        <table className="min-w-full text-[13px]">
-          <thead className="bg-ivory">
-            <tr className="text-left">
-              {[
-                "Category",
-                "Designations",
-                "Workers",
-                "Grade range",
-                "Daily rate range (OMR)",
-                "Daily cost",
-                "Key roles",
-              ].map((h) => (
-                <th
-                  key={h}
-                  className="px-3 py-2.5 font-semibold text-[11px] uppercase tracking-[0.10em] text-slate whitespace-nowrap"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-hairline">
-            {rows.map((r) => {
-              const accent = CATEGORY_ACCENT[r.category];
-              return (
-                <tr key={r.category} className="hover:bg-ivory/40 transition">
-                  <td className="px-3 py-2.5">
-                    <span className="flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${accent.stripe}`} />
-                      <span className="font-medium text-charcoal">{r.categoryDisplay}</span>
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 font-display text-[15px] text-charcoal">{r.designationCount}</td>
-                  <td className="px-3 py-2.5 font-display text-[15px] text-charcoal">{r.workerCount}</td>
-                  <td className="px-3 py-2.5 text-slate">{r.gradeRange}</td>
-                  <td className="px-3 py-2.5 text-slate">{r.dailyRateRange}</td>
-                  <td className="px-3 py-2.5 font-display text-[15px] font-semibold text-gold-deep">{formatOMR(r.dailyCost)}</td>
-                  <td className="px-3 py-2.5 text-[12px] text-slate">{r.keyRolesSummary}</td>
-                </tr>
-              );
-            })}
-            <tr className="border-t-2 border-hairline bg-parchment/40 font-semibold">
-              <td className="px-3 py-2.5 text-charcoal">TOTAL</td>
-              <td className="px-3 py-2.5 font-display text-[15px] text-charcoal">{totalDesigs}</td>
-              <td className="px-3 py-2.5 font-display text-[15px] text-charcoal">{totalWorkers}</td>
-              <td className="px-3 py-2.5 text-slate">A – E</td>
-              <td className="px-3 py-2.5 text-slate">—</td>
-              <td className="px-3 py-2.5 font-display text-[15px] text-gold-deep">{formatOMR(totalCost)}</td>
-              <td className="px-3 py-2.5 text-[12px] text-slate">{rows.length} categories</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <SimpleTable
+        data={data}
+        columns={columns}
+        sortable={false}
+        className="border-0 rounded-none"
+      />
     </div>
   );
 }

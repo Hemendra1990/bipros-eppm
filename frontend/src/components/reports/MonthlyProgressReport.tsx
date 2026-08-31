@@ -2,30 +2,91 @@
 
 import { useMemo } from "react";
 import { CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Progress } from "@/components/ui/progress";
-import type { MonthlyProgressData } from "@/lib/api/reportDataApi";
+import type { MonthlyProgressData, ActivitySummaryRow } from "@/lib/api/reportDataApi";
+import { useProjectCurrencyOptional } from "@/lib/currency/ProjectCurrencyProvider";
+import { formatMoney } from "@/lib/currency/format";
 
 interface MonthlyProgressReportProps {
   data: MonthlyProgressData;
 }
 
 export function MonthlyProgressReport({ data }: MonthlyProgressReportProps) {
+  const currency = useProjectCurrencyOptional();
+  const moneyCompact = (v: number | null | undefined) =>
+    currency ? currency.moneyCompact(v) : formatMoney(v, { code: "INR" }, { compact: true });
+
   const costVariance = useMemo(() => {
-    const variance = data.budgetAmount - data.actualCost;
+    const variance = data.budgetAmount - data.forecastCost;
     const percentage = data.budgetAmount > 0 ? (variance / data.budgetAmount) * 100 : 0;
     return { amount: variance, percentage };
-  }, [data.budgetAmount, data.actualCost]);
+  }, [data.budgetAmount, data.forecastCost]);
 
+  // Drive the badge off schedule performance: delayed activities signal "Behind Schedule".
+  // This is more honest than a raw 50%-complete threshold that fires early for long projects.
   const scheduleStatus = useMemo(() => {
     if (data.overallPercentComplete >= 100) return "completed";
-    if (data.overallPercentComplete >= 50) return "progressing";
-    return "at-risk";
-  }, [data.overallPercentComplete]);
+    if ((data.topDelayedActivities ?? []).length > 0) return "behind";
+    return "on-track";
+  }, [data.overallPercentComplete, data.topDelayedActivities]);
+
+  const columns = useMemo<ColumnDef<ActivitySummaryRow>[]>(
+    () => [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: (info) => (
+          <span className="font-mono text-text-primary">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: (info) => (
+          <span className="text-text-secondary">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => (
+          <span className="px-2 py-1 bg-orange-500/10 text-orange-400 rounded text-xs font-semibold">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "delayDays",
+        header: "Days Delayed",
+        cell: (info) => (
+          <span className="block text-right text-danger font-semibold">
+            {Math.abs(Math.round(Number(info.getValue())))} days
+          </span>
+        ),
+      },
+      {
+        accessorKey: "plannedFinish",
+        header: "Planned Finish",
+        cell: (info) => (
+          <span className="text-text-secondary">
+            {String(info.getValue()).slice(0, 10)}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
 
   return (
     <div className="space-y-6">
       {/* Header Info */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+      <div className="rounded-lg border border-border bg-surface/50 p-4">
         <div className="flex justify-between items-start">
           <div>
             <h3 className="font-semibold text-lg text-text-primary">{data.projectName}</h3>
@@ -33,12 +94,12 @@ export function MonthlyProgressReport({ data }: MonthlyProgressReportProps) {
           </div>
           <div className={`px-3 py-1 rounded-full text-sm font-semibold ${
             scheduleStatus === "completed" ? "bg-success/10 text-success" :
-            scheduleStatus === "progressing" ? "bg-accent/10 text-accent" :
+            scheduleStatus === "on-track" ? "bg-accent/10 text-accent" :
             "bg-danger/10 text-danger"
           }`}>
             {scheduleStatus === "completed" ? "Completed" :
-             scheduleStatus === "progressing" ? "In Progress" :
-             "At Risk"}
+             scheduleStatus === "on-track" ? "On Track" :
+             "Behind Schedule"}
           </div>
         </div>
       </div>
@@ -105,28 +166,28 @@ export function MonthlyProgressReport({ data }: MonthlyProgressReportProps) {
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-text-secondary">Budget</span>
-                <span className="font-semibold">${data.budgetAmount.toFixed(2)}</span>
+                <span className="font-semibold">{moneyCompact(data.budgetAmount)}</span>
               </div>
             </div>
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-text-secondary">Actual Cost</span>
-                <span className="font-semibold">${data.actualCost.toFixed(2)}</span>
+                <span className="font-semibold">{moneyCompact(data.actualCost)}</span>
               </div>
             </div>
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-text-secondary">Forecast</span>
-                <span className="font-semibold">${data.forecastCost.toFixed(2)}</span>
+                <span className="font-semibold">{moneyCompact(data.forecastCost)}</span>
               </div>
             </div>
             <div className="border-t pt-4">
               <div className="flex justify-between text-sm">
                 <span className={costVariance.percentage >= 0 ? "text-success" : "text-danger"}>
-                  Variance
+                  Variance (Budget &minus; Forecast)
                 </span>
                 <span className={`font-semibold ${costVariance.percentage >= 0 ? "text-success" : "text-danger"}`}>
-                  ${costVariance.amount.toFixed(2)} ({costVariance.percentage.toFixed(1)}%)
+                  {moneyCompact(costVariance.amount)} ({costVariance.percentage.toFixed(1)}%)
                 </span>
               </div>
             </div>
@@ -174,44 +235,17 @@ export function MonthlyProgressReport({ data }: MonthlyProgressReportProps) {
       </div>
 
       {/* Top Delayed Activities */}
-      {data.topDelayedActivities.length > 0 && (
+      {(data.topDelayedActivities ?? []).length > 0 && (
         <div className="bg-surface/50 border border-border rounded-lg p-4">
           <h4 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
             <AlertCircle className="text-orange-500" size={20} />
             Top Delayed Activities
           </h4>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-2 px-2 text-text-secondary font-semibold">Code</th>
-                  <th className="text-left py-2 px-2 text-text-secondary font-semibold">Name</th>
-                  <th className="text-left py-2 px-2 text-text-secondary font-semibold">Status</th>
-                  <th className="text-right py-2 px-2 text-text-secondary font-semibold">Days Delayed</th>
-                  <th className="text-left py-2 px-2 text-text-secondary font-semibold">Planned Finish</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.topDelayedActivities.map((activity, idx) => (
-                  <tr key={idx} className="border-b border-border/50 hover:bg-surface/80">
-                    <td className="py-3 px-2 font-mono text-text-primary">{activity.code}</td>
-                    <td className="py-3 px-2 text-text-secondary">{activity.name}</td>
-                    <td className="py-3 px-2">
-                      <span className="px-2 py-1 bg-orange-500/10 text-orange-400 rounded text-xs font-semibold">
-                        {activity.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-2 text-right text-danger font-semibold">
-                      {Math.abs(Math.round(activity.totalFloat))} days
-                    </td>
-                    <td className="py-3 px-2 text-text-secondary">
-                      {new Date(activity.plannedFinish).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SimpleTable
+            columns={columns}
+            data={data.topDelayedActivities ?? []}
+            sortable={false}
+          />
         </div>
       )}
     </div>

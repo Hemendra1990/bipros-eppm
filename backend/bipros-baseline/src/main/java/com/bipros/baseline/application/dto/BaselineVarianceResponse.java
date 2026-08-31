@@ -9,4 +9,5 @@ public record BaselineVarianceResponse(
     Long startVarianceDays,
     Long finishVarianceDays,
     Double durationVariance,
-    BigDecimal costVariance) {}
+    BigDecimal costVariance,
+    boolean comparable) {}

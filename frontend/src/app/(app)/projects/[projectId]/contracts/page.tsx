@@ -4,25 +4,17 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { contractApi } from "@/lib/api/contractApi";
+import { budgetApi } from "@/lib/api/budgetApi";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import { TabTip } from "@/components/common/TabTip";
 import { ContractForm } from "@/components/contracts/ContractForm";
-import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
+// import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
 import type { ContractResponse, CreateContractRequest } from "@/lib/types";
-
-/**
- * Format a rupee value intelligently: ≥1 Cr shown as "₹X.XX Cr", ≥1 L as "₹X.XX L",
- * otherwise with thousands separator. Backend stores amounts in full rupees.
- */
-function formatRupees(v: number | null | undefined): string {
-  const n = v ?? 0;
-  if (Math.abs(n) >= 10_000_000) return `₹${(n / 10_000_000).toFixed(2)} Cr`;
-  if (Math.abs(n) >= 100_000) return `₹${(n / 100_000).toFixed(2)} L`;
-  return `₹${n.toLocaleString()}`;
-}
 
 export default function ContractsPage() {
   const params = useParams();
   const projectId = params.projectId as string;
+  const { moneyCompact } = useProjectCurrency();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [page, setPage] = useState(0);
   const [size] = useState(20);
@@ -37,6 +29,13 @@ export default function ContractsPage() {
         pagination: { totalElements: 0, totalPages: 0, currentPage: 0, pageSize: 0 },
       },
   });
+
+  const { data: budgetData } = useQuery({
+    queryKey: ["project-budget", projectId],
+    queryFn: () => budgetApi.getBudgetSummary(projectId),
+    staleTime: 5 * 60 * 1000,
+  });
+  const projectCurrency = budgetData?.data?.budgetCurrency ?? "INR";
 
   const createMutation = useMutation({
     mutationFn: (data: CreateContractRequest) => contractApi.createContract(projectId, data),
@@ -63,10 +62,10 @@ export default function ContractsPage() {
 
   return (
     <div className="space-y-6">
-      <AiInsightsPanel
+      {/* <AiInsightsPanel
         projectId={projectId}
         endpoint={`/v1/projects/${projectId}/contracts/ai/insights`}
-      />
+      /> */}
       <TabTip
         title="Contracts & Procurement"
         description="Track contractor agreements, LOA values, milestones, and variation orders. Create contracts to link with project activities and costs."
@@ -90,6 +89,7 @@ export default function ContractsPage() {
             submitLabel="Create"
             onSubmit={(data) => createMutation.mutate(data)}
             onCancel={() => setShowCreateForm(false)}
+            defaultCurrency={projectCurrency}
           />
           {createMutation.isError ? (
             <p className="text-sm text-danger mt-3">
@@ -162,12 +162,12 @@ export default function ContractsPage() {
                       )}
                     </p>
                     <p className="text-sm text-text-secondary">
-                      <span className="font-medium">Value:</span> {formatRupees(contract.contractValue)}
+                      <span className="font-medium">Value:</span> {moneyCompact(contract.contractValue)}
                       {contract.revisedValue != null && contract.revisedValue !== contract.contractValue && (
                         <>
                           {" "}
                           · <span className="font-medium">Revised:</span>{" "}
-                          {formatRupees(contract.revisedValue)}
+                          {moneyCompact(contract.revisedValue)}
                         </>
                       )}{" "}
                       | <span className="font-medium">Type:</span>{" "}
@@ -212,7 +212,7 @@ export default function ContractsPage() {
                       {contract.voNumbersIssued != null && contract.voNumbersIssued > 0 && (
                         <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-surface-active/50 text-text-secondary ring-1 ring-border/50">
                           VOs {contract.voNumbersIssued}
-                          {contract.voValueCrores != null && ` · ₹${contract.voValueCrores.toFixed(1)}cr`}
+                          {contract.voValueCrores != null && ` · ${contract.voValueCrores.toFixed(1)} M ${contract.currency ?? projectCurrency}`}
                         </span>
                       )}
                       {contract.bgExpiry && (

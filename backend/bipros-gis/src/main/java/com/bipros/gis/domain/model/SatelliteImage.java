@@ -27,8 +27,16 @@ public class SatelliteImage extends BaseEntity {
     @Column(name = "layer_id")
     private UUID layerId;
 
-    /** Scene identifier from spec (e.g. SCN-N03-250328). */
-    @Column(name = "scene_id", unique = true, length = 80)
+    /** Owning WBS polygon; null for legacy scenes ingested before per-polygon ownership. */
+    @Column(name = "wbs_polygon_id")
+    private UUID wbsPolygonId;
+
+    /**
+     * Scene identifier from spec (e.g. SCN-N03-250328). NOT globally unique:
+     * per-polygon ownership stores the same scene once per overlapping polygon,
+     * deduped by (sceneId, wbsPolygonId) at ingestion time.
+     */
+    @Column(name = "scene_id", length = 80)
     private String sceneId;
 
     /** Cloud cover at capture time (0-100). */

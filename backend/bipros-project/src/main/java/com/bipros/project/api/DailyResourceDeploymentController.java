@@ -34,7 +34,7 @@ public class DailyResourceDeploymentController {
   private final DailyResourceDeploymentService service;
 
   @PostMapping
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.CREATE')")
   public ResponseEntity<ApiResponse<DailyResourceDeploymentResponse>> create(
       @PathVariable UUID projectId,
       @Valid @RequestBody CreateDailyResourceDeploymentRequest request) {
@@ -44,7 +44,7 @@ public class DailyResourceDeploymentController {
   }
 
   @PostMapping("/bulk")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.CREATE')")
   public ResponseEntity<ApiResponse<List<DailyResourceDeploymentResponse>>> createBulk(
       @PathVariable UUID projectId,
       @Valid @RequestBody List<CreateDailyResourceDeploymentRequest> requests) {
@@ -53,6 +53,7 @@ public class DailyResourceDeploymentController {
   }
 
   @GetMapping
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.READ')")
   public ResponseEntity<ApiResponse<List<DailyResourceDeploymentResponse>>> list(
       @PathVariable UUID projectId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -62,6 +63,7 @@ public class DailyResourceDeploymentController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.READ')")
   public ResponseEntity<ApiResponse<DailyResourceDeploymentResponse>> get(
       @PathVariable UUID projectId,
       @PathVariable UUID id) {
@@ -69,11 +71,26 @@ public class DailyResourceDeploymentController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.DELETE')")
   public ResponseEntity<ApiResponse<Void>> delete(
       @PathVariable UUID projectId,
       @PathVariable UUID id) {
     service.delete(projectId, id);
     return ResponseEntity.ok(ApiResponse.ok(null));
+  }
+
+  /**
+   * Preview the auto-derived {@code nosPlanned} for a (project, role, date) triple without
+   * persisting. Backs the "Recalculate from plan" button on the frontend.
+   */
+  @GetMapping("/suggest-nos-planned")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.READ')")
+  public ResponseEntity<ApiResponse<Integer>> suggestNosPlanned(
+      @PathVariable UUID projectId,
+      @RequestParam(required = false) UUID resourceRoleId,
+      @RequestParam(required = false) com.bipros.project.domain.model.DeploymentResourceType resourceType,
+      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate logDate) {
+    return ResponseEntity.ok(ApiResponse.ok(
+        service.suggestNosPlanned(projectId, resourceRoleId, resourceType, logDate)));
   }
 }

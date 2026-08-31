@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   Sparkles,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from "@/components/ui/dialog";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import { aiApi } from "@/lib/api/aiApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import toast from "react-hot-toast";
@@ -51,6 +53,7 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
   const [docDefaultDuration, setDocDefaultDuration] = useState(5);
   const [generationResult, setGenerationResult] = useState<ActivityAiGenerationResponse | null>(null);
   const [applyResult, setApplyResult] = useState<ActivityAiApplyResponse | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
   /**
    * Original-WBS-code → confirmed-existing-WBS-code map. Populated when the
    * user accepts a WBS_NEAR_MATCH suggestion in the preview. Sent on apply
@@ -109,6 +112,8 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
       aiApi.applyGeneratedActivities(projectId, {
         activities: generationResult?.activities ?? [],
         wbsRemap: Object.keys(wbsRemap).length > 0 ? wbsRemap : undefined,
+        // from-scratch batches are compressed to fit the project window on the backend
+        fromScratch: setupTab === "scratch",
       }),
     onSuccess: (data) => {
       if (data.data) {
@@ -122,7 +127,9 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
       }
     },
     onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to apply activities"));
+      const msg = getErrorMessage(err, "Failed to apply activities");
+      setApplyError(msg);
+      toast.error(msg);
     },
   });
 
@@ -131,6 +138,7 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
     setSetupTab("document");
     setGenerationResult(null);
     setApplyResult(null);
+    setApplyError(null);
     setDocFile(null);
     setWbsRemap({});
     onClose();
@@ -218,22 +226,29 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
           )}
 
           {phase === "preview" && generationResult && (
-            <PreviewPhase
-              rationale={generationResult.rationale}
-              activities={generationResult.activities}
-              annotations={generationResult.previewAnnotations ?? null}
-              wbsRemap={wbsRemap}
-              onAcceptNearMatch={(originalWbsCode, suggestedCode) =>
-                setWbsRemap((prev) => ({ ...prev, [originalWbsCode]: suggestedCode }))
-              }
-              onRejectNearMatch={(originalWbsCode) =>
-                setWbsRemap((prev) => {
-                  const next = { ...prev };
-                  delete next[originalWbsCode];
-                  return next;
-                })
-              }
-            />
+            <>
+              {applyError && (
+                <div className="mx-4 mt-3 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <strong>Apply failed:</strong> {applyError}
+                </div>
+              )}
+              <PreviewPhase
+                rationale={generationResult.rationale}
+                activities={generationResult.activities}
+                annotations={generationResult.previewAnnotations ?? null}
+                wbsRemap={wbsRemap}
+                onAcceptNearMatch={(originalWbsCode, suggestedCode) =>
+                  setWbsRemap((prev) => ({ ...prev, [originalWbsCode]: suggestedCode }))
+                }
+                onRejectNearMatch={(originalWbsCode) =>
+                  setWbsRemap((prev) => {
+                    const next = { ...prev };
+                    delete next[originalWbsCode];
+                    return next;
+                  })
+                }
+              />
+            </>
           )}
 
           {phase === "report" && applyResult && <ReportPhase result={applyResult} />}
@@ -289,7 +304,7 @@ export function ActivityAiGenerateDialog({ open, onClose, projectId }: ActivityA
                 Regenerate
               </button>
               <button
-                onClick={() => applyMutation.mutate()}
+                onClick={() => { setApplyError(null); applyMutation.mutate(); }}
                 disabled={applyMutation.isPending}
                 className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
               >
@@ -633,6 +648,129 @@ function PreviewPhase({
     return n;
   }, [annotations, activities, wbsRemap]);
 
+  const columns = useMemo<ColumnDef<ActivityAiNode>[]>(
+    () => [
+      {
+        header: "Code",
+        accessorKey: "code",
+        cell: ({ getValue }) => (
+          <span className="font-mono text-accent whitespace-nowrap">{String(getValue())}</span>
+        ),
+      },
+      {
+        header: "Name",
+        accessorKey: "name",
+        cell: ({ getValue }) => (
+          <span className="text-text-primary">{String(getValue())}</span>
+        ),
+      },
+      {
+        header: "WBS",
+        accessorKey: "wbsNodeCode",
+        cell: ({ row }) => {
+          const a = row.original;
+          const wbsAnnot = wbsAnnotByCode.get(a.code);
+          const accepted = wbsAnnot?.action === "WBS_NEAR_MATCH"
+            && wbsRemap[a.wbsNodeCode] === wbsAnnot.resolvedCode;
+          return (
+            <span className="font-mono whitespace-nowrap">
+              {wbsAnnot?.action === "MISSING_WBS_NODE" ? (
+                <span className="text-rose-300" title={wbsAnnot.reason ?? ""}>
+                  {a.wbsNodeCode}
+                </span>
+              ) : wbsAnnot?.action === "WBS_NEAR_MATCH" && wbsAnnot.resolvedCode ? (
+                <span className="flex items-center gap-2">
+                  {accepted ? (
+                    <>
+                      <span className="text-text-secondary line-through">{a.wbsNodeCode}</span>
+                      <span className="text-sky-300">\u2192 {wbsAnnot.resolvedCode}</span>
+                      <button
+                        type="button"
+                        className="text-xs text-text-muted hover:text-text-primary underline"
+                        onClick={() => onRejectNearMatch(a.wbsNodeCode)}
+                      >
+                        undo
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-text-secondary">{a.wbsNodeCode}</span>
+                      <button
+                        type="button"
+                        className="text-xs text-sky-300 hover:text-sky-200 underline"
+                        title={wbsAnnot.reason ?? ""}
+                        onClick={() => onAcceptNearMatch(a.wbsNodeCode, wbsAnnot.resolvedCode!)}
+                      >
+                        use {wbsAnnot.resolvedCode}
+                      </button>
+                    </>
+                  )}
+                </span>
+              ) : (
+                <span className="text-text-secondary">{a.wbsNodeCode}</span>
+              )}
+            </span>
+          );
+        },
+      },
+      {
+        header: "Days",
+        accessorKey: "originalDurationDays",
+        cell: ({ getValue }) => (
+          <span className="text-text-secondary whitespace-nowrap">{Number(getValue())}</span>
+        ),
+      },
+      {
+        header: "Predecessors",
+        accessorKey: "predecessors",
+        cell: ({ getValue }) => {
+          const preds = getValue() as Array<{ code: string; lagDays: number; type?: string | null }>;
+          if (!preds || preds.length === 0) return <span className="text-text-muted text-xs">&mdash;</span>;
+          const labels = preds.map(p => p.lagDays > 0 ? `${p.code}+${p.lagDays}d` : p.code);
+          return (
+            <span className="text-text-muted text-xs">
+              {labels.join(", ")}
+            </span>
+          );
+        },
+      },
+      {
+        header: "",
+        id: "tags",
+        cell: ({ row }) => {
+          const a = row.original;
+          const codeAnnot = codeAnnotByCode.get(a.code);
+          const codeTag = codeAnnot ? actionTag(codeAnnot.action) : null;
+          const wbsAnnot = wbsAnnotByCode.get(a.code);
+          return (
+            <span className="whitespace-nowrap space-x-1">
+              {codeTag && (
+                <span
+                  title={codeAnnot?.reason ?? ""}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${codeTag.className}`}
+                >
+                  {codeTag.label}
+                  {codeAnnot?.action === "RENAMED" && codeAnnot.resolvedCode !== codeAnnot.originalCode
+                    ? ` \u2192 ${codeAnnot.resolvedCode}`
+                    : ""}
+                </span>
+              )}
+              {wbsAnnot?.action === "MISSING_WBS_NODE" && (
+                <span
+                  title={wbsAnnot.reason ?? ""}
+                  className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-rose-500/15 text-rose-300"
+                >
+                  MISSING WBS
+                </span>
+              )}
+            </span>
+          );
+        },
+      },
+    ],
+    [wbsAnnotByCode, codeAnnotByCode, wbsRemap, onAcceptNearMatch, onRejectNearMatch]
+  );
+
   return (
     <div className="space-y-4">
       {rationale && (
@@ -690,95 +828,12 @@ function PreviewPhase({
           Generated Activities ({activities.length})
         </p>
         <div className="rounded-lg border border-border bg-surface/50 max-h-80 overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border bg-surface/80 sticky top-0">
-              <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-text-secondary">Code</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-text-secondary">Name</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-text-secondary">WBS</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-text-secondary">Days</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-text-secondary">Predecessors</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-text-secondary"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {activities.map((a, i) => {
-                const codeAnnot = codeAnnotByCode.get(a.code);
-                const codeTag = codeAnnot ? actionTag(codeAnnot.action) : null;
-                const wbsAnnot = wbsAnnotByCode.get(a.code);
-                const accepted = wbsAnnot?.action === "WBS_NEAR_MATCH"
-                  && wbsRemap[a.wbsNodeCode] === wbsAnnot.resolvedCode;
-                return (
-                  <tr key={`${a.code}-${i}`} className="hover:bg-surface-hover/30">
-                    <td className="px-3 py-2 font-mono text-accent whitespace-nowrap">{a.code}</td>
-                    <td className="px-3 py-2 text-text-primary">{a.name}</td>
-                    <td className="px-3 py-2 font-mono whitespace-nowrap">
-                      {wbsAnnot?.action === "MISSING_WBS_NODE" ? (
-                        <span className="text-rose-300" title={wbsAnnot.reason ?? ""}>
-                          {a.wbsNodeCode}
-                        </span>
-                      ) : wbsAnnot?.action === "WBS_NEAR_MATCH" && wbsAnnot.resolvedCode ? (
-                        <span className="flex items-center gap-2">
-                          {accepted ? (
-                            <>
-                              <span className="text-text-secondary line-through">{a.wbsNodeCode}</span>
-                              <span className="text-sky-300">\u2192 {wbsAnnot.resolvedCode}</span>
-                              <button
-                                type="button"
-                                className="text-xs text-text-muted hover:text-text-primary underline"
-                                onClick={() => onRejectNearMatch(a.wbsNodeCode)}
-                              >
-                                undo
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <span className="text-text-secondary">{a.wbsNodeCode}</span>
-                              <button
-                                type="button"
-                                className="text-xs text-sky-300 hover:text-sky-200 underline"
-                                title={wbsAnnot.reason ?? ""}
-                                onClick={() => onAcceptNearMatch(a.wbsNodeCode, wbsAnnot.resolvedCode!)}
-                              >
-                                use {wbsAnnot.resolvedCode}
-                              </button>
-                            </>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="text-text-secondary">{a.wbsNodeCode}</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{a.originalDurationDays}</td>
-                    <td className="px-3 py-2 text-text-muted text-xs">
-                      {a.predecessorCodes.length > 0 ? a.predecessorCodes.join(", ") : "\u2014"}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap space-x-1">
-                      {codeTag && (
-                        <span
-                          title={codeAnnot?.reason ?? ""}
-                          className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${codeTag.className}`}
-                        >
-                          {codeTag.label}
-                          {codeAnnot?.action === "RENAMED" && codeAnnot.resolvedCode !== codeAnnot.originalCode
-                            ? ` \u2192 ${codeAnnot.resolvedCode}`
-                            : ""}
-                        </span>
-                      )}
-                      {wbsAnnot?.action === "MISSING_WBS_NODE" && (
-                        <span
-                          title={wbsAnnot.reason ?? ""}
-                          className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-rose-500/15 text-rose-300"
-                        >
-                          MISSING WBS
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <SimpleTable
+            data={activities}
+            columns={columns}
+            sortable={false}
+            className="rounded-lg border-0 max-h-none"
+          />
         </div>
       </div>
     </div>

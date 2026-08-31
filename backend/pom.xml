@@ -42,7 +42,11 @@
         <module>bipros-permit</module>
         <module>bipros-analytics</module>
         <module>bipros-ai</module>
+        <module>bipros-site-ops</module>
+        <module>bipros-dbs</module>
+        <module>bipros-hds</module>
         <module>bipros-api</module>
+        <module>bipros-data-bootstrap</module>
     </modules>
 
     <properties>
@@ -52,6 +56,15 @@
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.8.4</springdoc.version>
         <testcontainers.version>1.20.4</testcontainers.version>
+        <antlr4.version>4.13.1</antlr4.version>
+        <caffeine.version>3.1.8</caffeine.version>
+        <!--
+          PDFBox pinned to 2.0.x: openhtmltopdf 1.0.10 (used by bipros-dbs / bipros-reporting
+          for PDF export) was built against PDFBox 2.x and crashes with NoSuchFieldError on the
+          PDType1Font.COURIER_BOLD_OBLIQUE constant when PDFBox 3.x is on the classpath. No
+          upstream openhtmltopdf release targets PDFBox 3 yet — see DBS Bug 3 fix.
+        -->
+        <pdfbox.version>2.0.30</pdfbox.version>
     </properties>
 
     <dependencyManagement>
@@ -172,6 +185,33 @@
                 <artifactId>bipros-ai</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.bipros</groupId>
+                <artifactId>bipros-site-ops</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bipros</groupId>
+                <artifactId>bipros-dbs</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bipros</groupId>
+                <artifactId>bipros-hds</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- AWS SDK v2 BOM — manages s3 and downstream artifact versions so child
+                 modules (bipros-integration, bipros-hds) can declare the dep without
+                 pinning a version. Aligned with the version already pinned in
+                 bipros-integration/pom.xml. -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>2.28.16</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
 
             <!-- JWT -->
             <dependency>
@@ -211,6 +251,37 @@
                 <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+
+            <!-- ANTLR4 -->
+            <dependency>
+                <groupId>org.antlr</groupId>
+                <artifactId>antlr4-runtime</artifactId>
+                <version>${antlr4.version}</version>
+            </dependency>
+
+            <!-- Caffeine Cache -->
+            <dependency>
+                <groupId>com.github.ben-manes.caffeine</groupId>
+                <artifactId>caffeine</artifactId>
+                <version>${caffeine.version}</version>
+            </dependency>
+
+            <!-- PDFBox (pinned to 2.0.x to match openhtmltopdf 1.0.10 — see property comment above) -->
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>pdfbox</artifactId>
+                <version>${pdfbox.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>fontbox</artifactId>
+                <version>${pdfbox.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>xmpbox</artifactId>
+                <version>${pdfbox.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

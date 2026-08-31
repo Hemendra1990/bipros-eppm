@@ -8,5 +8,7 @@ public record UpdateProfileRequest(
         @Size(max = 120) String name,
         @Size(max = 500) String description,
         @Size(max = 60) String legacyRoleName,
-        Set<String> permissions
+        Set<String> permissions,
+        /** OWN | PROJECT | ALL; null = leave unchanged. */
+        @Size(max = 10) String dataScope
 ) {}

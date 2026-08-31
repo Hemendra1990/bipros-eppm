@@ -1,0 +1,178 @@
+package com.bipros.project.application.service;
+
+import com.bipros.common.event.DprIssueChangedEvent;
+import com.bipros.common.security.ProjectAccessGuard;
+import com.bipros.common.util.AuditService;
+import com.bipros.project.application.dto.CreateDprIssueRequest;
+import com.bipros.project.application.dto.UpdateDprIssueRequest;
+import com.bipros.project.domain.model.DprIssue;
+import com.bipros.project.domain.model.DprIssueStatusHistory;
+import com.bipros.project.domain.model.HseIncidentType;
+import com.bipros.project.domain.model.IssueCategory;
+import com.bipros.project.domain.model.IssueSeverity;
+import com.bipros.project.domain.model.IssueStatus;
+import com.bipros.project.domain.repository.DprIssueRepository;
+import com.bipros.project.domain.repository.DprIssueStatusHistoryRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class DprIssueServiceTest {
+
+    @Mock private DprIssueRepository issueRepository;
+    @Mock private DprIssueStatusHistoryRepository historyRepository;
+    @Mock private AuditService auditService;
+    @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private ProjectAccessGuard projectAccessGuard;
+
+    private DprIssueService service;
+
+    private final UUID projectId = UUID.randomUUID();
+    private final UUID issueId = UUID.randomUUID();
+    private final UUID actorId = UUID.randomUUID();
+    private final UUID assigneeId = UUID.randomUUID();
+
+    @BeforeEach
+    void setUp() {
+        service = new DprIssueService(issueRepository, historyRepository, auditService,
+                eventPublisher, projectAccessGuard,
+                com.bipros.common.security.ScopeKeys::all);
+        lenient().when(projectAccessGuard.currentUserId()).thenReturn(actorId);
+        lenient().when(issueRepository.save(any(DprIssue.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    private DprIssue openIssue() {
+        return DprIssue.builder()
+                .projectId(projectId)
+                .category(IssueCategory.OTHER)
+                .severity(IssueSeverity.MEDIUM)
+                .status(IssueStatus.OPEN)
+                .title("t")
+                .openedAt(Instant.now())
+                .build();
+    }
+
+    @Test
+    void patch_statusChange_writesHistoryRowWithActor() {
+        DprIssue issue = openIssue();
+        issue.setAssignedToUserId(assigneeId);   // owner present so owner-rule passes
+        when(issueRepository.findByIdAndProjectId(issueId, projectId)).thenReturn(Optional.of(issue));
+
+        service.patch(projectId, issueId, new UpdateDprIssueRequest(
+                null, null, null, null, IssueStatus.IN_PROGRESS,
+                null, null, null, null, null, null, null, null, null, null, null, null, null));
+
+        ArgumentCaptor<DprIssueStatusHistory> cap = ArgumentCaptor.forClass(DprIssueStatusHistory.class);
+        verify(historyRepository).save(cap.capture());
+        assertThat(cap.getValue().getFromStatus()).isEqualTo(IssueStatus.OPEN);
+        assertThat(cap.getValue().getToStatus()).isEqualTo(IssueStatus.IN_PROGRESS);
+        assertThat(cap.getValue().getActorUserId()).isEqualTo(actorId);
+    }
+
+    @Test
+    void patch_statusChange_recordsProvidedReasonOnHistoryRow() {
+        DprIssue issue = openIssue();
+        issue.setAssignedToUserId(assigneeId);
+        when(issueRepository.findByIdAndProjectId(issueId, projectId)).thenReturn(Optional.of(issue));
+
+        service.patch(projectId, issueId, new UpdateDprIssueRequest(
+                null, null, null, null, IssueStatus.IN_PROGRESS,
+                null, null, null, null, null, null, null, null, null,
+                "Awaiting customs clearance", null, null, null));
+
+        ArgumentCaptor<DprIssueStatusHistory> cap = ArgumentCaptor.forClass(DprIssueStatusHistory.class);
+        verify(historyRepository).save(cap.capture());
+        assertThat(cap.getValue().getReason()).isEqualTo("Awaiting customs clearance");
+    }
+
+    @Test
+    void patch_toTerminalWithoutNotes_throws() {
+        DprIssue issue = openIssue();
+        issue.setAssignedToUserId(assigneeId);
+        when(issueRepository.findByIdAndProjectId(issueId, projectId)).thenReturn(Optional.of(issue));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            service.patch(projectId, issueId, new UpdateDprIssueRequest(
+                null, null, null, null, IssueStatus.RESOLVED,
+                null, null, null, null, null, null, null, null, null, null, null, null, null)))
+            .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class)
+            .hasMessageContaining("Resolution notes");
+    }
+
+    @Test
+    void patch_toInProgressWithoutAssignee_throws() {
+        DprIssue issue = openIssue();   // no assignee
+        when(issueRepository.findByIdAndProjectId(issueId, projectId)).thenReturn(Optional.of(issue));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            service.patch(projectId, issueId, new UpdateDprIssueRequest(
+                null, null, null, null, IssueStatus.IN_PROGRESS,
+                null, null, null, null, null, null, null, null, null, null, null, null, null)))
+            .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class)
+            .hasMessageContaining("Assigned");
+    }
+
+    @Test
+    void create_openWithoutAssignee_ok() {
+        var row = service.create(projectId, new CreateDprIssueRequest(
+            "title", null, IssueCategory.OTHER, IssueSeverity.MEDIUM, IssueStatus.OPEN,
+            null, null, null, null, null, null, null, null, null, null, null, null));
+        assertThat(row.title()).isEqualTo("title");
+    }
+
+    @Test
+    void create_inProgressWithoutAssignee_throws() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            service.create(projectId, new CreateDprIssueRequest(
+                "title", null, IssueCategory.OTHER, IssueSeverity.MEDIUM, IssueStatus.IN_PROGRESS,
+                null, null, null, null, null, null, null, null, null, null, null, null)))
+            .isInstanceOf(com.bipros.common.exception.BusinessRuleException.class);
+    }
+
+    @Test
+    void create_withHseIncidentType_persistsAndReturnsIt() {
+        var row = service.create(projectId, new CreateDprIssueRequest(
+            "gas leak near manifold", null, IssueCategory.SAFETY, IssueSeverity.MEDIUM, IssueStatus.OPEN,
+            null, null, null, null, null, null, null, null, null,
+            HseIncidentType.NEAR_MISS, null, null));
+
+        assertThat(row.hseIncidentType()).isEqualTo(HseIncidentType.NEAR_MISS);
+    }
+
+    @Test
+    void list_qFiltersTitleAndDescriptionCaseInsensitive() {
+        DprIssue a = openIssue(); a.setTitle("Steel rebar delay"); a.setDescription("customs");
+        DprIssue b = openIssue(); b.setTitle("Crane breakdown"); b.setDescription("hydraulic");
+        b.setReportDate(java.time.LocalDate.now());
+        a.setReportDate(java.time.LocalDate.now());
+        when(issueRepository.findByProjectIdOrderByOpenedAtDesc(projectId))
+                .thenReturn(java.util.List.of(a, b));
+
+        var byTitle = service.list(projectId, null, null, null, null, null, null, null, "REBAR", null);
+        assertThat(byTitle).hasSize(1);
+        assertThat(byTitle.get(0).title()).isEqualTo("Steel rebar delay");
+
+        var byDesc = service.list(projectId, null, null, null, null, null, null, null, "hydraulic", null);
+        assertThat(byDesc).hasSize(1);
+        assertThat(byDesc.get(0).title()).isEqualTo("Crane breakdown");
+
+        var noQ = service.list(projectId, null, null, null, null, null, null, null, null, null);
+        assertThat(noQ).hasSize(2);
+    }
+}

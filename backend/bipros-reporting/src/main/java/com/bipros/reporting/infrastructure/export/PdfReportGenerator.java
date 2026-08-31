@@ -44,13 +44,19 @@ public class PdfReportGenerator {
 
   private String buildHtml(String title, String projectName, String tableContent) {
     String timestamp = LocalDateTime.now().format(DATE_FORMATTER);
+    // openhtmltopdf parses this as strict XHTML, so plain-text values (title, project name)
+    // injected into the template MUST be XML-escaped — a raw '&' or '<' (e.g. a project named
+    // "…Road & Link…") otherwise aborts PDF rendering at the <title>. tableContent is markup,
+    // escaped at its own source (e.g. DprReportHtmlRenderer.esc).
+    String safeTitle = escapeXml(title);
+    String safeProject = escapeXml(projectName);
 
     return String.format(
         """
         <!DOCTYPE html>
         <html>
         <head>
-            <meta charset="UTF-8">
+            <meta charset="UTF-8" />
             <title>%s</title>
             <style>
                 body {
@@ -110,7 +116,51 @@ public class PdfReportGenerator {
         </body>
         </html>
         """,
-        title, title, projectName, timestamp, tableContent);
+        safeTitle, safeTitle, safeProject, timestamp, tableContent);
+  }
+
+  /**
+   * Branded document shell (2026-08-05): the content brings its OWN header band and styling
+   * (e.g. the Daily Project Report), so this wrapper adds only the page frame — no blue h1
+   * header, no default table skin that would fight the content's inline styles. The generated
+   * timestamp goes into a discreet footer line instead.
+   */
+  public byte[] generateBranded(String title, String bodyContent) {
+    String timestamp = LocalDateTime.now().format(DATE_FORMATTER);
+    String html = String.format(
+        """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8" />
+            <title>%s</title>
+            <style>
+                @page { size: A4; margin: 14mm 12mm; }
+                body { font-family: Arial, sans-serif; margin: 0; color: #232A31; }
+            </style>
+        </head>
+        <body>
+            %s
+            <div style="margin-top:10px;font-size:9px;color:#8a9199;text-align:center">Generated %s</div>
+        </body>
+        </html>
+        """,
+        escapeXml(title), bodyContent, timestamp);
+    try {
+      return renderToPdf(html);
+    } catch (IOException e) {
+      log.error("Error generating branded PDF report: {}", title, e);
+      throw new RuntimeException("Failed to generate PDF report", e);
+    }
+  }
+
+  /** XML-escape a plain-text value for safe injection into the XHTML the PDF engine parses. */
+  private static String escapeXml(String s) {
+    if (s == null) return "";
+    return s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;");
   }
 
   private byte[] renderToPdf(String html) throws IOException {

@@ -7,13 +7,13 @@ import {
   ArrowLeft,
   CalendarDays,
   ChevronDown,
+  Coins,
   Download,
   RefreshCw,
   Sparkles,
 } from "lucide-react";
 import { portfolioReportApi } from "@/lib/api/portfolioReportApi";
 import { CashFlowOutlookChart } from "@/components/dashboards/portfolio/CashFlowOutlookChart";
-import { CompliancePanel } from "@/components/dashboards/portfolio/CompliancePanel";
 import { ContractorLeagueChart } from "@/components/dashboards/portfolio/ContractorLeagueChart";
 import { CostOverrunChart } from "@/components/dashboards/portfolio/CostOverrunChart";
 import { DelayedProjectsChart } from "@/components/dashboards/portfolio/DelayedProjectsChart";
@@ -33,7 +33,6 @@ const sections: SectionNavItem[] = [
   { id: "funding", label: "Funding" },
   { id: "risks", label: "Risks" },
   { id: "vendors", label: "Vendors" },
-  { id: "compliance", label: "Compliance" },
 ];
 
 const RANGE_OPTIONS = [
@@ -48,7 +47,29 @@ export default function PortfolioDashboardPage() {
   const qc = useQueryClient();
   const [range, setRange] = useState("90d");
   const [rangeOpen, setRangeOpen] = useState(false);
+  const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [manualCurrency, setManualCurrency] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const { data: scorecard } = useQuery({
+    queryKey: ["portfolio-scorecard"],
+    queryFn: () => portfolioReportApi.getScorecard(),
+    staleTime: 60_000,
+  });
+  const budgetList = scorecard?.budgetByCurrency ?? [];
+  const currencies = Array.from(
+    new Set([
+      ...budgetList.map((c) => c.currency),
+      ...(scorecard?.spentByCurrency ?? []).map((c) => c.currency),
+      ...(scorecard?.committedByCurrency ?? []).map((c) => c.currency),
+    ]),
+  );
+  const defaultCurrency =
+    [...budgetList].sort((a, b) => (b.totalBudgetRaw ?? 0) - (a.totalBudgetRaw ?? 0))[0]?.currency ??
+    currencies[0] ??
+    "INR";
+  const selectedCurrency =
+    manualCurrency !== null && currencies.includes(manualCurrency) ? manualCurrency : defaultCurrency;
 
   const { data: evmData } = useQuery({
     queryKey: ["portfolio-evm-rollup"],
@@ -129,14 +150,53 @@ export default function PortfolioDashboardPage() {
                 Portfolio dashboard
               </h1>
               <p className="mt-2 max-w-[640px] text-sm leading-relaxed text-slate">
-                Cross-project performance — schedule, cost, cash-flow, funding, risks
-                and compliance — at a glance.
+                Cross-project performance — schedule, cost, cash-flow, funding and risks — at a glance.
               </p>
             </div>
           </div>
 
           {/* Toolbar */}
           <div className="flex flex-wrap items-center gap-2">
+            {currencies.length > 0 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setCurrencyOpen((v) => !v)}
+                  onBlur={() => setTimeout(() => setCurrencyOpen(false), 150)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-3.5 py-2 text-xs font-semibold text-charcoal shadow-sm transition-colors hover:border-gold/40 hover:text-gold-deep"
+                >
+                  <Coins size={14} strokeWidth={1.75} />
+                  {selectedCurrency}
+                  <ChevronDown
+                    size={12}
+                    className={`transition-transform ${currencyOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {currencyOpen && (
+                  <div className="absolute right-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-xl border border-hairline bg-paper p-1 shadow-[0_12px_32px_-12px_rgba(28,28,28,0.18)]">
+                    {currencies.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setManualCurrency(c);
+                          setCurrencyOpen(false);
+                        }}
+                        className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors ${
+                          c === selectedCurrency
+                            ? "bg-gold-tint/40 text-gold-ink"
+                            : "text-charcoal hover:bg-ivory"
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="relative">
               <button
                 type="button"
@@ -204,25 +264,26 @@ export default function PortfolioDashboardPage() {
 
       <div className="space-y-6">
         <section id="overview" className="scroll-mt-24 space-y-6">
-          <PortfolioKpiRow />
+          <PortfolioKpiRow currency={selectedCurrency} />
           <PortfolioStatusMix />
         </section>
 
-        <section id="schedule" className="scroll-mt-24">
+        <section id="schedule" className="scroll-mt-24 grid grid-cols-1 gap-6 xl:grid-cols-2">
           <DelayedProjectsChart />
+          <ScheduleHealthChart />
         </section>
 
         <section id="cost" className="scroll-mt-24 grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <CostOverrunChart />
-          <EvmRollupChart />
+          <CostOverrunChart currency={selectedCurrency} />
+          <EvmRollupChart currency={selectedCurrency} />
         </section>
 
         <section id="cash-flow" className="scroll-mt-24">
-          <CashFlowOutlookChart />
+          <CashFlowOutlookChart currency={selectedCurrency} />
         </section>
 
         <section id="funding" className="scroll-mt-24">
-          <FundingUtilizationChart />
+          <FundingUtilizationChart currency={selectedCurrency} />
         </section>
 
         <section id="risks" className="scroll-mt-24">
@@ -231,14 +292,6 @@ export default function PortfolioDashboardPage() {
 
         <section id="vendors" className="scroll-mt-24">
           <ContractorLeagueChart />
-        </section>
-
-        <section
-          id="compliance"
-          className="scroll-mt-24 grid grid-cols-1 gap-6 xl:grid-cols-2"
-        >
-          <CompliancePanel />
-          <ScheduleHealthChart />
         </section>
       </div>
     </div>

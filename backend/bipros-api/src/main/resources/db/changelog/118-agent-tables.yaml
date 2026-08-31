@@ -1,0 +1,321 @@
+databaseChangeLog:
+  # Multi-agent AI platform tables (ai schema). BaseEntity columns (id, created_at, updated_at,
+  # created_by, updated_by, version) follow the 110-user-notifications convention. Partial unique
+  # indexes (Postgres) enforce single-ACTIVE-per-fingerprint and single-RUNNING-per-pipeline.
+
+  - changeSet:
+      id: 118-1-agent-run
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: agent_run
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+              - column: { name: pipeline_run_id, type: UUID }
+              - column: { name: agent_key, type: VARCHAR(80), constraints: { nullable: false } }
+              - column: { name: project_id, type: UUID }
+              - column: { name: status, type: VARCHAR(24), constraints: { nullable: false } }
+              - column: { name: trigger_type, type: VARCHAR(40), constraints: { nullable: false } }
+              - column: { name: trigger_ref, type: VARCHAR(200) }
+              - column: { name: data_hash, type: VARCHAR(64) }
+              - column: { name: llm_skip_reason, type: VARCHAR(20) }
+              - column: { name: tokens_input, type: INT }
+              - column: { name: tokens_output, type: INT }
+              - column: { name: model, type: VARCHAR(120) }
+              - column: { name: findings_count, type: INT, constraints: { nullable: false } }
+              - column: { name: started_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: finished_at, type: TIMESTAMP }
+              - column: { name: duration_ms, type: BIGINT }
+              - column: { name: error_message, type: VARCHAR(2000) }
+        - createIndex:
+            schemaName: ai
+            tableName: agent_run
+            indexName: idx_agent_run_project_agent
+            columns:
+              - column: { name: project_id }
+              - column: { name: agent_key }
+        - createIndex:
+            schemaName: ai
+            tableName: agent_run
+            indexName: idx_agent_run_pipeline
+            columns:
+              - column: { name: pipeline_run_id }
+        - createIndex:
+            schemaName: ai
+            tableName: agent_run
+            indexName: idx_agent_run_status
+            columns:
+              - column: { name: status }
+
+  - changeSet:
+      id: 118-2-agent-pipeline-run
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: agent_pipeline_run
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+              - column: { name: pipeline_key, type: VARCHAR(60), constraints: { nullable: false } }
+              - column: { name: project_id, type: UUID }
+              - column: { name: status, type: VARCHAR(24), constraints: { nullable: false } }
+              - column: { name: trigger_type, type: VARCHAR(40), constraints: { nullable: false } }
+              - column: { name: trigger_ref, type: VARCHAR(200) }
+              - column: { name: agent_count, type: INT, constraints: { nullable: false } }
+              - column: { name: succeeded_count, type: INT, constraints: { nullable: false } }
+              - column: { name: failed_count, type: INT, constraints: { nullable: false } }
+              - column: { name: started_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: finished_at, type: TIMESTAMP }
+        - createIndex:
+            schemaName: ai
+            tableName: agent_pipeline_run
+            indexName: idx_agent_pipeline_run_project
+            columns:
+              - column: { name: pipeline_key }
+              - column: { name: project_id }
+
+  - changeSet:
+      id: 118-2b-agent-pipeline-run-running-unique
+      author: bipros
+      comment: One RUNNING pipeline per (pipeline_key, project_id) — idempotency for concurrent triggers.
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: >-
+              CREATE UNIQUE INDEX uq_agent_pipeline_running
+              ON ai.agent_pipeline_run (pipeline_key, project_id)
+              WHERE status = 'RUNNING';
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: DROP INDEX IF EXISTS ai.uq_agent_pipeline_running;
+
+  - changeSet:
+      id: 118-3-agent-finding
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: agent_finding
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+              - column: { name: run_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: agent_key, type: VARCHAR(80), constraints: { nullable: false } }
+              - column: { name: project_id, type: UUID }
+              - column: { name: finding_type, type: VARCHAR(60), constraints: { nullable: false } }
+              - column: { name: subject_ref, type: VARCHAR(200) }
+              - column: { name: fingerprint, type: VARCHAR(64), constraints: { nullable: false } }
+              - column: { name: content_hash, type: VARCHAR(64), constraints: { nullable: false } }
+              - column: { name: severity, type: VARCHAR(10), constraints: { nullable: false } }
+              - column: { name: confidence, type: DOUBLE, constraints: { nullable: false } }
+              - column: { name: confidence_basis, type: VARCHAR(300) }
+              - column: { name: title, type: VARCHAR(300), constraints: { nullable: false } }
+              - column: { name: what_happened, type: TEXT }
+              - column: { name: why_it_happened, type: TEXT }
+              - column: { name: business_impact, type: TEXT }
+              - column: { name: recommended_action, type: TEXT }
+              - column: { name: evidence_json, type: JSONB }
+              - column: { name: stakeholders_json, type: JSONB }
+              - column: { name: status, type: VARCHAR(20), constraints: { nullable: false } }
+              - column: { name: supersedes_id, type: UUID }
+              - column: { name: notifiable, type: BOOLEAN, constraints: { nullable: false } }
+              - column: { name: valid_until, type: TIMESTAMP }
+              - column: { name: last_seen_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: acknowledged_by, type: UUID }
+              - column: { name: acknowledged_at, type: TIMESTAMP }
+              - column: { name: resolved_by, type: UUID }
+              - column: { name: resolved_at, type: TIMESTAMP }
+        - createIndex:
+            schemaName: ai
+            tableName: agent_finding
+            indexName: idx_agent_finding_project_status_sev
+            columns:
+              - column: { name: project_id }
+              - column: { name: status }
+              - column: { name: severity }
+        - createIndex:
+            schemaName: ai
+            tableName: agent_finding
+            indexName: idx_agent_finding_run
+            columns:
+              - column: { name: run_id }
+        - createIndex:
+            schemaName: ai
+            tableName: agent_finding
+            indexName: idx_agent_finding_agent
+            columns:
+              - column: { name: agent_key }
+              - column: { name: status }
+
+  - changeSet:
+      id: 118-3b-agent-finding-fingerprint-active-unique
+      author: bipros
+      comment: At most one ACTIVE finding per fingerprint — the dedup/supersession invariant.
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: >-
+              CREATE UNIQUE INDEX uq_agent_finding_fingerprint_active
+              ON ai.agent_finding (fingerprint)
+              WHERE status = 'ACTIVE';
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: DROP INDEX IF EXISTS ai.uq_agent_finding_fingerprint_active;
+
+  - changeSet:
+      id: 118-4-agent-investigation
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: agent_investigation
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+              - column: { name: project_id, type: UUID }
+              - column: { name: question, type: TEXT, constraints: { nullable: false } }
+              - column: { name: answer, type: TEXT }
+              - column: { name: run_ids_json, type: JSONB }
+              - column: { name: tokens_input, type: INT }
+              - column: { name: tokens_output, type: INT }
+              - column: { name: asked_by, type: UUID }
+
+  - changeSet:
+      id: 118-5-agent-budget-usage
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: agent_budget_usage
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+              - column: { name: project_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: usage_date, type: DATE, constraints: { nullable: false } }
+              - column: { name: tokens_reserved, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: tokens_used, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: run_count, type: INT, constraints: { nullable: false } }
+        - addUniqueConstraint:
+            schemaName: ai
+            tableName: agent_budget_usage
+            columnNames: project_id, usage_date
+            constraintName: uq_agent_budget_scope_date
+
+  - changeSet:
+      id: 118-6-agent-trigger-queue
+      author: bipros
+      comment: Coalescing queue — composite PK (pipeline_key, project_id); not a BaseEntity.
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: agent_trigger_queue
+            columns:
+              - column: { name: pipeline_key, type: VARCHAR(60), constraints: { nullable: false, primaryKey: true, primaryKeyName: pk_agent_trigger_queue } }
+              - column: { name: project_id, type: UUID, constraints: { nullable: false, primaryKey: true, primaryKeyName: pk_agent_trigger_queue } }
+              - column: { name: trigger_type, type: VARCHAR(40), constraints: { nullable: false } }
+              - column: { name: trigger_ref, type: VARCHAR(200) }
+              - column: { name: first_seen_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: last_seen_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: event_count, type: INT, constraints: { nullable: false } }
+              - column: { name: due_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: max_due_at, type: TIMESTAMP, constraints: { nullable: false } }
+
+  - changeSet:
+      id: 118-7-agent-channel-config
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: agent_channel_config
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+              - column: { name: channel_key, type: VARCHAR(20), constraints: { nullable: false, unique: true, uniqueConstraintName: uq_agent_channel_key } }
+              - column: { name: api_url, type: VARCHAR(500) }
+              - column: { name: account_sid, type: VARCHAR(200) }
+              - column: { name: auth_token_ciphertext, type: BYTEA }
+              - column: { name: auth_token_iv, type: BYTEA }
+              - column: { name: auth_token_version, type: INT }
+              - column: { name: from_number, type: VARCHAR(40) }
+              - column: { name: active, type: BOOLEAN, constraints: { nullable: false } }
+
+  - changeSet:
+      id: 118-8-agent-notification-rule
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: agent_notification_rule
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+              - column: { name: project_id, type: UUID }
+              - column: { name: severity, type: VARCHAR(10), constraints: { nullable: false } }
+              - column: { name: channels_csv, type: VARCHAR(120), constraints: { nullable: false } }
+              - column: { name: immediate, type: BOOLEAN, constraints: { nullable: false } }
+
+  - changeSet:
+      id: 118-9-agent-notification-delivery
+      author: bipros
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: agent_notification_delivery
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+              - column: { name: finding_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: channel_key, type: VARCHAR(20), constraints: { nullable: false } }
+              - column: { name: recipient_user_id, type: UUID }
+              - column: { name: status, type: VARCHAR(16), constraints: { nullable: false } }
+              - column: { name: detail, type: VARCHAR(500) }
+              - column: { name: sent_at, type: TIMESTAMP }
+        - createIndex:
+            schemaName: ai
+            tableName: agent_notification_delivery
+            indexName: idx_agent_delivery_finding
+            columns:
+              - column: { name: finding_id }
+        - createIndex:
+            schemaName: ai
+            tableName: agent_notification_delivery
+            indexName: idx_agent_delivery_recipient
+            columns:
+              - column: { name: recipient_user_id }

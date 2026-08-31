@@ -25,11 +25,19 @@
         </dependency>
         <dependency>
             <groupId>com.bipros</groupId>
+            <artifactId>bipros-admin</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
             <artifactId>bipros-analytics</artifactId>
         </dependency>
         <dependency>
             <groupId>com.bipros</groupId>
             <artifactId>bipros-project</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-site-ops</artifactId>
         </dependency>
         <dependency>
             <groupId>com.bipros</groupId>
@@ -57,7 +65,19 @@
         </dependency>
         <dependency>
             <groupId>com.bipros</groupId>
+            <artifactId>bipros-dbs</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-hds</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
             <artifactId>bipros-evm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bipros</groupId>
+            <artifactId>bipros-udf</artifactId>
         </dependency>
         <dependency>
             <groupId>com.bipros</groupId>
@@ -105,6 +125,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+        <!-- JavaMailSender for the agent EmailChannel. The channel is gated on
+             bipros.agent.notify.email.host + a JavaMailSender bean (auto-configured
+             only when spring.mail.host is set), so this stays inert until configured. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springdoc</groupId>
@@ -112,11 +139,12 @@
         </dependency>
 
         <!-- PDF text extraction for AI document ingestion (e.g. WBS from
-             vendor-supplied PDFs). Pure-Java, no native deps. -->
+             vendor-supplied PDFs). Pure-Java, no native deps.
+             Version managed by parent pom (pinned to PDFBox 2.0.x for
+             openhtmltopdf 1.0.10 compatibility — see DBS Bug 3 fix). -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
-            <version>3.0.3</version>
         </dependency>
 
         <!-- Excel text extraction for AI document ingestion. poi-ooxml pulls

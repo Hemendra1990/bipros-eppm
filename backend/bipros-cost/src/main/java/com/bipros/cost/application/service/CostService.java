@@ -2,6 +2,8 @@ package com.bipros.cost.application.service;
 
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.event.ActivityExpenseRecordedEvent;
+import com.bipros.common.event.CostAccountCreatedEvent;
+import com.bipros.common.event.CostAccountUpdatedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.ProjectAccessGuard;
@@ -9,10 +11,19 @@ import com.bipros.common.util.AuditService;
 import com.bipros.cost.application.dto.*;
 import com.bipros.cost.domain.entity.*;
 import com.bipros.cost.domain.repository.*;
+import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.repository.ActivityRepository;
+import com.bipros.project.application.service.BoqCalculator;
+import com.bipros.project.application.service.DprActualCostLookup;
 import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.repository.BoqItemRepository;
+import com.bipros.project.domain.repository.DailyProgressReportRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
+import com.bipros.project.domain.repository.WbsNodeRepository;
+import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
 import com.bipros.resource.domain.repository.GoodsReceiptNoteRepository;
 import com.bipros.resource.domain.repository.MaterialStockRepository;
+import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
@@ -20,8 +31,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -46,9 +64,24 @@ public class CostService {
     // PMS MasterData wiring — material procurement + on-hand stock enrich the cost summary.
     private final GoodsReceiptNoteRepository goodsReceiptNoteRepository;
     private final MaterialStockRepository materialStockRepository;
+    private final ResourceAssignmentRepository resourceAssignmentRepository;
+    private final ActivitySubContractorAssignmentRepository activitySubContractorAssignmentRepository;
+    private final ActivityRepository activityRepository;
     private final ProjectAccessGuard projectAccess;
     private final ProjectRepository projectRepository;
     private final ApplicationEventPublisher eventPublisher;
+    // Pulls supervisor-entered DPR persisted line_cost into the rollup. DPR rows compute and
+    // persist a line_cost per child row but nothing was copying that figure into either
+    // ActivityExpense.actualCost or ResourceAssignment.actualCost, leaving Cost summaries at 0
+    // on projects that report cost only via DPRs. See FIX7 / A9–A10.
+    private final DprActualCostLookup dprActualCostLookup;
+    private final FinancialPeriodAutoGenerator financialPeriodAutoGenerator;
+    private final BoqItemRepository boqItemRepository;
+    private final WbsNodeRepository wbsNodeRepository;
+    // Finds the executing activity per BOQ item (Fix 3: Cost Variance by WBS) so BOQ budget in
+    // getEvmByWbs regroups onto the activity's WBS node instead of the BOQ item's own (often null)
+    // wbsNodeId — the same key the actual-cost side already groups by.
+    private final DailyProgressReportRepository dailyProgressReportRepository;
 
     // Cost Account Operations
     @Transactional
@@ -67,6 +100,9 @@ public class CostService {
 
         var saved = costAccountRepository.save(entity);
         auditService.logCreate("CostAccount", saved.getId(), CostAccountDto.from(saved));
+        eventPublisher.publishEvent(
+            new CostAccountCreatedEvent(null, saved.getId(), saved.getCode(), saved.getName())
+        );
         return CostAccountDto.from(saved);
     }
 
@@ -95,6 +131,9 @@ public class CostService {
 
         var updated = costAccountRepository.save(entity);
         auditService.logUpdate("CostAccount", id, "costAccount", null, CostAccountDto.from(updated));
+        eventPublisher.publishEvent(
+            new CostAccountUpdatedEvent(null, updated.getId(), updated.getCode(), updated.getName())
+        );
         return CostAccountDto.from(updated);
     }
 
@@ -294,6 +333,7 @@ public class CostService {
     @Transactional
     public FinancialPeriodDto createFinancialPeriod(CreateFinancialPeriodRequest request) {
         var entity = new FinancialPeriod();
+        entity.setProjectId(request.projectId());
         entity.setName(request.name());
         entity.setStartDate(request.startDate());
         entity.setEndDate(request.endDate());
@@ -306,17 +346,19 @@ public class CostService {
         return FinancialPeriodDto.from(saved);
     }
 
-    @Transactional(readOnly = true)
-    public List<FinancialPeriodDto> getAllFinancialPeriods() {
-        return financialPeriodRepository.findAllByOrderBySortOrder()
+    @Transactional
+    public List<FinancialPeriodDto> getAllFinancialPeriods(UUID projectId) {
+        financialPeriodAutoGenerator.ensureForProject(projectId);
+        return financialPeriodRepository.findByProjectIdOrderBySortOrderAsc(projectId)
                 .stream()
                 .map(FinancialPeriodDto::from)
                 .collect(Collectors.toList());
     }
 
-    @Transactional(readOnly = true)
-    public List<FinancialPeriodDto> getOpenFinancialPeriods() {
-        return financialPeriodRepository.findByIsClosedFalseOrderBySortOrder()
+    @Transactional
+    public List<FinancialPeriodDto> getOpenFinancialPeriods(UUID projectId) {
+        financialPeriodAutoGenerator.ensureForProject(projectId);
+        return financialPeriodRepository.findByProjectIdAndIsClosedFalseOrderBySortOrderAsc(projectId)
                 .stream()
                 .map(FinancialPeriodDto::from)
                 .collect(Collectors.toList());
@@ -569,18 +611,33 @@ public class CostService {
         BigDecimal totalBudget = expenses.stream()
                 .map(e -> e.getBudgetedCost() != null ? e.getBudgetedCost() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // FIX-14: match EVM BAC — add ResourceAssignment.plannedCost so the two agree.
+        // EvmRollupService.getActivityBac sums both expense.budgetedCost AND assignment.plannedCost;
+        // previously this method only counted the expense side, yielding totalBudget=0 on projects
+        // that define cost purely through resource assignments (e.g. Oman-Demo Site Clearing ~6500 OMR).
+        BigDecimal raBudget = resourceAssignmentRepository.sumPlannedCostByProjectId(projectId);
+        totalBudget = totalBudget.add(raBudget != null ? raBudget : BigDecimal.ZERO);
+        // Sub-contractor planned cost — third source after ActivityExpense and ResourceAssignment.
+        // ActivitySubContractorAssignment.plannedCost is already stored as plannedUnits × rate
+        // (see ActivitySubContractorAssignmentService:95), so we just sum it.
+        BigDecimal scBudget = activitySubContractorAssignmentRepository.sumPlannedCostByProjectId(projectId);
+        totalBudget = totalBudget.add(scBudget != null ? scBudget : BigDecimal.ZERO);
 
         BigDecimal totalActual = expenses.stream()
                 .map(e -> e.getActualCost() != null ? e.getActualCost() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal totalRemaining = expenses.stream()
-                .map(e -> e.getRemainingCost() != null ? e.getRemainingCost() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal atCompletion = expenses.stream()
-                .map(e -> e.getAtCompletionCost() != null ? e.getAtCompletionCost() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Add DPR-sourced actuals so a project that books cost via supervisor DPRs (rather than
+        // via discrete ActivityExpense rows) still shows a non-zero totalActual.
+        //
+        // Important: do NOT also add resource_assignments.actual_cost here. RA.actualCost is
+        // maintained in lock-step with DPR child rows by ResourceAssignmentCostRollupListener
+        // (actualCost = rate × actualUnits where actualUnits is rolled up from DPR ledger), so
+        // it represents the same money as `dprActual`. The earlier FIX-18 attempt added both
+        // sums and produced a 2× over-count for any project that books cost purely via DPRs
+        // (verified against HIGHWAY-301: DPR = ₹7,150, RA = ₹7,150, totalActual shown as
+        // ₹14,300 instead of ₹7,150).
+        BigDecimal dprActual = dprActualCostLookup.sumByProject(projectId);
+        totalActual = totalActual.add(dprActual);
 
         // PMS MasterData: pull material procurement + stock value so the summary reflects the
         // procurement ledger even when it hasn't been copied into ActivityExpense rows.
@@ -594,39 +651,207 @@ public class CostService {
         BigDecimal materialIssued = materialProcurement.subtract(openStock);
         if (materialIssued.signum() < 0) materialIssued = BigDecimal.ZERO;
 
-        // P6-style project-level budget
+        // P6-style project-level budget.
+        // FIX-14: when project.originalBudget is null (not set in the UI) fall back to the
+        // canonical planned-cost total so the field is never null on a project that has
+        // resource assignments. This matches what EVM BAC uses as its baseline.
         Project project = projectRepository.findById(projectId).orElse(null);
+        // OBS-5 unit fix: project.originalBudget is stored in the currency's "major-scale" unit
+        // (crores for INR = 1e7, millions for every other currency = 1e6). Convert to raw units
+        // for the DTO's projectOriginalBudget field.
         BigDecimal projectOriginalBudget = project != null ? project.getOriginalBudget() : null;
-        BigDecimal projectCurrentBudget = project != null ? project.getCurrentBudget() : null;
+        if (project != null) {
+            BigDecimal majorUnitFactor = "INR".equalsIgnoreCase(project.getBudgetCurrency())
+                    ? new BigDecimal("10000000") : new BigDecimal("1000000");
+            if (projectOriginalBudget != null && projectOriginalBudget.signum() > 0)
+                projectOriginalBudget = projectOriginalBudget.multiply(majorUnitFactor);
+        }
+        if (projectOriginalBudget == null)
+            projectOriginalBudget = totalBudget.compareTo(BigDecimal.ZERO) > 0 ? totalBudget : null;
 
-        return CostSummaryDto.of(totalBudget, totalActual, totalRemaining, atCompletion,
-            expenses.size(), materialProcurement, openStock, materialIssued,
-            projectOriginalBudget, projectCurrentBudget);
+        // BAC = configured project budget (raw units), falling back to original budget then bottom-up plan.
+        BigDecimal bac = resolveBac(project, totalBudget);
+
+        // Earned value comes from the BOQ ledger: executed × budgeted_rate over total budgeted.
+        BigDecimal boqBudgetedTotal = boqItemRepository.sumBudgetedAmount(projectId);
+        BigDecimal boqEarnedValue = boqItemRepository.sumEarnedBudgetedValue(projectId);
+
+        // Planned %-complete: linear across the project's planned window, clamped to [0,1].
+        BigDecimal plannedPercentComplete = plannedPercentComplete(project);
+
+        return CostSummaryDto.ofEvm(
+                bac, totalBudget, totalActual,
+                boqBudgetedTotal, boqEarnedValue, plannedPercentComplete,
+                expenses.size(), materialProcurement, openStock, materialIssued,
+                projectOriginalBudget, /* contractValue */ null);
     }
 
-    // Period Aggregation
+    /** Configured project BAC in raw currency units (currentBudget → originalBudget → bottom-up plan). */
+    private BigDecimal resolveBac(Project project, BigDecimal totalBudgetFallback) {
+        BigDecimal original = project != null ? project.getOriginalBudget() : null;
+        BigDecimal current  = project != null ? project.getCurrentBudget()  : null;
+        if (project != null) {
+            BigDecimal factor = "INR".equalsIgnoreCase(project.getBudgetCurrency())
+                    ? new BigDecimal("10000000") : new BigDecimal("1000000");
+            if (original != null && original.signum() > 0) original = original.multiply(factor);
+            if (current  != null && current.signum()  > 0) current  = current.multiply(factor);
+        }
+        return firstNonNull(current, original,
+                totalBudgetFallback != null && totalBudgetFallback.signum() > 0 ? totalBudgetFallback : BigDecimal.ZERO);
+    }
+
+    @Transactional(readOnly = true)
+    public List<WbsEvmRow> getEvmByWbs(UUID projectId) {
+        Project project = projectRepository.findById(projectId).orElse(null);
+        BigDecimal projectBudgeted = boqItemRepository.sumBudgetedAmount(projectId);   // Σ boq budgeted
+        BigDecimal bac = resolveBac(project, /* fallback */ projectBudgeted);
+        BigDecimal plannedPct = plannedPercentComplete(project);
+
+        // WBS tree. Group by top-level node — but when the project has a SINGLE root (e.g. one
+        // "Civil Works" parent over several phases) group one level down, at the root's children,
+        // so the table breaks down by phase instead of collapsing into one project-total row.
+        var nodes = wbsNodeRepository.findByProjectId(projectId);
+        Map<UUID, com.bipros.project.domain.model.WbsNode> byId = new HashMap<>();
+        Map<UUID, UUID> parentById = new HashMap<>();
+        for (var n : nodes) { byId.put(n.getId(), n); parentById.put(n.getId(), n.getParentId()); }
+        UUID soleRoot = soleRootOf(parentById);
+
+        // Activity → its own WBS node (shared by both the budget regroup below and the AC loop).
+        Map<UUID, UUID> activityToWbs = new HashMap<>();
+        for (var a : activityRepository.findByProjectId(projectId)) activityToWbs.put(a.getId(), a.getWbsNodeId());
+
+        // Each BOQ item's dominant executing activity (largest Σ qty_executed across APPROVED
+        // DPRs). BoqItem has no activity FK — the DPR is the only BOQ↔activity link — so budget
+        // must be regrouped via the executing activity's WBS, the SAME key the AC side uses,
+        // instead of BoqItem.wbsNodeId (frequently null in real data → everything piling into
+        // "(Unmapped)").
+        Map<UUID, UUID> boqItemToActivity = new HashMap<>();
+        Map<UUID, BigDecimal> boqItemBestQty = new HashMap<>();
+        for (Object[] r : dailyProgressReportRepository.boqItemExecutingActivities(projectId)) {
+            UUID boqId = (UUID) r[0];
+            UUID actId = (UUID) r[1];
+            BigDecimal qty = r[2] != null ? (BigDecimal) r[2] : BigDecimal.ZERO;
+            if (qty.compareTo(boqItemBestQty.getOrDefault(boqId, BigDecimal.valueOf(-1))) > 0) {
+                boqItemBestQty.put(boqId, qty);
+                boqItemToActivity.put(boqId, actId);
+            }
+        }
+
+        // A null group key is the "(Unmapped)" bucket: BOQ/AC with no WBS link still counts toward
+        // the totals, so Σ rows always reconciles to the project BAC/EV/AC shown on the cards.
+        Map<UUID, BigDecimal[]> agg = new LinkedHashMap<>();   // group node (or null) -> [budgeted, earned, ac]
+        for (var b : boqItemRepository.findByProjectId(projectId)) {
+            UUID execAct = boqItemToActivity.get(b.getId());
+            UUID wbs = execAct != null ? activityToWbs.get(execAct) : b.getWbsNodeId();
+            UUID group = groupAncestor(wbs, parentById, soleRoot);
+            BigDecimal budg = b.getBudgetedAmount() != null ? b.getBudgetedAmount() : BigDecimal.ZERO;
+            BigDecimal earned = BoqCalculator.cappedEarned(
+                    b.getEarnedFraction(), b.getQtyExecutedToDate(), b.getBoqQty(), b.getBudgetedRate());
+            BigDecimal[] cell = agg.computeIfAbsent(group, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO});
+            cell[0] = cell[0].add(budg); cell[1] = cell[1].add(earned);
+        }
+        // AC by group node (DPR cost per activity → activity's WBS → group)
+        Map<UUID, BigDecimal> acByActivity = dprActualCostLookup.sumByActivity(projectId);
+        for (var entry : acByActivity.entrySet()) {
+            UUID group = groupAncestor(activityToWbs.get(entry.getKey()), parentById, soleRoot);
+            BigDecimal[] cell = agg.computeIfAbsent(group, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO});
+            cell[2] = cell[2].add(entry.getValue() != null ? entry.getValue() : BigDecimal.ZERO);
+        }
+
+        List<WbsEvmRow> rows = new ArrayList<>();
+        boolean hasBudget = projectBudgeted != null && projectBudgeted.signum() > 0;
+        for (var e : agg.entrySet()) {
+            var node = e.getKey() != null ? byId.get(e.getKey()) : null;
+            BigDecimal nb = e.getValue()[0], ne = e.getValue()[1], nac = e.getValue()[2];
+            BigDecimal nodeBac = hasBudget ? bac.multiply(nb).divide(projectBudgeted, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            BigDecimal nodeEv  = hasBudget ? bac.multiply(ne).divide(projectBudgeted, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            if (nodeEv.compareTo(nodeBac) > 0) nodeEv = nodeBac;
+            BigDecimal nodePv  = nodeBac.multiply(plannedPct);
+            String code = node != null ? node.getCode() : "(Unmapped)";
+            String name = node != null ? node.getName() : "Unmapped";
+            rows.add(WbsEvmRow.of(code, name, nodeBac, nodeEv, nodePv, nac));
+        }
+        rows.sort(Comparator.comparing(WbsEvmRow::code));
+        return rows;
+    }
+
+    /** The single top-level WBS root id, or null when there are zero or several roots. A node is a
+     *  root when its parent is null or points outside the project's node set. */
+    static UUID soleRootOf(Map<UUID, UUID> parentById) {
+        UUID root = null;
+        for (var e : parentById.entrySet()) {
+            UUID parent = e.getValue();
+            if (parent == null || !parentById.containsKey(parent)) {
+                if (root != null) return null;   // more than one root → group by roots
+                root = e.getKey();
+            }
+        }
+        return root;
+    }
+
+    /** Walk up to the grouping node: the highest ancestor that is NOT the sole root, so a single-root
+     *  tree groups at its phases (the root's children); with several roots (soleRoot == null) it rolls
+     *  to the root. Returns null for an unknown/unmapped node so it lands in the "(Unmapped)" bucket. */
+    static UUID groupAncestor(UUID nodeId, Map<UUID, UUID> parentById, UUID soleRoot) {
+        UUID cur = nodeId;
+        for (int guard = 0; cur != null && guard < 50; guard++) {
+            if (!parentById.containsKey(cur)) return null;                       // unknown / unmapped
+            UUID parent = parentById.get(cur);
+            if (parent == null || !parentById.containsKey(parent)) return cur;   // cur is a root
+            if (parent.equals(soleRoot)) return cur;                             // direct child of the sole root
+            cur = parent;
+        }
+        return cur;
+    }
+
+    private static BigDecimal firstNonNull(BigDecimal... values) {
+        for (BigDecimal v : values) if (v != null) return v;
+        return BigDecimal.ZERO;
+    }
+
+    /** Linear planned %-complete from the project's planned window to the project's data_date
+     *  (falls back to today when data_date is null), clamped to [0,1]. */
+    private static BigDecimal plannedPercentComplete(Project project) {
+        if (project == null) return BigDecimal.ZERO;
+        LocalDate start = project.getPlannedStartDate();
+        LocalDate finish = project.getPlannedFinishDate();
+        if (start == null || finish == null || !finish.isAfter(start)) return BigDecimal.ZERO;
+        long total = ChronoUnit.DAYS.between(start, finish);
+        LocalDate asOf = project.getDataDate() != null ? project.getDataDate() : LocalDate.now();
+        long elapsed = ChronoUnit.DAYS.between(start, asOf);
+        if (elapsed <= 0) return BigDecimal.ZERO;
+        if (elapsed >= total) return BigDecimal.ONE;
+        return BigDecimal.valueOf(elapsed).divide(BigDecimal.valueOf(total), 6, RoundingMode.HALF_UP);
+    }
+
+    // Period Aggregation — combines two ledgers per financial period:
+    //   1. ActivityExpense rows (manual "extras": permits, mobilisation, consultant fees, etc.)
+    //      bucketed by actualStartDate.
+    //   2. Operational DPR cost (resource-plan consumption: manpower / equipment / material)
+    //      bucketed by report_date, plus its planned counterpart from ResourceAssignment.planned_cost
+    //      prorated linearly across the assignment's planned start → finish window.
+    // EV / PV still come from StorePeriodPerformance (manually snapshotted via the EVM tab).
     @Transactional(readOnly = true)
     public List<PeriodCostAggregationDto> aggregateByPeriod(UUID projectId) {
-        var periods = financialPeriodRepository.findAllByOrderBySortOrder();
+        financialPeriodAutoGenerator.ensureForProject(projectId);
+        var periods = financialPeriodRepository.findByProjectIdOrderBySortOrderAsc(projectId);
         var expenses = activityExpenseRepository.findByProjectId(projectId);
         var performances = storePeriodPerformanceRepository.findByProjectId(projectId);
+        var assignments = resourceAssignmentRepository.findByProjectId(projectId);
+        var scAssignments = activitySubContractorAssignmentRepository.findByProjectId(projectId);
+        var dprDailyCost = dprActualCostLookup.sumByProjectGroupedByDate(projectId);
+        Project projectForDates = projectRepository.findById(projectId).orElse(null);
+        LocalDate fallbackStart = projectForDates != null ? projectForDates.getPlannedStartDate() : null;
+        LocalDate fallbackFinish = projectForDates != null ? projectForDates.getPlannedFinishDate() : null;
+
+        Map<UUID, BigDecimal> periodBudgets = computePeriodBudgets(
+                periods, expenses, assignments, scAssignments, fallbackStart, fallbackFinish);
+        Map<UUID, BigDecimal> periodActuals = computePeriodActuals(periods, expenses, dprDailyCost);
 
         return periods.stream().map(period -> {
-            // Sum actuals for expenses whose actual start date falls in this period
-            BigDecimal periodBudget = BigDecimal.ZERO;
-            BigDecimal periodActual = BigDecimal.ZERO;
-            for (var expense : expenses) {
-                if (expense.getActualStartDate() != null
-                        && !expense.getActualStartDate().isBefore(period.getStartDate())
-                        && !expense.getActualStartDate().isAfter(period.getEndDate())) {
-                    periodActual = periodActual.add(
-                            expense.getActualCost() != null ? expense.getActualCost() : BigDecimal.ZERO);
-                    periodBudget = periodBudget.add(
-                            expense.getBudgetedCost() != null ? expense.getBudgetedCost() : BigDecimal.ZERO);
-                }
-            }
+            BigDecimal periodBudget = periodBudgets.getOrDefault(period.getId(), BigDecimal.ZERO);
+            BigDecimal periodActual = periodActuals.getOrDefault(period.getId(), BigDecimal.ZERO);
 
-            // EV/PV from StorePeriodPerformance
             BigDecimal ev = BigDecimal.ZERO;
             BigDecimal pv = BigDecimal.ZERO;
             for (var perf : performances) {
@@ -650,10 +875,129 @@ public class CostService {
     // Forecast Generation
     @Transactional(readOnly = true)
     public List<CashFlowForecastDto> generateForecast(UUID projectId, CashFlowForecastEngine.ForecastMethod method) {
-        var periods = financialPeriodRepository.findAllByOrderBySortOrder();
+        financialPeriodAutoGenerator.ensureForProject(projectId);
+        var periods = financialPeriodRepository.findByProjectIdOrderBySortOrderAsc(projectId);
         var expenses = activityExpenseRepository.findByProjectId(projectId);
         var performances = storePeriodPerformanceRepository.findByProjectId(projectId);
+        var assignments = resourceAssignmentRepository.findByProjectId(projectId);
+        var scAssignments = activitySubContractorAssignmentRepository.findByProjectId(projectId);
+        var dprDailyCost = dprActualCostLookup.sumByProjectGroupedByDate(projectId);
+        Project projectForDates = projectRepository.findById(projectId).orElse(null);
+        LocalDate fallbackStart = projectForDates != null ? projectForDates.getPlannedStartDate() : null;
+        LocalDate fallbackFinish = projectForDates != null ? projectForDates.getPlannedFinishDate() : null;
 
-        return cashFlowForecastEngine.generateForecast(projectId, periods, expenses, performances, method);
+        Map<UUID, BigDecimal> periodBudgets = computePeriodBudgets(
+                periods, expenses, assignments, scAssignments, fallbackStart, fallbackFinish);
+        Map<UUID, BigDecimal> periodActuals = computePeriodActuals(periods, expenses, dprDailyCost);
+
+        return cashFlowForecastEngine.generateForecast(
+            projectId, periods, periodBudgets, periodActuals, performances, method);
+    }
+
+    /**
+     * Combine the manual ActivityExpense budget (bucketed by actualStartDate) with the prorated
+     * ResourceAssignment.planned_cost (linear over the assignment's planned window) into a single
+     * per-period budget map. When a resource assignment lacks its own planned dates, falls back
+     * to the project's planned start/finish — common when the planner sets project dates but
+     * never explicitly stamps assignment-level dates.
+     */
+    private Map<UUID, BigDecimal> computePeriodBudgets(
+            List<FinancialPeriod> periods,
+            List<ActivityExpense> expenses,
+            List<com.bipros.resource.domain.model.ResourceAssignment> assignments,
+            List<com.bipros.resource.domain.model.ActivitySubContractorAssignment> scAssignments,
+            LocalDate projectFallbackStart,
+            LocalDate projectFallbackFinish) {
+        Map<UUID, BigDecimal> out = new LinkedHashMap<>();
+        for (var period : periods) {
+            BigDecimal total = BigDecimal.ZERO;
+            for (var e : expenses) {
+                if (e.getActualStartDate() != null
+                        && !e.getActualStartDate().isBefore(period.getStartDate())
+                        && !e.getActualStartDate().isAfter(period.getEndDate())) {
+                    total = total.add(e.getBudgetedCost() != null ? e.getBudgetedCost() : BigDecimal.ZERO);
+                }
+            }
+            for (var ra : assignments) {
+                LocalDate raStart = ra.getPlannedStartDate() != null ? ra.getPlannedStartDate() : projectFallbackStart;
+                LocalDate raFinish = ra.getPlannedFinishDate() != null ? ra.getPlannedFinishDate() : projectFallbackFinish;
+                total = total.add(proratePlannedCost(
+                        ra.getPlannedCost(),
+                        raStart,
+                        raFinish,
+                        period.getStartDate(),
+                        period.getEndDate()));
+            }
+            for (var sa : scAssignments) {
+                // SC assignments don't carry their own date columns today. Use the parent
+                // activity's planned window when present, falling back to the project window.
+                LocalDate saStart = projectFallbackStart;
+                LocalDate saFinish = projectFallbackFinish;
+                Activity scActivity = sa.getActivityId() != null
+                        ? activityRepository.findById(sa.getActivityId()).orElse(null)
+                        : null;
+                if (scActivity != null) {
+                    if (scActivity.getPlannedStartDate() != null) saStart = scActivity.getPlannedStartDate();
+                    if (scActivity.getPlannedFinishDate() != null) saFinish = scActivity.getPlannedFinishDate();
+                }
+                total = total.add(proratePlannedCost(
+                        sa.getPlannedCost(),
+                        saStart,
+                        saFinish,
+                        period.getStartDate(),
+                        period.getEndDate()));
+            }
+            out.put(period.getId(), total);
+        }
+        return out;
+    }
+
+    /**
+     * Combine the manual ActivityExpense actuals (bucketed by actualStartDate) with the
+     * DPR-driven daily cost (bucketed by DPR report_date) into a single per-period actual map.
+     */
+    private Map<UUID, BigDecimal> computePeriodActuals(
+            List<FinancialPeriod> periods,
+            List<ActivityExpense> expenses,
+            Map<LocalDate, BigDecimal> dprDailyCost) {
+        Map<UUID, BigDecimal> out = new LinkedHashMap<>();
+        for (var period : periods) {
+            BigDecimal total = BigDecimal.ZERO;
+            for (var e : expenses) {
+                if (e.getActualStartDate() != null
+                        && !e.getActualStartDate().isBefore(period.getStartDate())
+                        && !e.getActualStartDate().isAfter(period.getEndDate())) {
+                    total = total.add(e.getActualCost() != null ? e.getActualCost() : BigDecimal.ZERO);
+                }
+            }
+            for (var entry : dprDailyCost.entrySet()) {
+                LocalDate d = entry.getKey();
+                if (d == null) continue;
+                if (!d.isBefore(period.getStartDate()) && !d.isAfter(period.getEndDate())) {
+                    total = total.add(entry.getValue());
+                }
+            }
+            out.put(period.getId(), total);
+        }
+        return out;
+    }
+
+    /**
+     * Linear daily proration of a ResourceAssignment's planned_cost into a financial-period
+     * window: {@code planned_cost × (overlap_days ÷ activity_days)}. Returns zero when any
+     * input is missing or the windows don't overlap.
+     */
+    private static BigDecimal proratePlannedCost(
+            BigDecimal plannedCost, LocalDate raStart, LocalDate raFinish,
+            LocalDate periodStart, LocalDate periodFinish) {
+        if (plannedCost == null || raStart == null || raFinish == null) return BigDecimal.ZERO;
+        long activityDays = ChronoUnit.DAYS.between(raStart, raFinish) + 1;
+        if (activityDays <= 0) return BigDecimal.ZERO;
+        LocalDate overlapStart = raStart.isAfter(periodStart) ? raStart : periodStart;
+        LocalDate overlapEnd = raFinish.isBefore(periodFinish) ? raFinish : periodFinish;
+        if (overlapEnd.isBefore(overlapStart)) return BigDecimal.ZERO;
+        long overlapDays = ChronoUnit.DAYS.between(overlapStart, overlapEnd) + 1;
+        return plannedCost.multiply(BigDecimal.valueOf(overlapDays))
+                .divide(BigDecimal.valueOf(activityDays), 2, RoundingMode.HALF_UP);
     }
 }

@@ -12,6 +12,8 @@ export interface DailyWeatherResponse {
   weatherCondition: string | null;
   workingHours: number | null;
   remarks: string | null;
+  /** US AQI (0–500); present on auto-ingested rows, null on manual entries. */
+  aqi: number | null;
 }
 
 export interface CreateDailyWeatherRequest {

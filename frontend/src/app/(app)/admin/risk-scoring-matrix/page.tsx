@@ -13,6 +13,8 @@ import {
 import { apiClient } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/utils/error";
 import type { ApiResponse, PagedResponse, ProjectResponse } from "@/lib/types";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 const SCORING_METHODS: { value: ScoringMethod; label: string; description: string }[] = [
   {
@@ -231,51 +233,41 @@ export default function RiskScoringMatrixAdminPage() {
               <div className="text-center py-8 text-text-muted">Loading matrix...</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="w-32 border border-border bg-surface-hover p-2 text-right text-xs font-medium text-text-secondary">
-                        Probability →
-                      </th>
-                      {impactLabels.map((label, idx) => (
-                        <th
-                          key={idx}
-                          className="w-28 border border-border bg-surface-hover p-2 text-center text-xs font-medium text-text-secondary"
-                        >
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {probLabels.map((probLabel, probIdx) => (
-                      <tr key={probIdx}>
-                        <th className="border border-border bg-surface-hover p-2 text-left text-xs font-medium text-text-secondary">
-                          {probLabel}
-                        </th>
-                        {impactLabels.map((_, impactIdx) => {
-                          const score = getCellValue(probIdx, impactIdx);
-                          return (
-                            <td
-                              key={impactIdx}
-                              className={`border border-border p-1 text-center ${ragBg(score)}`}
-                            >
-                              <input
-                                type="number"
-                                min={0}
-                                max={999}
-                                value={score}
-                                onChange={(e) => handleCellChange(probIdx, impactIdx, e.target.value)}
-                                aria-label={`Score for probability ${probIdx + 1}, impact ${impactIdx + 1}`}
-                                className="w-full px-2 py-1 text-center text-sm font-semibold text-text-primary bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-accent rounded"
-                              />
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <SimpleTable
+                  columns={[
+                    {
+                      accessorKey: "probLabel",
+                      header: "Probability →",
+                      cell: ({ row }) => <span className="text-xs font-medium text-text-secondary">{row.original.probLabel}</span>,
+                    },
+                    ...impactLabels.map((label, impactIdx) => ({
+                      accessorKey: `impact${impactIdx}`,
+                      header: label,
+                      cell: ({ row }: { row: { original: { probIdx: number; scores: number[] } } }) => {
+                        const score = row.original.scores[impactIdx];
+                        return (
+                          <div className={`p-1 text-center ${ragBg(score)}`}>
+                            <input
+                              type="number"
+                              min={0}
+                              max={999}
+                              value={score}
+                              onChange={(e) => handleCellChange(row.original.probIdx, impactIdx, e.target.value)}
+                              aria-label={`Score for probability ${row.original.probIdx + 1}, impact ${impactIdx + 1}`}
+                              className="w-full px-2 py-1 text-center text-sm font-semibold text-text-primary bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-accent rounded"
+                            />
+                          </div>
+                        );
+                      },
+                    })),
+                  ]}
+                  data={probLabels.map((probLabel, probIdx) => ({
+                    probLabel,
+                    probIdx,
+                    scores: impactLabels.map((_, impactIdx) => getCellValue(probIdx, impactIdx)),
+                  }))}
+                  sortable={false}
+                />
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-text-secondary">
                   <span className="uppercase tracking-wide text-text-muted">RAG bands</span>
                   <span className="inline-flex items-center gap-1">

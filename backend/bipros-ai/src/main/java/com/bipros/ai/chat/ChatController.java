@@ -32,37 +32,121 @@ public class ChatController {
     @PostMapping("/chat")
     @PreAuthorize("@aiAccess.canChat(#request.projectId)")
     public ResponseEntity<ApiResponse<ChatResponse>> chat(@RequestBody ChatRequest request) {
-        AiContext ctx = contextResolver.resolve(request.projectId(), request.module());
+        List<UUID> hdsScope = resolveHdsScope(request, null);
+        // Keep the 2-arg resolve() call when no HDS scope is in play so the existing
+        // RBAC + portfolio plumbing is unaffected by the new optional field.
+        AiContext ctx = hdsScope.isEmpty()
+                ? contextResolver.resolve(request.projectId(), request.module())
+                : contextResolver.resolve(request.projectId(), request.module(), hdsScope);
         var conv = conversationService.getOrCreate(request.conversationId(), ctx);
+        // Security invariant: reloading an old conversation that was originally
+        // project-scoped MUST keep that scope, even if the caller sent
+        // projectId=null (e.g. browsing a different page in general mode).
+        // Never silently broaden a project-scoped conversation.
+        if (request.conversationId() != null
+                && conv.getProjectId() != null
+                && ctx.projectId() == null) {
+            ctx = hdsScope.isEmpty()
+                    ? contextResolver.resolve(conv.getProjectId(), conv.getModule())
+                    : contextResolver.resolve(conv.getProjectId(), conv.getModule(), hdsScope);
+        }
+        // If the request did not set hdsVersionIds, fall back to whatever the
+        // conversation already had (e.g. an earlier turn pinned the scope).
+        // The fallback only kicks in for stored conversations; new sessions
+        // with no request scope stay empty.
+        if (conv != null
+                && (request.hdsVersionIds() == null || request.hdsVersionIds().isEmpty())
+                && conv.getHdsVersionIds() != null && !conv.getHdsVersionIds().isEmpty()) {
+            hdsScope = parseHdsVersionIds(conv.getHdsVersionIds());
+            ctx = contextResolver.resolve(ctx.projectId(), ctx.module(), hdsScope);
+        }
+        // Persist explicit HDS scope on the conversation so follow-up turns
+        // without the field still answer in the same scope. Sending an empty
+        // list explicitly clears the scope.
+        if (conv != null && request.hdsVersionIds() != null) {
+            conversationService.saveHdsScope(conv.getId(), request.hdsVersionIds());
+        }
         List<LlmProvider.Message> history = conversationService.getMessages(conv.getId());
+
+        // Persist the user message BEFORE invoking the orchestrator so a thrown
+        // orchestrator (LLM outage, timeout, tool error escaping the loop) does
+        // not lose the user's message from conversation history. The streaming
+        // endpoint already does this in the same order — keep them aligned.
+        conversationService.appendUserMessage(conv.getId(), request.message());
 
         var flux = orchestrator.handle(request.message(), request.imageUrl(), history, ctx, llmProvider,
                 resolveConfig());
         List<com.bipros.ai.orchestrator.AiOrchestrator.ChatEvent> events = flux.collectList().block();
 
-        StringBuilder text = new StringBuilder();
+        String finalText = reduceFinalText(events);
+
+        conversationService.appendAssistantMessage(conv.getId(), finalText);
+
+        return ResponseEntity.ok(ApiResponse.ok(new ChatResponse(conv.getId(), finalText)));
+    }
+
+    /**
+     * Reduces the orchestrator's event stream to the single final answer.
+     *
+     * <p>The orchestrator does NOT emit incremental tokens — each ReAct round emits one
+     * {@code token} event carrying that round's ENTIRE content, and several rounds may run
+     * (the initial draft plus re-draft rounds forced by the tool-use / verification / chart
+     * gates), followed by a terminal {@code done} event with the finished answer. So the naive
+     * "append every token and the done text" approach concatenated every draft, making the
+     * answer appear multiple times.
+     *
+     * <p>Rule: the terminal {@code done} text wins WHEN IT IS NON-BLANK. It can legitimately be
+     * blank — e.g. the model returns empty content on the post-verification round (Gate C), so
+     * {@code done} carries {@code ""} even though a good pre-verification draft was already emitted
+     * as a {@code token}. In that case (and on the error path, which emits tokens but no done) we
+     * fall back to the LAST non-blank {@code token}, i.e. the most refined draft. Only when nothing
+     * usable was emitted do we return an empty string.
+     */
+    static String reduceFinalText(List<com.bipros.ai.orchestrator.AiOrchestrator.ChatEvent> events) {
+        String doneText = null;
+        String lastToken = null;
         if (events != null) {
             for (var e : events) {
-                if ("token".equals(e.event()) && e.data().get("delta") != null) {
-                    text.append(e.data().get("delta"));
-                }
                 if ("done".equals(e.event()) && e.data().get("text") != null) {
-                    text.append(e.data().get("text"));
+                    doneText = e.data().get("text").toString();
+                } else if ("token".equals(e.event()) && e.data().get("delta") != null) {
+                    String delta = e.data().get("delta").toString();
+                    if (!delta.isBlank()) lastToken = delta;
                 }
             }
         }
-
-        conversationService.appendUserMessage(conv.getId(), request.message());
-        conversationService.appendAssistantMessage(conv.getId(), text.toString());
-
-        return ResponseEntity.ok(ApiResponse.ok(new ChatResponse(conv.getId(), text.toString())));
+        if (doneText != null && !doneText.isBlank()) return doneText;
+        if (lastToken != null) return lastToken;
+        return doneText != null ? doneText : "";
     }
 
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("@aiAccess.canChat(#request.projectId)")
     public Flux<org.springframework.http.codec.ServerSentEvent<String>> chatStream(@RequestBody ChatRequest request) {
-        AiContext ctx = contextResolver.resolve(request.projectId(), request.module());
+        List<UUID> hdsScope = resolveHdsScope(request, null);
+        AiContext ctx = hdsScope.isEmpty()
+                ? contextResolver.resolve(request.projectId(), request.module())
+                : contextResolver.resolve(request.projectId(), request.module(), hdsScope);
         var conv = conversationService.getOrCreate(request.conversationId(), ctx);
+        // Security invariant: see /chat — reloading a project-scoped conversation
+        // in general mode must NOT silently broaden the scope.
+        if (request.conversationId() != null
+                && conv.getProjectId() != null
+                && ctx.projectId() == null) {
+            ctx = hdsScope.isEmpty()
+                    ? contextResolver.resolve(conv.getProjectId(), conv.getModule())
+                    : contextResolver.resolve(conv.getProjectId(), conv.getModule(), hdsScope);
+        }
+        // Fall back to the conversation's stored HDS scope if the request omitted it.
+        if (conv != null
+                && (request.hdsVersionIds() == null || request.hdsVersionIds().isEmpty())
+                && conv.getHdsVersionIds() != null && !conv.getHdsVersionIds().isEmpty()) {
+            hdsScope = parseHdsVersionIds(conv.getHdsVersionIds());
+            ctx = contextResolver.resolve(ctx.projectId(), ctx.module(), hdsScope);
+        }
+        if (conv != null && request.hdsVersionIds() != null) {
+            conversationService.saveHdsScope(conv.getId(), request.hdsVersionIds());
+        }
         List<LlmProvider.Message> history = conversationService.getMessages(conv.getId());
 
         conversationService.appendUserMessage(conv.getId(), request.message());
@@ -107,6 +191,7 @@ public class ChatController {
     }
 
     @GetMapping("/conversations")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<ConversationDto>>> listConversations(
             @RequestParam(required = false) UUID projectId,
             @RequestParam(defaultValue = "20") int limit) {
@@ -114,11 +199,13 @@ public class ChatController {
     }
 
     @GetMapping("/conversations/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<ConversationDetailDto>> getConversation(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(conversationService.getDetail(id)));
     }
 
     @DeleteMapping("/conversations/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> deleteConversation(@PathVariable UUID id) {
         conversationService.softDelete(id);
         return ResponseEntity.ok(ApiResponse.ok(null));
@@ -130,7 +217,51 @@ public class ChatController {
                 .orElseThrow(() -> new IllegalStateException("No active LLM provider configured. Add one via /v1/admin/llm-providers."));
     }
 
-    public record ChatRequest(UUID conversationId, UUID projectId, String module, String message, String imageUrl) {
+    /**
+     * Resolves the HDS document version UUIDs for this request, parsing the
+     * string list from {@link ChatRequest}. Skips malformed entries. The
+     * {@code stored} parameter is the conversation's previously-stored list
+     * (or {@code null} when not yet known); when the request has nothing to
+     * say, the caller decides whether to fall back to {@code stored} —
+     * this method just normalises the request side.
+     */
+    private List<UUID> resolveHdsScope(ChatRequest request, List<String> stored) {
+        List<String> raw = request.hdsVersionIds();
+        if (raw == null || raw.isEmpty()) {
+            return parseHdsVersionIds(stored);
+        }
+        return parseHdsVersionIds(raw);
+    }
+
+    /**
+     * Parse a list of UUID strings to UUIDs, skipping anything malformed.
+     * Null/empty input returns an empty list. Used both for the request
+     * payload and the JSONB-persisted list on the conversation.
+     */
+    private List<UUID> parseHdsVersionIds(List<String> raw) {
+        if (raw == null || raw.isEmpty()) return List.of();
+        java.util.List<UUID> out = new java.util.ArrayList<>(raw.size());
+        for (String s : raw) {
+            if (s == null) continue;
+            try {
+                out.add(UUID.fromString(s.trim()));
+            } catch (IllegalArgumentException ignored) {
+                log.warn("Ignoring malformed HDS version id: {}", s);
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    /**
+     * Chat request payload. {@code hdsVersionIds} is optional — when non-empty,
+     * the orchestrator routes deterministically to the HDS search tool instead
+     * of running the LLM-driven tool-selection loop. The frontend sends the
+     * UUIDs of the HDS document versions the user has selected as scope; the
+     * resolver persists them on the conversation so follow-up turns without
+     * the field still answer in HDS scope.
+     */
+    public record ChatRequest(UUID conversationId, UUID projectId, String module, String message, String imageUrl,
+                              List<String> hdsVersionIds) {
     }
 
     public record ChatResponse(UUID conversationId, String text) {
@@ -139,7 +270,7 @@ public class ChatController {
     public record ConversationDto(UUID id, String title, String module, Instant lastMessageAt) {
     }
 
-    public record ConversationDetailDto(UUID id, String title, List<MessageDto> messages) {
+    public record ConversationDetailDto(UUID id, String title, UUID projectId, String module, List<MessageDto> messages) {
     }
 
     public record MessageDto(String role, String content, Instant createdAt) {

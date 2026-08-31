@@ -10,12 +10,14 @@ import {
   type RaBill,
   type SatelliteGate,
 } from "@/lib/api/raBillApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText } from "lucide-react";
 import { TabTip } from "@/components/common/TabTip";
 import { contractApi } from "@/lib/api/contractApi";
 import { getErrorMessage } from "@/lib/utils/error";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 
 const gateBadge = (gate?: SatelliteGate | null) => {
   if (!gate) return "bg-surface-active/40 text-text-secondary";
@@ -65,6 +67,7 @@ export default function RaBillsPage() {
   const params = useParams();
   const projectId = params.projectId as string;
   const queryClient = useQueryClient();
+  const { money, symbol } = useProjectCurrency();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
 
@@ -109,42 +112,47 @@ export default function RaBillsPage() {
   const billItems = billItemsData?.data ?? [];
 
   const billColumns: ColumnDef<RaBill>[] = [
-    { key: "billNumber", label: "Bill Number", sortable: true },
-    { key: "wbsPackageCode", label: "Package", sortable: true },
-    { key: "billPeriodFrom", label: "From", sortable: true },
-    { key: "billPeriodTo", label: "To", sortable: true },
+    { accessorKey: "billNumber", header: "Bill Number", enableSorting: true },
+    { accessorKey: "wbsPackageCode", header: "Package", enableSorting: true },
+    { accessorKey: "billPeriodFrom", header: "From", enableSorting: true },
+    { accessorKey: "billPeriodTo", header: "To", enableSorting: true },
     {
-      key: "grossAmount",
-      label: "Gross",
-      sortable: true,
-      render: (value) => `₹${Number(value).toLocaleString("en-IN")}`,
+      accessorKey: "grossAmount",
+      header: "Gross",
+      enableSorting: true,
+      cell: (info) => money(Number(info.getValue()), { decimals: 0 }),
     },
     {
-      key: "netAmount",
-      label: "Net",
-      sortable: true,
-      render: (value) => `₹${Number(value).toLocaleString("en-IN")}`,
+      accessorKey: "netAmount",
+      header: "Net",
+      enableSorting: true,
+      cell: (info) => money(Number(info.getValue()), { decimals: 0 }),
     },
     {
-      key: "contractorClaimedPercent",
-      label: "Claim %",
-      sortable: true,
-      render: (value) =>
-        value != null ? `${Number(value).toFixed(1)}%` : "—",
+      accessorKey: "contractorClaimedPercent",
+      header: "Claim %",
+      enableSorting: true,
+      cell: (info) => {
+        const value = info.getValue();
+        return value != null ? `${Number(value).toFixed(1)}%` : "—";
+      },
     },
     {
-      key: "aiSatellitePercent",
-      label: "AI %",
-      sortable: true,
-      render: (value) =>
-        value != null ? `${Number(value).toFixed(1)}%` : "—",
+      accessorKey: "aiSatellitePercent",
+      header: "AI %",
+      enableSorting: true,
+      cell: (info) => {
+        const value = info.getValue();
+        return value != null ? `${Number(value).toFixed(1)}%` : "—";
+      },
     },
     {
-      key: "satelliteGate",
-      label: "Satellite Gate",
-      sortable: true,
-      render: (value, row) => {
-        const gate = value as SatelliteGate | null | undefined;
+      accessorKey: "satelliteGate",
+      header: "Satellite Gate",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        const gate = info.getValue() as SatelliteGate | null | undefined;
         if (!gate) return <span className="text-text-muted">—</span>;
         const variance = row.satelliteGateVariance;
         return (
@@ -158,16 +166,19 @@ export default function RaBillsPage() {
       },
     },
     {
-      key: "status",
-      label: "Status",
-      sortable: true,
-      render: (value) => (
-        <span
-          className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${statusBadge(String(value))}`}
-        >
-          {String(value).replace(/_/g, " ")}
-        </span>
-      ),
+      accessorKey: "status",
+      header: "Status",
+      enableSorting: true,
+      cell: (info) => {
+        const value = info.getValue();
+        return (
+          <span
+            className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${statusBadge(String(value))}`}
+          >
+            {String(value).replace(/_/g, " ")}
+          </span>
+        );
+      },
     },
   ];
 
@@ -348,9 +359,9 @@ export default function RaBillsPage() {
               <div className="space-y-4">
                 <div className="rounded border border-border bg-surface-hover/30 p-3 text-sm">
                   <div>Period: {draftPreview.bill.billPeriodFrom} → {draftPreview.bill.billPeriodTo}</div>
-                  <div>Gross: ₹{Number(draftPreview.bill.grossAmount).toLocaleString("en-IN")}</div>
-                  <div>Net: ₹{Number(draftPreview.bill.netAmount).toLocaleString("en-IN")} (after Mob/Retention/TDS/GST)</div>
-                  <div>Cumulative: ₹{Number(draftPreview.bill.cumulativeAmount).toLocaleString("en-IN")}</div>
+                  <div>Gross: {money(Number(draftPreview.bill.grossAmount), { decimals: 0 })}</div>
+                  <div>Net: {money(Number(draftPreview.bill.netAmount), { decimals: 0 })} (after Mob/Retention/TDS/GST)</div>
+                  <div>Cumulative: {money(Number(draftPreview.bill.cumulativeAmount), { decimals: 0 })}</div>
                   <div>Lines: {draftPreview.items.length}</div>
                 </div>
                 <div className="overflow-x-auto">
@@ -378,7 +389,7 @@ export default function RaBillsPage() {
                             <td className="border border-border px-3 py-1.5 text-right">{delta.toFixed(3)}</td>
                             <td className="border border-border px-3 py-1.5 text-right">{it.rate ?? "—"}</td>
                             <td className="border border-border px-3 py-1.5 text-right">
-                              ₹{Number(it.amount).toLocaleString("en-IN")}
+                              {money(Number(it.amount), { decimals: 0 })}
                             </td>
                           </tr>
                         );
@@ -500,7 +511,7 @@ export default function RaBillsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-text-secondary">
-                  Gross Amount (₹)
+                  Gross Amount ({symbol})
                 </label>
                 <input
                   type="number"
@@ -625,10 +636,11 @@ export default function RaBillsPage() {
             </p>
           </div>
         ) : (
-          <DataTable
+          <VirtualDataTable
             columns={billColumns}
             data={bills}
-            rowKey="id"
+            sortable
+            resizable
             onRowClick={(bill) => setSelectedBillId(bill.id)}
           />
         )}
@@ -658,7 +670,7 @@ export default function RaBillsPage() {
                   </div>
                   <div className="text-right">
                     <p className="font-medium text-text-primary">
-                      ₹{Number(item.amount).toLocaleString("en-IN")}
+                      {money(Number(item.amount), { decimals: 0 })}
                     </p>
                     {item.unit && (
                       <p className="text-sm text-text-muted">Unit: {item.unit}</p>

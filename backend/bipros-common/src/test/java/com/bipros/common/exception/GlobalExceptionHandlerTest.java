@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.http.MockHttpInputMessage;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -147,6 +148,59 @@ class GlobalExceptionHandlerTest {
     }
 
     @Nested
+    @DisplayName("TransactionException (transaction rolled back)")
+    class TransactionRolledBack {
+
+        @Test
+        @DisplayName("returns HTTP 409 with TRANSACTION_ROLLED_BACK error code")
+        void returns409() {
+            org.springframework.transaction.UnexpectedRollbackException ex =
+                    new org.springframework.transaction.UnexpectedRollbackException("x");
+
+            ResponseEntity<ApiResponse<Void>> resp = handler.handleTransactionRolledBack(ex);
+
+            assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            ApiError err = resp.getBody().error();
+            assertThat(err.code()).isEqualTo("TRANSACTION_ROLLED_BACK");
+        }
+    }
+
+    @Nested
+    @DisplayName("IOException (unreadable file/request)")
+    class IoError {
+
+        @Test
+        @DisplayName("returns HTTP 400 with IO_ERROR error code")
+        void returns400() {
+            java.io.IOException ex = new java.io.IOException("x");
+
+            ResponseEntity<ApiResponse<Void>> resp = handler.handleIoError(ex);
+
+            assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            ApiError err = resp.getBody().error();
+            assertThat(err.code()).isEqualTo("IO_ERROR");
+        }
+    }
+
+    @Nested
+    @DisplayName("MissingServletRequestPartException (required file not provided)")
+    class MissingFile {
+
+        @Test
+        @DisplayName("returns HTTP 400 with MISSING_FILE error code")
+        void returns400() {
+            org.springframework.web.multipart.support.MissingServletRequestPartException ex =
+                    new org.springframework.web.multipart.support.MissingServletRequestPartException("file");
+
+            ResponseEntity<ApiResponse<Void>> resp = handler.handleMissingFile(ex);
+
+            assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            ApiError err = resp.getBody().error();
+            assertThat(err.code()).isEqualTo("MISSING_FILE");
+        }
+    }
+
+    @Nested
     @DisplayName("Generic Exception handler")
     class Generic {
 
@@ -156,7 +210,7 @@ class GlobalExceptionHandlerTest {
             ReflectionTestUtils.setField(handler, "includeExceptionDetail", false);
             RuntimeException ex = new IllegalStateException("something deep broke");
 
-            ResponseEntity<ApiResponse<Void>> resp = handler.handleGeneral(ex);
+            ResponseEntity<ApiResponse<Void>> resp = handler.handleGeneral(ex, new MockHttpServletResponse());
 
             assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
             ApiError err = resp.getBody().error();
@@ -173,13 +227,28 @@ class GlobalExceptionHandlerTest {
             ReflectionTestUtils.setField(handler, "includeExceptionDetail", true);
             RuntimeException ex = new IllegalStateException("something deep broke");
 
-            ResponseEntity<ApiResponse<Void>> resp = handler.handleGeneral(ex);
+            ResponseEntity<ApiResponse<Void>> resp = handler.handleGeneral(ex, new MockHttpServletResponse());
 
             assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
             ApiError err = resp.getBody().error();
             assertThat(err.code()).isEqualTo("INTERNAL_ERROR");
             assertThat(err.message()).contains("IllegalStateException");
             assertThat(err.message()).contains("something deep broke");
+        }
+
+        @Test
+        @DisplayName("response already committed: returns null to suppress body write")
+        void committedResponse_suppressesBody() {
+            ReflectionTestUtils.setField(handler, "includeExceptionDetail", true);
+            MockHttpServletResponse committed = new MockHttpServletResponse();
+            committed.setCommitted(true);
+
+            ResponseEntity<ApiResponse<Void>> resp =
+                    handler.handleGeneral(new IllegalStateException("late SSE failure"), committed);
+
+            // null return → @RestControllerAdvice skips body negotiation, which
+            // is the only safe behavior once an SSE stream is mid-flight.
+            assertThat(resp).isNull();
         }
     }
 }

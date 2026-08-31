@@ -1,0 +1,34 @@
+databaseChangeLog:
+  # Per-project manual HSE inputs backing the HSE statistics tab: one row per project holding the
+  # cumulative fleet KM driven. Dev ddl-auto:update creates the table automatically; this changeset
+  # is the prod source of truth. New table only — no changes to existing tables.
+  - changeSet:
+      id: 115-project-hse-metrics-table
+      author: subrat
+      changes:
+        - createTable:
+            schemaName: project
+            tableName: project_hse_metrics
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints: { nullable: false, unique: true, uniqueConstraintName: uk_project_hse_metrics_project }
+              - column:
+                  name: km_distance_driven
+                  type: NUMERIC(19, 3)
+                  defaultValueNumeric: 0
+                  constraints: { nullable: false }
+              - column: { name: created_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP, constraints: { nullable: false } }
+              - column: { name: created_by, type: VARCHAR(255) }
+              - column: { name: updated_by, type: VARCHAR(255) }
+              - column: { name: version, type: BIGINT }
+      rollback:
+        - dropTable:
+            schemaName: project
+            tableName: project_hse_metrics

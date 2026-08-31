@@ -7,7 +7,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,11 +28,15 @@ public interface ResourceRepository extends JpaRepository<Resource, UUID> {
 
   List<Resource> findByStatus(ResourceStatus status);
 
-  List<Resource> findByUserIdIn(Collection<UUID> userIds);
-
   long countByResourceType_Id(UUID typeId);
 
   long countByRole_Id(UUID roleId);
+
+  /**
+   * Resources linked to a given rate master row. Used by {@code RateMasterSyncService} to
+   * cascade unit + rate edits to all linked resources in the same transaction.
+   */
+  List<Resource> findByRateMasterId(UUID rateMasterId);
 
   /**
    * Active resources of a given type. Used by the Phase 7.2 eligible-supervisors endpoint

@@ -51,6 +51,10 @@ public class WbsPolygon extends BaseEntity {
     @Column(name = "wbs_name", nullable = false, length = 200)
     private String wbsName;
 
+    /** Optional user-supplied polygon name; defaults to the attached WBS node's name. */
+    @Column(name = "name", length = 200)
+    private String name;
+
     /**
      * Polygon geometry in EPSG:4326. hibernate-spatial maps this to
      * {@code geometry(Polygon, 4326)} in PostGIS.

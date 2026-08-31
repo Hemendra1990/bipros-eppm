@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: 111-1-compression-finish-dates
+      author: bipros
+      comment: |
+        Add nullable original_finish_date / compressed_finish_date columns to
+        scheduling.compression_analyses. The iterative crash analysis records the
+        project's current and achievable finish dates so the Schedule Compression
+        "Crashing" tab can anchor on dates instead of a critical-path-length number.
+        Dev ddl-auto:update adds the columns automatically; this changeset covers prod.
+      changes:
+        - addColumn:
+            schemaName: scheduling
+            tableName: compression_analyses
+            columns:
+              - column:
+                  name: original_finish_date
+                  type: DATE
+              - column:
+                  name: compressed_finish_date
+                  type: DATE
+      rollback:
+        - dropColumn:
+            schemaName: scheduling
+            tableName: compression_analyses
+            columnName: original_finish_date
+        - dropColumn:
+            schemaName: scheduling
+            tableName: compression_analyses
+            columnName: compressed_finish_date

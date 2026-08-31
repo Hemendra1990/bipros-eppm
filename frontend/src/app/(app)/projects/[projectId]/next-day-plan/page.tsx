@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -14,6 +14,8 @@ import { activityApi } from "@/lib/api/activityApi";
 import { TabTip } from "@/components/common/TabTip";
 import { chainageLabel, parseChainage } from "@/lib/format/chainage";
 import { getErrorMessage } from "@/lib/utils/error";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 interface PlanForm {
   reportDate: string;
@@ -64,6 +66,7 @@ export default function NextDayPlanPage() {
   const [toDate, setToDate] = useState("");
   const [appliedFrom, setAppliedFrom] = useState("");
   const [appliedTo, setAppliedTo] = useState("");
+  const [rangeError, setRangeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!project) return;
@@ -88,7 +91,7 @@ export default function NextDayPlanPage() {
     enabled: !!projectId && !!appliedFrom && !!appliedTo,
   });
 
-  const plans: NextDayPlanResponse[] = data?.data ?? [];
+  const plans: NextDayPlanResponse[] = useMemo(() => data?.data ?? [], [data]);
 
   // Pull yesterday's daily outputs + the project's activities (for code↔name resolution).
   // This powers the "Carry forward from yesterday" button: clicking it pre-populates the form
@@ -139,6 +142,11 @@ export default function NextDayPlanPage() {
   };
 
   const handleApply = () => {
+    if (fromDate && toDate && fromDate > toDate) {
+      setRangeError("From date cannot be later than To date.");
+      return;
+    }
+    setRangeError(null);
     setAppliedFrom(fromDate);
     setAppliedTo(toDate);
   };
@@ -192,6 +200,63 @@ export default function NextDayPlanPage() {
     }
   };
 
+  const columns = useMemo<ColumnDef<NextDayPlanResponse>[]>(() => [
+    { accessorKey: "reportDate", header: "Report Date" },
+    { accessorKey: "nextDayActivity", header: "Next Day Activity" },
+    {
+      accessorKey: "chainageFromM",
+      header: "Chainage From",
+      cell: ({ row }) => chainageLabel(row.original.chainageFromM),
+    },
+    {
+      accessorKey: "chainageToM",
+      header: "Chainage To",
+      cell: ({ row }) => chainageLabel(row.original.chainageToM),
+    },
+    {
+      accessorKey: "targetQty",
+      header: "Target Qty",
+      cell: ({ row }) =>
+        row.original.targetQty != null ? row.original.targetQty.toLocaleString() : "—",
+    },
+    {
+      accessorKey: "unit",
+      header: "Unit",
+      cell: ({ row }) => row.original.unit ?? "—",
+    },
+    {
+      accessorKey: "concerns",
+      header: "Concerns",
+      cell: ({ row }) => (
+        <span className="max-w-xs truncate block">
+          {row.original.concerns ?? "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "actionBy",
+      header: "Action By",
+      cell: ({ row }) => row.original.actionBy ?? "—",
+    },
+    {
+      accessorKey: "dueDate",
+      header: "Due Date",
+      cell: ({ row }) => row.original.dueDate ?? "—",
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <button
+          onClick={() => handleDelete(row.original.id)}
+          className="text-danger hover:underline text-sm"
+        >
+          Delete
+        </button>
+      ),
+    },
+  ], [handleDelete]);
+
   return (
     <div className="p-6">
       <TabTip
@@ -208,7 +273,8 @@ export default function NextDayPlanPage() {
             <input
               type="date"
               value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
+              onChange={(e) => { setFromDate(e.target.value); setRangeError(null); }}
+              max={toDate || undefined}
               className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
             />
           </div>
@@ -217,7 +283,8 @@ export default function NextDayPlanPage() {
             <input
               type="date"
               value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
+              onChange={(e) => { setToDate(e.target.value); setRangeError(null); }}
+              min={fromDate || undefined}
               className="px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
             />
           </div>
@@ -245,6 +312,7 @@ export default function NextDayPlanPage() {
           </button>
         </div>
 
+        {rangeError && <div className="text-danger mb-4 text-sm">{rangeError}</div>}
         {error && <div className="text-danger mb-4">{error}</div>}
         {isError && (
           <div className="text-danger mb-4">
@@ -415,65 +483,14 @@ export default function NextDayPlanPage() {
           </form>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Report Date</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Next Day Activity</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Chainage From</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Chainage To</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Target Qty</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Unit</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Concerns</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Action By</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Due Date</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && (
-                <tr>
-                  <td colSpan={10} className="border border-border px-4 py-6 text-center text-text-muted">
-                    Loading plans…
-                  </td>
-                </tr>
-              )}
-              {!isLoading && plans.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="border border-border px-4 py-6 text-center text-text-muted">
-                    No plans in this date range.
-                  </td>
-                </tr>
-              )}
-              {plans.map((plan) => (
-                <tr key={plan.id} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2">{plan.reportDate}</td>
-                  <td className="border border-border px-4 py-2">{plan.nextDayActivity}</td>
-                  <td className="border border-border px-4 py-2">{chainageLabel(plan.chainageFromM)}</td>
-                  <td className="border border-border px-4 py-2">{chainageLabel(plan.chainageToM)}</td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {plan.targetQty != null ? plan.targetQty.toLocaleString() : "—"}
-                  </td>
-                  <td className="border border-border px-4 py-2">{plan.unit ?? "—"}</td>
-                  <td className="border border-border px-4 py-2 max-w-xs truncate">
-                    {plan.concerns ?? "—"}
-                  </td>
-                  <td className="border border-border px-4 py-2">{plan.actionBy ?? "—"}</td>
-                  <td className="border border-border px-4 py-2">{plan.dueDate ?? "—"}</td>
-                  <td className="border border-border px-4 py-2">
-                    <button
-                      onClick={() => handleDelete(plan.id)}
-                      className="text-danger hover:underline text-sm"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={plans}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No plans in this date range."
+        />
       </div>
     </div>
   );

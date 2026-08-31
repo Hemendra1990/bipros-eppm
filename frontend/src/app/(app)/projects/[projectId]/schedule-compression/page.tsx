@@ -14,10 +14,19 @@ import {
 import { ApiResponse } from "@/lib/types";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
+import { KpiTile } from "@/components/common/KpiTile";
+import { useProjectCurrency, type ProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
+import { formatDate } from "@/lib/utils/format";
+
+const days = (n?: number | null) =>
+  n == null || Math.abs(n) < 0.05 ? "0 days" : `${n.toFixed(1)} days`;
 
 export default function ScheduleCompressionPage() {
   const params = useParams();
   const projectId = params.projectId as string;
+  const { money, moneyCompact } = useProjectCurrency();
 
   const [activeTab, setActiveTab] = useState<"fast-track" | "crash" | "scenarios">("fast-track");
   const [selectedScenarios, setSelectedScenarios] = useState<{
@@ -101,7 +110,7 @@ export default function ScheduleCompressionPage() {
 
       {/* Crashing Section */}
       {activeTab === "crash" && (
-        <CrashingSection mutation={crashMutation} />
+        <CrashingSection mutation={crashMutation} money={money} moneyCompact={moneyCompact} />
       )}
 
       {/* Scenario Comparison Section */}
@@ -144,55 +153,39 @@ function FastTrackingSection({ mutation }: FastTrackingSectionProps) {
           <div className="space-y-4">
             {/* Summary Cards */}
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
-                <div className="text-2xl font-bold">
-                  {mutation.data.data?.originalDuration?.toFixed(1)} days
-                </div>
-                <p className="text-sm text-text-secondary">Original Duration</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
-                <div className="text-2xl font-bold text-success">
-                  -{mutation.data.data?.durationSaved?.toFixed(1)} days
-                </div>
-                <p className="text-sm text-text-secondary">Potential Savings</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
-                <div className="text-2xl font-bold text-purple-600">
-                  {mutation.data.data?.compressedDuration?.toFixed(1)} days
-                </div>
-                <p className="text-sm text-text-secondary">Compressed Duration</p>
-              </div>
+              <KpiTile label="Original Duration" value={days(mutation.data.data?.originalDuration)} />
+              <KpiTile
+                label="Potential Savings"
+                tone="success"
+                value={days(mutation.data.data?.durationSaved)}
+                delta={{ value: "saved", direction: "down" }}
+              />
+              <KpiTile label="Compressed Duration" tone="accent" value={days(mutation.data.data?.compressedDuration)} />
             </div>
 
-            {/* Recommendations Table */}
-            {(mutation.data.data?.recommendations?.length ?? 0) > 0 && (
-              <div className="overflow-x-auto border border-border rounded-lg">
-                <table className="w-full">
-                  <thead className="bg-surface/80 border-b border-border">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Activity Code</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Original Duration</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Days Saved</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mutation.data.data?.recommendations?.map((rec: CompressionRecommendation, idx: number) => (
-                      <tr key={idx} className="border-b border-border hover:bg-surface/80">
-                        <td className="px-4 py-3 font-medium">{rec.activityCode}</td>
-                        <td className="px-4 py-3">{rec.originalDuration?.toFixed(1)} days</td>
-                        <td className="px-4 py-3">
-                          <span className="inline-block px-2 py-1 text-xs font-semibold bg-success/10 text-success rounded">
-                            {rec.durationSaved?.toFixed(1)} days
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">{rec.reason}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* Recommendations Table or Empty State */}
+            {(mutation.data.data?.recommendations?.length ?? 0) > 0 ? (
+              <SimpleTable
+                columns={[
+                  { accessorKey: "activityCode", header: "Activity Code", cell: ({ row }) => <span className="font-medium">{row.original.activityCode}</span> },
+                  { accessorKey: "originalDuration", header: "Original Duration", cell: ({ row }) => `${row.original.originalDuration?.toFixed(1)} days` },
+                  {
+                    accessorKey: "durationSaved",
+                    header: "Days Saved",
+                    cell: ({ row }) => (
+                      <span className="inline-block px-2 py-1 text-xs font-semibold bg-success/10 text-success rounded">
+                        {row.original.durationSaved?.toFixed(1)} days
+                      </span>
+                    ),
+                  },
+                  { accessorKey: "reason", header: "Reason", cell: ({ row }) => <span className="text-sm text-text-secondary">{row.original.reason}</span> },
+                ] as ColumnDef<CompressionRecommendation>[]}
+                data={mutation.data.data?.recommendations ?? []}
+              />
+            ) : (
+              <div className="rounded border border-border bg-surface/80 p-4 text-sm text-text-secondary">
+                No fast-tracking opportunity — fast-tracking needs Finish-to-Start links between critical
+                activities, and this project has none defined.
               </div>
             )}
           </div>
@@ -210,9 +203,14 @@ function FastTrackingSection({ mutation }: FastTrackingSectionProps) {
 
 interface CrashingSectionProps {
   mutation: ReturnType<typeof useMutation<ApiResponse<CompressionAnalysisResponse>>>;
+  money: ProjectCurrency["money"];
+  moneyCompact: ProjectCurrency["moneyCompact"];
 }
 
-function CrashingSection({ mutation }: CrashingSectionProps) {
+function CrashingSection({ mutation, money, moneyCompact }: CrashingSectionProps) {
+  const d = mutation.data?.data;
+  const noCompression = d?.durationSaved != null && d.durationSaved < 0.05;
+
   return (
     <div className="bg-surface/50 rounded-lg border border-border shadow-sm">
       <div className="border-b border-border px-6 py-4">
@@ -232,74 +230,60 @@ function CrashingSection({ mutation }: CrashingSectionProps) {
         </Button>
 
         {mutation.data && (
-          <div className="space-y-4">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-4 gap-4">
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
-                <div className="text-2xl font-bold">
-                  {mutation.data.data?.originalDuration?.toFixed(1)} days
-                </div>
-                <p className="text-sm text-text-secondary">Original Duration</p>
+          noCompression ? (
+            <div className="space-y-4">
+              <div className="max-w-xs">
+                <KpiTile label="Current Finish" value={formatDate(d?.originalFinishDate)} />
               </div>
-
-              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-6 border border-red-200">
-                <div className="text-2xl font-bold text-danger">
-                  -{mutation.data.data?.durationSaved?.toFixed(1)} days
-                </div>
-                <p className="text-sm text-text-secondary">Potential Savings</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-6 border border-yellow-200">
-                <div className="text-2xl font-bold text-warning">
-                  ${mutation.data.data?.additionalCost?.toFixed(2)}
-                </div>
-                <p className="text-sm text-text-secondary">Additional Cost</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
-                <div className="text-2xl font-bold text-purple-600">
-                  {mutation.data.data?.compressedDuration?.toFixed(1)} days
-                </div>
-                <p className="text-sm text-text-secondary">Compressed Duration</p>
+              <div className="rounded border border-border bg-surface/80 p-4 text-sm text-text-secondary">
+                No further compression possible — the project finish is already at its limit (driven by completed work or activities already at their crash limit).
               </div>
             </div>
-
-            {/* Recommendations Table */}
-            {(mutation.data.data?.recommendations?.length ?? 0) > 0 && (
-              <div className="overflow-x-auto border border-border rounded-lg">
-                <table className="w-full">
-                  <thead className="bg-surface/80 border-b border-border">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Activity Code</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Original Duration</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Crashed Duration</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Days Saved</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Cost/Day</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold">Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mutation.data.data?.recommendations?.map((rec: CompressionRecommendation, idx: number) => (
-                      <tr key={idx} className="border-b border-border hover:bg-surface/80">
-                        <td className="px-4 py-3 font-medium">{rec.activityCode}</td>
-                        <td className="px-4 py-3">{rec.originalDuration?.toFixed(1)} days</td>
-                        <td className="px-4 py-3">{rec.newDuration?.toFixed(1)} days</td>
-                        <td className="px-4 py-3">
-                          <span className="inline-block px-2 py-1 text-xs font-semibold bg-danger/10 text-danger rounded">
-                            {rec.durationSaved?.toFixed(1)} days
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          ${rec.additionalCost && rec.durationSaved ? (rec.additionalCost / rec.durationSaved).toFixed(2) : "N/A"}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">{rec.reason}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          ) : (
+            <div className="space-y-4">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-4 gap-4">
+                <KpiTile label="Current Finish" value={formatDate(d?.originalFinishDate)} />
+                <KpiTile label="Achievable Finish" tone="accent" value={formatDate(d?.compressedFinishDate)} />
+                <KpiTile label="Time Saved" tone="success" value={days(d?.durationSaved)} delta={{ value: "saved", direction: "down" }} />
+                <KpiTile label="Additional Cost" tone="warning" value={d?.additionalCost != null ? moneyCompact(d.additionalCost) : "—"} />
               </div>
-            )}
-          </div>
+
+              <p className="text-xs text-text-muted">
+                Crashing is applied across all the activities that drive the finish, then re-checked — so the total time saved reflects the real project finish, not the sum of the rows below.
+              </p>
+
+              {/* Recommendations Table */}
+              {(d?.recommendations?.length ?? 0) > 0 && (
+                <SimpleTable
+                  columns={[
+                    { accessorKey: "activityCode", header: "Activity Code", cell: ({ row }) => <span className="font-medium">{row.original.activityCode}</span> },
+                    { accessorKey: "originalDuration", header: "Original Duration", cell: ({ row }) => `${row.original.originalDuration?.toFixed(1)} days` },
+                    { accessorKey: "newDuration", header: "Crashed To", cell: ({ row }) => `${row.original.newDuration?.toFixed(1)} days` },
+                    {
+                      accessorKey: "durationSaved",
+                      header: "Days Crashed",
+                      cell: ({ row }) => (
+                        <span className="inline-block px-2 py-1 text-xs font-semibold bg-danger/10 text-danger rounded">
+                          {row.original.durationSaved?.toFixed(1)} days
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "additionalCost",
+                      header: "Cost",
+                      cell: ({ row }) =>
+                        row.original.additionalCost != null
+                          ? money(row.original.additionalCost)
+                          : "—",
+                    },
+                    { accessorKey: "reason", header: "Reason", cell: ({ row }) => <span className="text-sm text-text-secondary">{row.original.reason}</span> },
+                  ] as ColumnDef<CompressionRecommendation>[]}
+                  data={d?.recommendations ?? []}
+                />
+              )}
+            </div>
+          )
         )}
 
         {mutation.isError && (
@@ -387,25 +371,15 @@ function ScenarioComparisonSection({
         {comparisonQuery.data && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
-                <div className="text-sm text-text-secondary mb-2">
-                  {comparisonQuery.data.data?.scenario1Name}
-                </div>
-                <div className="text-2xl font-bold">
-                  {comparisonQuery.data.data?.duration1?.toFixed(1)} days
-                </div>
-                <p className="text-xs text-text-muted mt-2">Duration</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
-                <div className="text-sm text-text-secondary mb-2">
-                  {comparisonQuery.data.data?.scenario2Name}
-                </div>
-                <div className="text-2xl font-bold">
-                  {comparisonQuery.data.data?.duration2?.toFixed(1)} days
-                </div>
-                <p className="text-xs text-text-muted mt-2">Duration</p>
-              </div>
+              <KpiTile
+                label={comparisonQuery.data.data?.scenario1Name ?? "Scenario 1"}
+                value={days(comparisonQuery.data.data?.duration1)}
+              />
+              <KpiTile
+                label={comparisonQuery.data.data?.scenario2Name ?? "Scenario 2"}
+                tone="accent"
+                value={days(comparisonQuery.data.data?.duration2)}
+              />
             </div>
 
             <div className="border-2 border-green-500 bg-success/10 rounded-lg p-6">

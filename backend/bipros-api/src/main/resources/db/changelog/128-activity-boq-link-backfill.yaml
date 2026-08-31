@@ -1,0 +1,26 @@
+databaseChangeLog:
+  # BOQ-link backfill (design L12): link each existing activity to the ONE BOQ line its
+  # approved DPR history names. Activities with mixed histories are left unlinked (never
+  # guessed) — DevSchemaFixupRunner fixup 128 logs their count on dev/pilot boots.
+  - changeSet:
+      id: 128-activity-boq-link-backfill
+      author: subrat
+      changes:
+        - sql:
+            splitStatements: false
+            sql: >-
+              UPDATE activity.activities a
+                 SET boq_item_id = s.only_item
+                FROM (SELECT d.activity_id, MIN(d.boq_item_id::text)::uuid AS only_item
+                        FROM project.daily_progress_reports d
+                       WHERE d.boq_item_id IS NOT NULL
+                         AND d.approval_status = 'APPROVED'
+                       GROUP BY d.activity_id
+                      HAVING COUNT(DISTINCT d.boq_item_id) = 1) s
+               WHERE s.activity_id = a.id
+                 AND a.boq_item_id IS NULL
+                 AND NOT EXISTS (SELECT 1 FROM activity.activities c
+                                  WHERE c.parent_activity_id = a.id)
+      rollback:
+        - sql:
+            sql: "UPDATE activity.activities SET boq_item_id = NULL"

@@ -1,8 +1,11 @@
 package com.bipros.reporting.presentation.controller;
 
+import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.common.dto.ApiResponse;
-import com.bipros.evm.domain.entity.EvmCalculation;
-import com.bipros.evm.domain.repository.EvmCalculationRepository;
+import com.bipros.cost.application.dto.CostSummaryDto;
+import com.bipros.cost.application.dto.WbsEvmRow;
+import com.bipros.cost.application.service.CostService;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.ProjectRepository;
@@ -18,6 +21,7 @@ import com.bipros.reporting.presentation.dto.ProjectComplianceDto.HseBlock;
 import com.bipros.reporting.presentation.dto.ProjectComplianceDto.PariveshBlock;
 import com.bipros.reporting.presentation.dto.ProjectComplianceDto.PfmsBlock;
 import com.bipros.reporting.presentation.dto.ProjectStatusSnapshotDto;
+import com.bipros.reporting.presentation.dto.ProjectStatusSnapshotWithTrendDto;
 import com.bipros.reporting.presentation.dto.RaBillSummaryDto;
 import com.bipros.reporting.presentation.dto.VariationOrderRow;
 import jakarta.persistence.EntityManager;
@@ -41,7 +45,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -52,7 +55,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/v1/projects/{projectId}")
-@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'VIEWER')")
+@PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
 @RequiredArgsConstructor
 @Slf4j
 public class ProjectInsightsController {
@@ -61,7 +64,8 @@ public class ProjectInsightsController {
 
   private final ProjectRepository projectRepository;
   private final WbsNodeRepository wbsNodeRepository;
-  private final EvmCalculationRepository evmCalculationRepository;
+  private final CostService costService;
+  private final ActivityRepository activityRepository;
 
   @PersistenceContext private EntityManager em;
 
@@ -75,18 +79,97 @@ public class ProjectInsightsController {
       double actualPct,
       double variancePct) {}
 
+  /**
+   * WBS progress is a derived view, not a stored value. We deliberately do NOT read
+   * {@code wbs_nodes.summary_percent_complete} — that column has no writer in the system
+   * today and would always return 0%. Instead we walk the WBS tree bottom-up and weight
+   * each descendant activity by its {@code original_duration} (fallback weight = 1):
+   *
+   * <pre>
+   *   actualPct(node)  = Σ (activity.percent_complete × duration) ÷ Σ duration
+   *   plannedPct(node) = Σ (linearPlannedPct(today, planned_start, planned_finish) × duration) ÷ Σ duration
+   * </pre>
+   *
+   * Activities with null planned dates are excluded from the planned-pct numerator only;
+   * they still contribute their actual %. This matches the standard "duration-weighted
+   * earned schedule" approach used by Primavera / MS Project rollups.
+   */
   @GetMapping("/wbs-progress")
   public ApiResponse<List<WbsProgressRow>> getWbsProgress(@PathVariable UUID projectId) {
     List<WbsNode> nodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(projectId);
-    LocalDate today = LocalDate.now();
-    List<WbsProgressRow> rows = new ArrayList<>(nodes.size());
+    if (nodes.isEmpty()) return ApiResponse.ok(List.of());
+
+    List<Activity> activities = activityRepository.findByProjectId(projectId);
+    Project p = projectRepository.findById(projectId).orElse(null);
+    LocalDate asOf = p != null && p.getDataDate() != null ? p.getDataDate() : LocalDate.now();
+
+    // Build node-id → direct-children map and node-id → activities-directly-under map.
+    Map<UUID, List<WbsNode>> childrenByParent = new HashMap<>();
     for (WbsNode n : nodes) {
-      double planned = computePlannedPct(today, n.getPlannedStart(), n.getPlannedFinish());
-      double actual = n.getSummaryPercentComplete() != null ? n.getSummaryPercentComplete() : 0.0;
-      rows.add(
-          new WbsProgressRow(n.getCode(), n.getName(), n.getWbsLevel(), planned, actual, actual - planned));
+      if (n.getParentId() != null) {
+        childrenByParent.computeIfAbsent(n.getParentId(), k -> new ArrayList<>()).add(n);
+      }
     }
-    return ApiResponse.ok(rows);
+    Map<UUID, List<Activity>> activitiesByWbs = new HashMap<>();
+    for (Activity a : activities) {
+      if (a.getWbsNodeId() == null) continue;
+      activitiesByWbs.computeIfAbsent(a.getWbsNodeId(), k -> new ArrayList<>()).add(a);
+    }
+
+    // Weighted aggregator returns [actualWeightedSum, plannedWeightedSum, weightSum, plannedWeightSum].
+    Map<UUID, double[]> rollup = new HashMap<>();
+    for (WbsNode n : nodes) rollup.put(n.getId(), aggregate(n, childrenByParent, activitiesByWbs, asOf));
+
+    List<WbsProgressRow> result = new ArrayList<>(nodes.size());
+    for (WbsNode n : nodes) {
+      double[] agg = rollup.get(n.getId());
+      double actual = agg[2] > 0d ? agg[0] / agg[2] : 0d;
+      double planned = agg[3] > 0d ? agg[1] / agg[3] : 0d;
+      result.add(new WbsProgressRow(
+          n.getCode(), n.getName(), n.getWbsLevel(),
+          round2(planned), round2(actual), round2(actual - planned)));
+    }
+    return ApiResponse.ok(result);
+  }
+
+  private double[] aggregate(
+      WbsNode node,
+      Map<UUID, List<WbsNode>> childrenByParent,
+      Map<UUID, List<Activity>> activitiesByWbs,
+      LocalDate today) {
+    double actualSum = 0d;
+    double plannedSum = 0d;
+    double weight = 0d;
+    double plannedWeight = 0d;
+
+    // Activities directly under this node
+    for (Activity a : activitiesByWbs.getOrDefault(node.getId(), List.of())) {
+      double w = a.getOriginalDuration() != null && a.getOriginalDuration() > 0
+          ? a.getOriginalDuration()
+          : 1d;
+      double pc = a.getPercentComplete() != null ? a.getPercentComplete() : 0d;
+      actualSum += pc * w;
+      weight += w;
+      if (a.getPlannedStartDate() != null && a.getPlannedFinishDate() != null) {
+        plannedSum += computePlannedPct(today, a.getPlannedStartDate(), a.getPlannedFinishDate()) * w;
+        plannedWeight += w;
+      }
+    }
+
+    // Recurse into child WBS nodes
+    for (WbsNode child : childrenByParent.getOrDefault(node.getId(), List.of())) {
+      double[] childAgg = aggregate(child, childrenByParent, activitiesByWbs, today);
+      actualSum += childAgg[0];
+      plannedSum += childAgg[1];
+      weight += childAgg[2];
+      plannedWeight += childAgg[3];
+    }
+
+    return new double[] {actualSum, plannedSum, weight, plannedWeight};
+  }
+
+  private static double round2(double v) {
+    return BigDecimal.valueOf(v).setScale(2, RoundingMode.HALF_UP).doubleValue();
   }
 
   // ─────────────── J1 — Status snapshot ───────────────
@@ -96,17 +179,19 @@ public class ProjectInsightsController {
     Project p = projectRepository.findById(projectId).orElse(null);
     if (p == null) return ApiResponse.ok(null);
 
-    Optional<EvmCalculation> latest =
-        evmCalculationRepository.findTopByProjectIdOrderByDataDateDesc(projectId);
+    CostSummaryDto cs = costService.getCostSummary(projectId);
+    double cpi = cs.costPerformanceIndex() != null ? cs.costPerformanceIndex().doubleValue() : 0.0;
+    double spi = cs.schedulePerformanceIndex() != null ? cs.schedulePerformanceIndex().doubleValue() : 0.0;
+    BigDecimal bac = nullToZero(cs.bac());
+    BigDecimal eac = nullToZero(cs.estimateAtCompletion());
+    BigDecimal ev = nullToZero(cs.earnedValue());
+    BigDecimal ac = nullToZero(cs.totalActual());
 
-    double cpi = latest.map(e -> e.getCostPerformanceIndex() != null ? e.getCostPerformanceIndex() : 0.0).orElse(0.0);
-    double spi = latest.map(e -> e.getSchedulePerformanceIndex() != null ? e.getSchedulePerformanceIndex() : 0.0).orElse(0.0);
-    BigDecimal bac = latest.map(e -> nullToZero(e.getBudgetAtCompletion())).orElse(BigDecimal.ZERO);
-    BigDecimal eac = latest.map(e -> nullToZero(e.getEstimateAtCompletion())).orElse(BigDecimal.ZERO);
-
-    String scheduleRag = bandOne(spi);
-    String costRag = bandOne(cpi);
-    String scopeRag = "GREEN"; // no scope-change feed yet
+    // No EVM signal at all (no budget AND no earned value) → grey, not a false GREEN.
+    boolean hasEvmSignal = bac.signum() > 0 || ev.signum() > 0 || ac.signum() > 0;
+    String scheduleRag = hasEvmSignal ? bandOne(spi) : "GREY";
+    String costRag = hasEvmSignal ? bandOne(cpi) : "GREY";
+    String scopeRag = "GREY"; // no scope-change feed — show neutral "No data"
     long activeRisks = queryScalarLong(
         "SELECT COUNT(*) FROM risk.risks WHERE project_id = ?1 AND status NOT IN ('CLOSED','MITIGATED')",
         projectId);
@@ -114,16 +199,15 @@ public class ProjectInsightsController {
         "SELECT COUNT(*) FROM risk.risks WHERE project_id = ?1 "
             + "AND status NOT IN ('CLOSED','MITIGATED') AND (rag = 'RED' OR risk_score >= 15)",
         projectId);
-    String riskRag = criticalRisks > 0 ? "RED" : activeRisks > 0 ? "AMBER" : "GREEN";
-    String hseRag = "GREEN"; // no HSE feed yet
+    // 0 risks → GREY "No data" (matches the Risk Register "No risks logged"), not a false GREEN.
+    String riskRag = criticalRisks > 0 ? "RED" : activeRisks > 0 ? "AMBER" : "GREY";
+    String hseRag = "GREY"; // no HSE feed — show neutral "No data"
 
-    LocalDate today = LocalDate.now();
-    double physicalPct = queryScalarDouble(
-        "SELECT COALESCE(AVG(percent_complete), 0) FROM activity.activities WHERE project_id = ?1",
-        projectId);
+    LocalDate asOf = p.getDataDate() != null ? p.getDataDate() : LocalDate.now();
+    double physicalPct = cs.costPercentComplete() != null ? cs.costPercentComplete().doubleValue() * 100 : 0.0;
     double plannedPct = 0.0;
     if (p.getPlannedStartDate() != null && p.getPlannedFinishDate() != null) {
-      plannedPct = computePlannedPct(today, p.getPlannedStartDate(), p.getPlannedFinishDate());
+      plannedPct = computePlannedPct(asOf, p.getPlannedStartDate(), p.getPlannedFinishDate());
     }
 
     List<String> topIssues = new ArrayList<>();
@@ -164,71 +248,59 @@ public class ProjectInsightsController {
             scheduleRag, costRag, scopeRag, riskRag, hseRag,
             topIssues, nextMilestoneName, nextMilestoneDate,
             cpi, spi, physicalPct, plannedPct, activeRisks, 0L,
-            toCrores(bac), toCrores(eac),
-            p.getUpdatedAt()));
+            toCrores(bac), toCrores(eac), toCrores(ac),
+            p.getUpdatedAt(), asOf));
+  }
+
+  /**
+   * Status snapshot + period-over-period deltas. Powers the four KPI tiles on the executive
+   * project dashboard. Deltas are nullable today and will be wired to a daily snapshot history
+   * once that table exists; the frontend treats null as "no delta to show", so the dashboard
+   * renders cleanly in the interim.
+   */
+  @GetMapping("/status-snapshot-with-trend")
+  public ApiResponse<ProjectStatusSnapshotWithTrendDto> getStatusSnapshotWithTrend(
+      @PathVariable UUID projectId) {
+    ProjectStatusSnapshotDto current = getStatusSnapshot(projectId).data();
+    // TODO(snapshot-history): diff against project.daily_status_snapshots row from 7 days ago
+    // once the JobRunr daily writer + table land. Until then deltas stay null so the UI degrades.
+    ProjectStatusSnapshotWithTrendDto.SnapshotDeltas deltas =
+        new ProjectStatusSnapshotWithTrendDto.SnapshotDeltas(null, null, null, null);
+    return ApiResponse.ok(new ProjectStatusSnapshotWithTrendDto(current, deltas));
   }
 
   // ─────────────── J4 — Cost variance per WBS ───────────────
 
   @GetMapping("/cost-variance")
-  @SuppressWarnings("unchecked")
+  // Access-Output row 4: overrides the class-level REPORT.READ — cost variance is cost data.
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'COST.READ')")
   public ApiResponse<List<CostVarianceRow>> getCostVariance(@PathVariable UUID projectId) {
+    // Build code → WbsNode map for wbsNodeId + level enrichment.
     List<WbsNode> nodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(projectId);
-    // Pre-fetch cost aggregates per WBS via a single grouped query.
-    // cost.activity_expenses has no wbs_node_id — roll up via the activity → wbs_node_id join.
-    Map<UUID, BigDecimal[]> costByWbs = new HashMap<>();
-    try {
-      List<Object> rows = em.createNativeQuery(
-              "SELECT a.wbs_node_id, "
-                  + "       COALESCE(SUM(e.budgeted_cost), 0), "
-                  + "       COALESCE(SUM(e.actual_cost), 0), "
-                  + "       COALESCE(SUM(e.at_completion_cost), 0) "
-                  + "FROM cost.activity_expenses e "
-                  + "JOIN activity.activities a ON a.id = e.activity_id "
-                  + "WHERE e.project_id = ?1 "
-                  + "GROUP BY a.wbs_node_id")
-          .setParameter(1, projectId)
-          .getResultList();
-      for (Object row : rows) {
-        Object[] cols = (Object[]) row;
-        costByWbs.put(
-            UUID.fromString(cols[0].toString()),
-            new BigDecimal[] {
-                new BigDecimal(cols[1].toString()),
-                new BigDecimal(cols[2].toString()),
-                new BigDecimal(cols[3].toString())
-            });
-      }
-    } catch (Exception e) {
-      log.debug("cost-variance aggregate failed: {}", e.getMessage());
+    Map<String, WbsNode> nodeByCode = new HashMap<>();
+    for (WbsNode n : nodes) {
+      if (n.getCode() != null) nodeByCode.put(n.getCode(), n);
     }
 
-    List<CostVarianceRow> result = new ArrayList<>();
-    for (WbsNode n : nodes) {
-      BigDecimal budget = n.getBudgetCrores() != null ? n.getBudgetCrores() : BigDecimal.ZERO;
-      BigDecimal committed = BigDecimal.ZERO;
-      BigDecimal actualRupees = BigDecimal.ZERO;
-      BigDecimal forecastRupees = BigDecimal.ZERO;
-      BigDecimal[] agg = costByWbs.get(n.getId());
-      if (agg != null) {
-        committed = agg[0];
-        actualRupees = agg[1];
-        forecastRupees = agg[2];
-      }
-      BigDecimal actualCrores = toCrores(actualRupees);
-      BigDecimal committedCrores = toCrores(committed);
-      BigDecimal forecastCrores = toCrores(forecastRupees);
-      BigDecimal varianceCrores = forecastCrores.subtract(budget);
+    List<WbsEvmRow> wbsRows = costService.getEvmByWbs(projectId);
+    List<CostVarianceRow> result = new ArrayList<>(wbsRows.size());
+    for (WbsEvmRow row : wbsRows) {
+      WbsNode n = nodeByCode.get(row.code());
+      UUID wbsNodeId = n != null ? n.getId() : null;
+      Integer level = n != null ? n.getWbsLevel() : null;
+      BigDecimal budget = toCrores(nullToZero(row.bac()));
+      BigDecimal actual = toCrores(nullToZero(row.actualCost()));
+      BigDecimal forecast = toCrores(nullToZero(row.estimateAtCompletion()));
+      BigDecimal variance = forecast.subtract(budget);
       double variancePct = budget.signum() != 0
-          ? varianceCrores.multiply(new BigDecimal("100"))
+          ? variance.multiply(new BigDecimal("100"))
               .divide(budget, 2, RoundingMode.HALF_UP)
               .doubleValue()
           : 0.0;
-      result.add(
-          new CostVarianceRow(
-              n.getId(), n.getCode(), n.getName(), n.getWbsLevel(),
-              scaleMoney(budget), scaleMoney(committedCrores), scaleMoney(actualCrores),
-              scaleMoney(forecastCrores), scaleMoney(varianceCrores), variancePct));
+      result.add(new CostVarianceRow(
+          wbsNodeId, row.code(), row.name(), level,
+          scaleMoney(budget), BigDecimal.ZERO, scaleMoney(actual),
+          scaleMoney(forecast), scaleMoney(variance), variancePct));
     }
     return ApiResponse.ok(result);
   }
@@ -342,23 +414,30 @@ public class ProjectInsightsController {
       return ApiResponse.ok(List.of());
     }
 
-    LocalDate today = LocalDate.now();
+    Project proj = projectRepository.findById(projectId).orElse(null);
+    LocalDate asOf = (proj != null && proj.getDataDate() != null)
+        ? proj.getDataDate()
+        : LocalDate.now();
     List<ActivityStatusRow> result = new ArrayList<>(rows.size());
     for (Object row : rows) {
       Object[] cols = (Object[]) row;
+      LocalDate plannedStart = cols[7] != null ? LocalDate.parse(cols[7].toString()) : null;
       LocalDate plannedFinish = cols[8] != null ? LocalDate.parse(cols[8].toString()) : null;
       LocalDate actualFinish = cols[10] != null ? LocalDate.parse(cols[10].toString()) : null;
       double pct = cols[16] != null ? ((Number) cols[16]).doubleValue() : 0.0;
       long daysDelay = 0;
-      if (plannedFinish != null && pct < 100 && today.isAfter(plannedFinish)) {
-        daysDelay = ChronoUnit.DAYS.between(plannedFinish, today);
+      if (plannedFinish != null && pct < 100 && asOf.isAfter(plannedFinish)) {
+        daysDelay = ChronoUnit.DAYS.between(plannedFinish, asOf);
       } else if (plannedFinish != null && actualFinish != null && actualFinish.isAfter(plannedFinish)) {
         daysDelay = ChronoUnit.DAYS.between(plannedFinish, actualFinish);
       }
       long daysRemaining = 0;
       if (plannedFinish != null && pct < 100) {
-        daysRemaining = Math.max(0, ChronoUnit.DAYS.between(today, plannedFinish));
+        daysRemaining = Math.max(0, ChronoUnit.DAYS.between(asOf, plannedFinish));
       }
+      double expectedProgressPct = (plannedStart != null && plannedFinish != null)
+          ? computePlannedPct(asOf, plannedStart, plannedFinish)
+          : 0.0;
       result.add(new ActivityStatusRow(
           UUID.fromString(cols[0].toString()),
           cols[1] != null ? cols[1].toString() : "",
@@ -367,7 +446,7 @@ public class ProjectInsightsController {
           cols[4] != null ? cols[4].toString() : "",
           cols[5] != null ? cols[5].toString() : "",
           cols[6] != null ? cols[6].toString() : "",
-          cols[7] != null ? LocalDate.parse(cols[7].toString()) : null,
+          plannedStart,
           plannedFinish,
           cols[9] != null ? LocalDate.parse(cols[9].toString()) : null,
           actualFinish,
@@ -378,7 +457,8 @@ public class ProjectInsightsController {
           cols[15] != null && (Boolean) cols[15],
           pct,
           daysDelay,
-          daysRemaining));
+          daysRemaining,
+          expectedProgressPct));
     }
     return ApiResponse.ok(result);
   }
@@ -469,7 +549,7 @@ public class ProjectInsightsController {
       long missingLogicCount,
       long leadRelationshipsCount,
       long lagsCount,
-      double fsRelationshipPct,
+      Double fsRelationshipPct,   // null when there are no relationships (N/A)
       long hardConstraintsCount,
       long highFloatCount,
       long negativeFloatCount,
@@ -485,6 +565,8 @@ public class ProjectInsightsController {
 
   @GetMapping("/schedule-quality")
   public ApiResponse<ScheduleQualityDto> getScheduleQuality(@PathVariable UUID projectId) {
+    Project sq = projectRepository.findById(projectId).orElse(null);
+    LocalDate asOf = (sq != null && sq.getDataDate() != null) ? sq.getDataDate() : LocalDate.now();
     long missingLogic = queryScalarLong(
         "SELECT COUNT(a.id) FROM activity.activities a "
             + "LEFT JOIN activity.activity_relationships r "
@@ -511,7 +593,7 @@ public class ProjectInsightsController {
             + "JOIN activity.activities a ON a.id = r.predecessor_activity_id "
             + "WHERE a.project_id = ?1 AND r.relationship_type = 'FINISH_TO_START'",
         projectId);
-    double fsPct = totalRels > 0 ? (fsRels * 100.0) / totalRels : 100.0;
+    Double fsPct = totalRels > 0 ? (fsRels * 100.0) / totalRels : null; // null = N/A (no relationships)
     long hardConstraints = queryScalarLong(
         "SELECT COUNT(*) FROM activity.activities "
             + "WHERE project_id = ?1 AND primary_constraint_type IN ('START_ON','FINISH_ON','AS_LATE_AS_POSSIBLE')",
@@ -534,9 +616,9 @@ public class ProjectInsightsController {
         projectId);
     long missedTasks = queryScalarLong(
         "SELECT COUNT(*) FROM activity.activities "
-            + "WHERE project_id = ?1 AND planned_finish_date < CURRENT_DATE "
+            + "WHERE project_id = ?1 AND planned_finish_date < ?2 "
             + "  AND (percent_complete IS NULL OR percent_complete < 100)",
-        projectId);
+        projectId, asOf);
     long cpLength = queryScalarLong(
         "SELECT COUNT(*) FROM activity.activities WHERE project_id = ?1 AND is_critical = TRUE",
         projectId);
@@ -548,8 +630,8 @@ public class ProjectInsightsController {
         projectId);
     long shouldHave = queryScalarLong(
         "SELECT COUNT(*) FROM activity.activities "
-            + "WHERE project_id = ?1 AND planned_finish_date <= CURRENT_DATE",
-        projectId);
+            + "WHERE project_id = ?1 AND planned_finish_date <= ?2",
+        projectId, asOf);
     double beiActual = shouldHave > 0 ? (completedByNow * 1.0) / shouldHave : 0.0;
     double beiRequired = 0.95;
 
@@ -559,7 +641,7 @@ public class ProjectInsightsController {
     if (missingLogic > 0) { failed++; failing.add("Missing logic"); }
     if (leadRels > 0) { failed++; failing.add("Leads (negative lag)"); }
     if (lags > totalRels * 0.1) { failed++; failing.add("Excessive lags (>10%)"); }
-    if (fsPct < 90) { failed++; failing.add("FS relationships <90%"); }
+    if (fsPct == null || fsPct < 90) { failed++; failing.add("FS relationships <90%"); }
     if (hardConstraints > 0) { failed++; failing.add("Hard constraints present"); }
     if (highFloat > 0) { failed++; failing.add("High float activities (>44d)"); }
     if (negFloat > 0) { failed++; failing.add("Negative float"); }
@@ -650,7 +732,6 @@ public class ProjectInsightsController {
   }
 
   private static String bandOne(double idx) {
-    if (idx == 0.0) return "GREEN";
     if (idx >= 0.95) return "GREEN";
     if (idx >= 0.85) return "AMBER";
     return "RED";
@@ -665,17 +746,6 @@ public class ProjectInsightsController {
     } catch (Exception e) {
       log.debug("queryScalarLong failed: {}", e.getMessage());
       return 0L;
-    }
-  }
-
-  private double queryScalarDouble(String sql, Object... params) {
-    try {
-      var q = em.createNativeQuery(sql);
-      for (int i = 0; i < params.length; i++) q.setParameter(i + 1, params[i]);
-      Object r = q.getSingleResult();
-      return r != null ? ((Number) r).doubleValue() : 0.0;
-    } catch (Exception e) {
-      return 0.0;
     }
   }
 

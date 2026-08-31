@@ -20,6 +20,9 @@ public interface ProductivityNormRepository extends JpaRepository<ProductivityNo
 
   List<ProductivityNorm> findByWorkActivityId(UUID workActivityId);
 
+  /** Norms for a set of work activities — used by the unit-consistency repair to load norms in bulk. */
+  List<ProductivityNorm> findByWorkActivityIdIn(List<UUID> workActivityIds);
+
   long countByWorkActivityId(UUID workActivityId);
 
   Optional<ProductivityNorm> findFirstByWorkActivityIdAndResourceId(
@@ -27,4 +30,24 @@ public interface ProductivityNormRepository extends JpaRepository<ProductivityNo
 
   Optional<ProductivityNorm> findFirstByWorkActivityIdAndResourceIsNullAndResourceTypeId(
       UUID workActivityId, UUID resourceTypeId);
+
+  // ----- Role-keyed resolver chain (new model) -----
+
+  Optional<ProductivityNorm>
+      findFirstByWorkActivityIdAndRoleIdAndCategoryIdAndGradeIdAndMakeAndModelAndNormType(
+          UUID workActivityId,
+          UUID roleId,
+          UUID categoryId,
+          UUID gradeId,
+          String make,
+          String model,
+          ProductivityNormType normType);
+
+  Optional<ProductivityNorm>
+      findFirstByWorkActivityIdAndRoleIdAndCategoryIdIsNullAndGradeIdIsNullAndMakeIsNullAndModelIsNullAndNormType(
+          UUID workActivityId, UUID roleId, ProductivityNormType normType);
+
+  Optional<ProductivityNorm>
+      findFirstByWorkActivityIdAndRoleIdIsNullAndCategoryIdIsNullAndGradeIdIsNullAndMakeIsNullAndModelIsNullAndNormType(
+          UUID workActivityId, ProductivityNormType normType);
 }

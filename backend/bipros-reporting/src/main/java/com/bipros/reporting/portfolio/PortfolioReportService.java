@@ -1,10 +1,12 @@
 package com.bipros.reporting.portfolio;
 
-import com.bipros.evm.domain.entity.EvmCalculation;
-import com.bipros.evm.domain.repository.EvmCalculationRepository;
+import com.bipros.cost.application.dto.CostSummaryDto;
+import com.bipros.cost.application.service.CostService;
+import com.bipros.project.application.service.DprActualCostLookup;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.reporting.portfolio.dto.CashFlowOutlookPoint;
+import com.bipros.reporting.portfolio.dto.CurrencyBudget;
 import com.bipros.reporting.portfolio.dto.ComplianceRow;
 import com.bipros.reporting.portfolio.dto.ContractorLeagueRow;
 import com.bipros.reporting.portfolio.dto.CostOverrunRow;
@@ -29,10 +31,10 @@ import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -43,40 +45,58 @@ public class PortfolioReportService {
   private static final BigDecimal CRORE = new BigDecimal("10000000");
 
   private final ProjectRepository projectRepository;
-  private final EvmCalculationRepository evmCalculationRepository;
+  private final CostService costService;
+  private final DprActualCostLookup dprActualCostLookup;
 
   @PersistenceContext private EntityManager em;
+
+  // ─────────────────────── helpers: budget factor + progress map ───────────────────────
+
+  // factor: INR major-unit = crore (1e7), everything else = million (1e6)
+  private static BigDecimal majorUnitFactor(String currency) {
+    return currency == null || "INR".equalsIgnoreCase(currency)
+        ? new BigDecimal("10000000") : new BigDecimal("1000000");
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<UUID, Double> avgPercentCompleteByProject() {
+    Map<UUID, Double> map = new HashMap<>();
+    List<Object[]> rows = em.createNativeQuery(
+        "SELECT a.project_id, AVG(a.percent_complete) FROM activity.activities a "
+            + "JOIN project.projects p ON p.id = a.project_id "
+            + "WHERE p.archived_at IS NULL GROUP BY a.project_id").getResultList();
+    for (Object[] r : rows) {
+      if (r[0] == null) continue;
+      UUID id = r[0] instanceof UUID u ? u : UUID.fromString(r[0].toString());
+      map.put(id, r[1] == null ? 0.0 : ((Number) r[1]).doubleValue());
+    }
+    return map;
+  }
 
   // ─────────────────────── O4 — EVM Rollup ───────────────────────
 
   @Transactional(readOnly = true)
   public List<PortfolioEvmRow> getEvmRollup() {
     List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
+    var pctMap = avgPercentCompleteByProject();
     List<PortfolioEvmRow> rows = new ArrayList<>(projects.size());
     for (Project p : projects) {
-      Optional<EvmCalculation> latestOpt =
-          evmCalculationRepository.findTopByProjectIdOrderByDataDateDesc(p.getId());
-
-      BigDecimal pv = BigDecimal.ZERO, ev = BigDecimal.ZERO, ac = BigDecimal.ZERO;
-      BigDecimal cv = BigDecimal.ZERO, sv = BigDecimal.ZERO;
-      BigDecimal eac = BigDecimal.ZERO, bac = BigDecimal.ZERO;
-      double cpi = 0.0, spi = 0.0;
-
-      if (latestOpt.isPresent()) {
-        EvmCalculation e = latestOpt.get();
-        pv = nullToZero(e.getPlannedValue());
-        ev = nullToZero(e.getEarnedValue());
-        ac = nullToZero(e.getActualCost());
-        cpi = e.getCostPerformanceIndex() != null ? e.getCostPerformanceIndex() : 0.0;
-        spi = e.getSchedulePerformanceIndex() != null ? e.getSchedulePerformanceIndex() : 0.0;
-        cv = nullToZero(e.getCostVariance());
-        sv = nullToZero(e.getScheduleVariance());
-        eac = nullToZero(e.getEstimateAtCompletion());
-        bac = nullToZero(e.getBudgetAtCompletion());
-      }
-      rows.add(
-          new PortfolioEvmRow(
-              p.getId(), p.getCode(), p.getName(), pv, ev, ac, cpi, spi, cv, sv, eac, bac));
+      CostSummaryDto cs = costService.getCostSummary(p.getId());
+      BigDecimal pv = nullToZero(cs.plannedValue());
+      BigDecimal ev = nullToZero(cs.earnedValue());
+      BigDecimal ac = nullToZero(cs.totalActual());
+      double cpi = cs.costPerformanceIndex() != null ? cs.costPerformanceIndex().doubleValue() : 0.0;
+      double spi = cs.schedulePerformanceIndex() != null ? cs.schedulePerformanceIndex().doubleValue() : 0.0;
+      BigDecimal cv = nullToZero(cs.costVariance());
+      BigDecimal sv = nullToZero(cs.scheduleVariance());
+      BigDecimal eac = nullToZero(cs.estimateAtCompletion());
+      BigDecimal bac = nullToZero(cs.bac());
+      Double pct = cs.costPercentComplete() != null
+          ? cs.costPercentComplete().doubleValue() * 100
+          : pctMap.getOrDefault(p.getId(), 0.0);
+      rows.add(new PortfolioEvmRow(
+          p.getId(), p.getCode(), p.getName(), pv, ev, ac, cpi, spi, cv, sv, eac,
+          bac, p.getBudgetCurrency(), pct));
     }
     return rows;
   }
@@ -119,23 +139,36 @@ public class PortfolioReportService {
             + "  AND p.archived_at IS NULL",
         CRORE);
 
-    long green = 0, amber = 0, red = 0;
+    long green = 0, amber = 0, red = 0, grey = 0;
     long activeWithCritical = 0;
     long openCriticalRisks = 0;
+    List<BigDecimal> costPercents = new ArrayList<>();
+    // Spent is the canonical Actual Cost (CostService.totalActual) summed per currency, so the
+    // portfolio "Spent" tile equals the AC shown on the Costs/EVM tabs and reports — not a
+    // separate DPR query that drifts from it.
+    java.util.Map<String, BigDecimal> acByCurrency = new java.util.HashMap<>();
 
     for (Project p : projects) {
-      Optional<EvmCalculation> latestOpt =
-          evmCalculationRepository.findTopByProjectIdOrderByDataDateDesc(p.getId());
-      String rag = "GREEN";
-      if (latestOpt.isPresent()) {
-        Double cpi = latestOpt.get().getCostPerformanceIndex();
-        Double spi = latestOpt.get().getSchedulePerformanceIndex();
-        rag = bandRag(cpi, spi);
+      CostSummaryDto cs = costService.getCostSummary(p.getId());
+      costPercents.add(cs.costPercentComplete());
+      BigDecimal snapBac = nullToZero(cs.bac());
+      BigDecimal snapEv = nullToZero(cs.earnedValue());
+      BigDecimal snapAc = nullToZero(cs.totalActual());
+      String acCur = p.getBudgetCurrency() != null ? p.getBudgetCurrency() : "INR";
+      acByCurrency.merge(acCur, snapAc, BigDecimal::add);
+      String rag;
+      if (snapBac.signum() == 0 && snapEv.signum() == 0 && snapAc.signum() == 0) {
+        rag = "GREY";
+      } else {
+        Double ragCpi = cs.costPerformanceIndex() != null ? cs.costPerformanceIndex().doubleValue() : null;
+        Double ragSpi = cs.schedulePerformanceIndex() != null ? cs.schedulePerformanceIndex().doubleValue() : null;
+        rag = bandRag(ragCpi, ragSpi);
       }
       switch (rag) {
         case "GREEN" -> green++;
         case "AMBER" -> amber++;
         case "RED" -> red++;
+        case "GREY" -> grey++;
       }
     }
 
@@ -152,15 +185,51 @@ public class PortfolioReportService {
             + "  AND (r.rag = 'RED' OR r.risk_score >= 15) "
             + "  AND p.archived_at IS NULL");
 
+    @SuppressWarnings("unchecked")
+    List<Object[]> curRows = em.createNativeQuery(
+        "SELECT budget_currency, "
+            + "SUM(COALESCE(current_budget,0) * (CASE WHEN UPPER(budget_currency)='INR' OR budget_currency IS NULL THEN 10000000 ELSE 1000000 END)) "
+            + "FROM project.projects "
+            + "WHERE archived_at IS NULL AND COALESCE(current_budget,0) > 0 "
+            + "GROUP BY budget_currency").getResultList();
+    List<CurrencyBudget> budgetByCurrency = new ArrayList<>();
+    for (Object[] r : curRows) {
+      String cur = r[0] != null ? r[0].toString() : "INR";
+      BigDecimal raw = r[1] instanceof BigDecimal b ? b : new BigDecimal(r[1].toString());
+      budgetByCurrency.add(new CurrencyBudget(cur, raw));
+    }
+    double avgPct = avgCostPercent(costPercents);
+
+    List<CurrencyBudget> spentByCurrency = acByCurrency.entrySet().stream()
+        .filter(e -> e.getValue() != null && e.getValue().signum() > 0)
+        .sorted(java.util.Map.Entry.comparingByKey())
+        .map(e -> new CurrencyBudget(e.getKey(), e.getValue()))
+        .collect(java.util.stream.Collectors.toList());
+
+    @SuppressWarnings("unchecked")
+    List<Object[]> commRows = em.createNativeQuery(
+        "SELECT c.currency, COALESCE(SUM(c.contract_value),0) FROM contract.contracts c "
+      + "JOIN project.projects p ON p.id=c.project_id WHERE p.archived_at IS NULL "
+      + "GROUP BY c.currency HAVING COALESCE(SUM(c.contract_value),0) > 0 ORDER BY c.currency").getResultList();
+    List<CurrencyBudget> committedByCurrency = new ArrayList<>();
+    for (Object[] r : commRows) {
+      committedByCurrency.add(new CurrencyBudget(r[0] != null ? r[0].toString() : "INR",
+          r[1] instanceof BigDecimal b ? b : new BigDecimal(r[1].toString())));
+    }
+
     return new PortfolioScorecardDto(
         projects.size(),
         byStatus,
         scaleMoney(totalBudget),
         scaleMoney(totalCommitted),
         scaleMoney(totalSpent),
-        new RagCounts(green, amber, red),
+        new RagCounts(green, amber, red, grey),
         activeWithCritical,
-        openCriticalRisks);
+        openCriticalRisks,
+        budgetByCurrency,
+        avgPct,
+        spentByCurrency,
+        committedByCurrency);
   }
 
   // ─────────────────────── O2 — Delayed projects ───────────────────────
@@ -193,10 +262,10 @@ public class PortfolioReportService {
       } catch (Exception ignored) {
       }
 
-      Optional<EvmCalculation> latest =
-          evmCalculationRepository.findTopByProjectIdOrderByDataDateDesc(p.getId());
-      if (latest.isPresent() && latest.get().getSchedulePerformanceIndex() != null) {
-        spi = latest.get().getSchedulePerformanceIndex();
+      CostSummaryDto csd = costService.getCostSummary(p.getId());
+      Double spiVal = csd.schedulePerformanceIndex() != null ? csd.schedulePerformanceIndex().doubleValue() : null;
+      if (spiVal != null) {
+        spi = spiVal;
         if (spi > 0 && spi < 1.0 && plannedFinish != null && p.getPlannedStartDate() != null) {
           long planned = ChronoUnit.DAYS.between(p.getPlannedStartDate(), plannedFinish);
           long forecast = Math.round(planned / spi);
@@ -224,57 +293,51 @@ public class PortfolioReportService {
     List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
     List<CostOverrunRow> rows = new ArrayList<>();
     for (Project p : projects) {
-      Optional<EvmCalculation> latest =
-          evmCalculationRepository.findTopByProjectIdOrderByDataDateDesc(p.getId());
-      BigDecimal bac = BigDecimal.ZERO, eac = BigDecimal.ZERO;
-      double cpi = 0.0;
-      if (latest.isPresent()) {
-        bac = nullToZero(latest.get().getBudgetAtCompletion());
-        eac = nullToZero(latest.get().getEstimateAtCompletion());
-        cpi = latest.get().getCostPerformanceIndex() != null
-            ? latest.get().getCostPerformanceIndex()
-            : 0.0;
-      }
-      if (bac.signum() == 0) {
-        bac = queryScalarBigDecimal(
-            "SELECT COALESCE(SUM(budget_crores) * ?1, 0) FROM project.wbs_nodes WHERE project_id = ?2",
-            CRORE, p.getId());
-      }
+      CostSummaryDto cs = costService.getCostSummary(p.getId());
+      BigDecimal bac = nullToZero(cs.bac());
+      BigDecimal eac = nullToZero(cs.estimateAtCompletion());
+      double cpi = cs.costPerformanceIndex() != null ? cs.costPerformanceIndex().doubleValue() : 0.0;
       BigDecimal variance = eac.subtract(bac);
-      rows.add(
-          new CostOverrunRow(
-              p.getId(), p.getCode(), p.getName(),
-              scaleMoney(bac), scaleMoney(eac), scaleMoney(variance), cpi));
+      rows.add(new CostOverrunRow(
+          p.getId(), p.getCode(), p.getName(),
+          scaleMoney(bac), scaleMoney(eac), scaleMoney(variance), cpi, p.getBudgetCurrency()));
     }
-    rows.sort(Comparator.comparing(
-        (CostOverrunRow r) -> r.varianceCrores() != null ? r.varianceCrores().abs() : BigDecimal.ZERO).reversed());
+    // rank by |variance%| = |variance / bac|, currency-neutral across projects
+    rows.sort(Comparator.comparing((CostOverrunRow r) ->
+        (r.bacCrores() != null && r.bacCrores().signum() != 0)
+          ? r.varianceCrores().abs().divide(r.bacCrores().abs(), 6, RoundingMode.HALF_UP)
+          : BigDecimal.ZERO).reversed());
     return rows.stream().limit(limit).toList();
   }
 
   // ─────────────────────── O5 — Funding utilisation ───────────────────────
 
   @Transactional(readOnly = true)
-  @SuppressWarnings("unchecked")
   public List<FundingUtilizationRow> getFundingUtilization() {
     List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
     List<FundingUtilizationRow> rows = new ArrayList<>();
     for (Project p : projects) {
+      // sanctioned: from project_funding table (may be empty → 0), RAW money, no /1e7
       BigDecimal sanctioned = queryScalarBigDecimal(
-          "SELECT COALESCE(SUM(allocated_amount), 0) / ?1 FROM cost.project_funding WHERE project_id = ?2",
-          CRORE, p.getId());
-      BigDecimal utilized = queryScalarBigDecimal(
-          "SELECT COALESCE(SUM(net_amount), 0) / ?1 FROM cost.ra_bills "
-              + "WHERE project_id = ?2 AND status IN ('APPROVED','PAID','CERTIFIED')",
-          CRORE, p.getId());
-      BigDecimal released = sanctioned; // no releases table; treat sanction as released
+          "SELECT COALESCE(SUM(allocated_amount), 0) FROM cost.project_funding WHERE project_id = ?1",
+          p.getId());
+      // utilized: DPR ledger actual cost, RAW money (no /1e7)
+      BigDecimal utilized = dprActualCostLookup.sumByProject(p.getId());
+      // released: no releases table — honest 0 rather than faking released = sanctioned
+      BigDecimal released = BigDecimal.ZERO;
       BigDecimal pendingTreasury = BigDecimal.ZERO;
       double releasePct = percent(released, sanctioned);
-      double utilizationPct = percent(utilized, released);
+      double utilizationPct = percent(utilized, sanctioned);
 
       String status = "ON_TRACK";
-      if (releasePct < 50) status = "RELEASE_PENDING";
-      else if (utilizationPct < 50) status = "UNDER_UTILIZED";
-      else if (utilizationPct >= 95) status = "EXHAUSTED";
+      if (sanctioned.signum() == 0) {
+        status = "NO_FUNDING_DATA";
+      } else if (utilizationPct >= 95) {
+        status = "EXHAUSTED";
+      } else if (utilizationPct < 50) {
+        status = "UNDER_UTILIZED";
+      }
+      String currency = p.getBudgetCurrency() != null ? p.getBudgetCurrency() : "INR";
 
       rows.add(
           new FundingUtilizationRow(
@@ -286,7 +349,8 @@ public class PortfolioReportService {
               scaleMoney(pendingTreasury),
               releasePct,
               utilizationPct,
-              status));
+              status,
+              currency));
     }
     return rows;
   }
@@ -365,12 +429,15 @@ public class PortfolioReportService {
     List<Object> topRows =
         em.createNativeQuery(
                 "SELECT r.id, r.project_id, p.code, r.code, r.title, r.probability, r.impact, "
-                    + "       COALESCE(r.risk_score, 0), COALESCE(r.rag, 'AMBER') "
+                    + "       COALESCE(NULLIF(r.risk_score, 0), "
+                    + "         (CASE r.probability WHEN 'VERY_LOW' THEN 1 WHEN 'LOW' THEN 2 WHEN 'MEDIUM' THEN 3 WHEN 'HIGH' THEN 4 WHEN 'VERY_HIGH' THEN 5 ELSE 3 END) * "
+                    + "         (CASE r.impact WHEN 'VERY_LOW' THEN 1 WHEN 'LOW' THEN 2 WHEN 'MEDIUM' THEN 3 WHEN 'HIGH' THEN 4 WHEN 'VERY_HIGH' THEN 5 ELSE 3 END)) AS score, "
+                    + "       COALESCE(r.rag, 'AMBER') "
                     + "FROM risk.risks r "
                     + "JOIN project.projects p ON p.id = r.project_id "
                     + "WHERE r.status NOT IN ('CLOSED','MITIGATED') "
                     + "  AND p.archived_at IS NULL "
-                    + "ORDER BY COALESCE(r.risk_score, 0) DESC "
+                    + "ORDER BY score DESC NULLS LAST "
                     + "LIMIT 5")
             .getResultList();
     List<RiskHeatmapDto.TopRisk> top = new ArrayList<>();
@@ -385,7 +452,7 @@ public class PortfolioReportService {
               cols[4] != null ? cols[4].toString() : "",
               cols[5] != null ? cols[5].toString() : "",
               cols[6] != null ? cols[6].toString() : "",
-              ((Number) cols[7]).doubleValue(),
+              cols[7] != null ? ((Number) cols[7]).doubleValue() : 0.0,
               cols[8] != null ? cols[8].toString() : "AMBER"));
     }
 
@@ -395,54 +462,98 @@ public class PortfolioReportService {
   // ─────────────────────── O8 — Cash flow outlook ───────────────────────
 
   @Transactional(readOnly = true)
-  @SuppressWarnings("unchecked")
   public List<CashFlowOutlookPoint> getCashFlowOutlook(int months) {
-    YearMonth start = YearMonth.now();
-    // cash_flow_forecasts.period is stored as a string like "2026-04" (monthly bucket).
-    // planned_amount is treated as outflow; actual_amount isn't "inflow" in this model,
-    // but until funding-release ingestion lands it's the best proxy we have.
-    List<Object> rows = List.of();
-    try {
-      rows =
-          em.createNativeQuery(
-                  "SELECT cf.period, "
-                      + "       COALESCE(SUM(cf.planned_amount), 0) / ?1, "
-                      + "       COALESCE(SUM(cf.actual_amount), 0) / ?1 "
-                      + "FROM cost.cash_flow_forecasts cf "
-                      + "JOIN project.projects p ON p.id = cf.project_id "
-                      + "WHERE cf.period >= ?2 AND cf.period < ?3 "
-                      + "  AND p.archived_at IS NULL "
-                      + "GROUP BY cf.period ORDER BY cf.period")
-              .setParameter(1, CRORE)
-              .setParameter(2, start.toString())
-              .setParameter(3, start.plusMonths(months).toString())
-              .getResultList();
-    } catch (Exception e) {
-      log.debug("cash-flow-outlook query failed: {}", e.getMessage());
+    // cost.cash_flow_forecasts is empty. Derive the series from the DPR ledger instead.
+    // Strategy:
+    //   ACTUAL months  (past + current): sum DPR line_cost per day, bucket into YYYY-MM, RAW.
+    //   OUTLOOK months (future):         spread remaining BAC evenly from next month → project finish.
+    // Mixed-currency: emit one series per currency (frontend filters by selected/dominant currency).
+    // If no DPR data exists at all, return empty (honest).
+
+    List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
+
+    // Per-currency: month → actual spend
+    Map<String, Map<String, BigDecimal>> actualByCurrencyMonth = new LinkedHashMap<>();
+    // Per-currency: month → planned outlook
+    Map<String, Map<String, BigDecimal>> outlookByCurrencyMonth = new LinkedHashMap<>();
+
+    YearMonth currentMonth = YearMonth.now();
+    boolean anyDpr = false;
+
+    for (Project p : projects) {
+      String currency = p.getBudgetCurrency() != null ? p.getBudgetCurrency() : "INR";
+      Map<LocalDate, BigDecimal> dailyCosts = dprActualCostLookup.sumByProjectGroupedByDate(p.getId());
+      if (dailyCosts.isEmpty()) continue;
+      anyDpr = true;
+
+      // Bucket daily costs into YYYY-MM, accumulate per currency
+      Map<String, BigDecimal> actMonths = actualByCurrencyMonth.computeIfAbsent(currency, k -> new LinkedHashMap<>());
+      for (Map.Entry<LocalDate, BigDecimal> entry : dailyCosts.entrySet()) {
+        String ym = YearMonth.from(entry.getKey()).toString();
+        actMonths.merge(ym, entry.getValue(), BigDecimal::add);
+      }
+
+      // Outlook: remaining BAC spread evenly from next month → planned finish
+      BigDecimal bac = nullToZero(costService.getCostSummary(p.getId()).bac());
+      // Derive actualToDate from the already-fetched dailyCosts map (avoids a second DB round-trip)
+      BigDecimal actualToDate = dailyCosts.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+      BigDecimal remaining = bac.subtract(actualToDate);
+      if (remaining.signum() > 0 && p.getPlannedFinishDate() != null) {
+        YearMonth outlookStart = currentMonth.plusMonths(1);
+        YearMonth outlookEnd = YearMonth.from(p.getPlannedFinishDate());
+        if (!outlookEnd.isBefore(outlookStart)) {
+          long spreadMonths = outlookStart.until(outlookEnd, ChronoUnit.MONTHS) + 1;
+          BigDecimal perMonth = remaining.divide(BigDecimal.valueOf(spreadMonths), 2, RoundingMode.HALF_UP);
+          Map<String, BigDecimal> outlMonths = outlookByCurrencyMonth.computeIfAbsent(currency, k -> new LinkedHashMap<>());
+          for (long i = 0; i < spreadMonths; i++) {
+            String ym = outlookStart.plusMonths(i).toString();
+            outlMonths.merge(ym, perMonth, BigDecimal::add);
+          }
+        }
+      }
     }
 
-    Map<String, BigDecimal[]> byMonth = new LinkedHashMap<>();
-    for (int i = 0; i < months; i++) {
-      YearMonth ym = start.plusMonths(i);
-      byMonth.put(ym.toString(), new BigDecimal[] {BigDecimal.ZERO, BigDecimal.ZERO});
-    }
-    for (Object row : rows) {
-      Object[] cols = (Object[]) row;
-      String ym = cols[0].toString();
-      BigDecimal out = new BigDecimal(cols[1].toString());
-      BigDecimal in = new BigDecimal(cols[2].toString());
-      byMonth.put(ym, new BigDecimal[] {out, in});
+    if (!anyDpr) return List.of();
+
+    // Emit a series for EVERY currency present in actual or outlook data (no dominant-currency collapse).
+    List<String> allCurrencies = new ArrayList<>(actualByCurrencyMonth.keySet());
+    for (String c : outlookByCurrencyMonth.keySet()) {
+      if (!allCurrencies.contains(c)) allCurrencies.add(c);
     }
 
-    List<CashFlowOutlookPoint> result = new ArrayList<>(months);
-    BigDecimal cumulative = BigDecimal.ZERO;
-    for (Map.Entry<String, BigDecimal[]> e : byMonth.entrySet()) {
-      BigDecimal out = e.getValue()[0];
-      BigDecimal in = e.getValue()[1];
-      BigDecimal net = in.subtract(out);
-      cumulative = cumulative.add(net);
-      result.add(new CashFlowOutlookPoint(e.getKey(),
-          scaleMoney(out), scaleMoney(in), scaleMoney(net), scaleMoney(cumulative)));
+    List<CashFlowOutlookPoint> result = new ArrayList<>();
+    for (String cur : allCurrencies) {
+      Map<String, BigDecimal> actMonths = actualByCurrencyMonth.getOrDefault(cur, Map.of());
+      Map<String, BigDecimal> outlMonths = outlookByCurrencyMonth.getOrDefault(cur, Map.of());
+
+      // Build a time-ordered window: all months with actual data + forward outlook months
+      Map<String, BigDecimal[]> byMonth = new LinkedHashMap<>();
+      actMonths.entrySet().stream()
+          .sorted(Map.Entry.comparingByKey())
+          .forEach(e -> byMonth.put(e.getKey(), new BigDecimal[]{e.getValue(), BigDecimal.ZERO}));
+      outlMonths.entrySet().stream()
+          .sorted(Map.Entry.comparingByKey())
+          .forEach(e -> byMonth.computeIfAbsent(e.getKey(), k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO})[1] = e.getValue());
+
+      List<CashFlowOutlookPoint> points = new ArrayList<>(byMonth.size());
+      BigDecimal cumulative = BigDecimal.ZERO;
+      for (Map.Entry<String, BigDecimal[]> e : byMonth.entrySet()) {
+        BigDecimal actual = e.getValue()[0];
+        BigDecimal planned = e.getValue()[1];
+        BigDecimal net = actual.add(planned);
+        cumulative = cumulative.add(net);
+        points.add(new CashFlowOutlookPoint(
+            e.getKey(),
+            scaleMoney(actual),
+            scaleMoney(planned),
+            scaleMoney(net),
+            scaleMoney(cumulative),
+            cur));
+      }
+      if (months > 0 && points.size() > months) {
+        points = new ArrayList<>(points.subList(points.size() - months, points.size()));
+      }
+      result.addAll(points);
     }
     return result;
   }
@@ -483,6 +594,7 @@ public class PortfolioReportService {
     List<Project> projects = projectRepository.findAllByArchivedAtIsNull();
     List<ScheduleHealthRow> rows = new ArrayList<>();
     for (Project p : projects) {
+      LocalDate asOf = p.getDataDate() != null ? p.getDataDate() : LocalDate.now();
       long missingLogic = queryScalarLong(
           "SELECT COUNT(a.id) FROM activity.activities a "
               + "LEFT JOIN activity.activity_relationships r "
@@ -533,9 +645,9 @@ public class PortfolioReportService {
           p.getId());
       long missedTasks = queryScalarLong(
           "SELECT COUNT(*) FROM activity.activities "
-              + "WHERE project_id = ?1 AND planned_finish_date < CURRENT_DATE "
+              + "WHERE project_id = ?1 AND planned_finish_date < ?2 "
               + "  AND (percent_complete IS NULL OR percent_complete < 100)",
-          p.getId());
+          p.getId(), asOf);
       long cpLength = queryScalarLong(
           "SELECT COUNT(*) FROM activity.activities WHERE project_id = ?1 AND is_critical = TRUE",
           p.getId());
@@ -548,8 +660,8 @@ public class PortfolioReportService {
           p.getId());
       long shouldHaveCompleted = queryScalarLong(
           "SELECT COUNT(*) FROM activity.activities "
-              + "WHERE project_id = ?1 AND planned_finish_date <= CURRENT_DATE",
-          p.getId());
+              + "WHERE project_id = ?1 AND planned_finish_date <= ?2",
+          p.getId(), asOf);
       if (shouldHaveCompleted > 0) {
         beiActual = (completedByNow * 1.0) / shouldHaveCompleted;
       }
@@ -597,6 +709,14 @@ public class PortfolioReportService {
     return num.multiply(new BigDecimal("100"))
         .divide(den, 2, RoundingMode.HALF_UP)
         .doubleValue();
+  }
+
+  /** Mean of per-project cost-percent-complete (0..1) expressed as a percentage (0..100). */
+  static double avgCostPercent(List<BigDecimal> costPercents) {
+    List<BigDecimal> vals = costPercents.stream().filter(java.util.Objects::nonNull).toList();
+    if (vals.isEmpty()) return 0.0;
+    double sum = vals.stream().mapToDouble(v -> v.doubleValue() * 100.0).sum();
+    return sum / vals.size();
   }
 
   private static String bandRag(Double cpi, Double spi) {

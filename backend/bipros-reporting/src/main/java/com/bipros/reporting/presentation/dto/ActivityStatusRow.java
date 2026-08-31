@@ -25,4 +25,5 @@ public record ActivityStatusRow(
     boolean isCritical,
     double pctComplete,
     long daysDelay,
-    long daysRemaining) {}
+    long daysRemaining,
+    double expectedProgressPct) {}

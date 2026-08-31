@@ -110,18 +110,52 @@ public class ConversationService {
     public ChatController.ConversationDetailDto getDetail(UUID id) {
         AiConversation conv = conversationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation", id.toString()));
+        requireOwner(conv);
         List<AiMessage> msgs = messageRepository.findByConversationIdOrderBySeqAsc(id);
         List<ChatController.MessageDto> messageDtos = msgs.stream()
                 .map(m -> new ChatController.MessageDto(m.getRole(), m.getContent(), m.getCreatedAt()))
                 .toList();
-        return new ChatController.ConversationDetailDto(conv.getId(), conv.getTitle(), messageDtos);
+        return new ChatController.ConversationDetailDto(conv.getId(), conv.getTitle(), conv.getProjectId(), conv.getModule(), messageDtos);
+    }
+
+
+    /**
+     * Review round 2 (IDOR): conversations are private to their owner — list() always filtered
+     * by user, but detail/delete loaded by bare id. A foreign conversation is invisible (404).
+     */
+    private void requireOwner(AiConversation conv) {
+        UUID me;
+        try {
+            me = securityContextHelper.getCurrentUserId();
+        } catch (Exception noUser) {
+            me = null;
+        }
+        if (conv.getUserId() != null && !conv.getUserId().equals(me)) {
+            throw new ResourceNotFoundException("Conversation", conv.getId().toString());
+        }
     }
 
     @Transactional
     public void softDelete(UUID id) {
         AiConversation conv = conversationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation", id.toString()));
+        requireOwner(conv);
         conv.setDeletedAt(Instant.now());
+        conversationRepository.save(conv);
+    }
+
+    /**
+     * Persists the HDS document version scope on the conversation. Called by
+     * the chat endpoints when the request carries a non-null hdsVersionIds list
+     * — the scope sticks across turns so a follow-up message that omits the
+     * field still resolves to HDS retrieval. A null or empty list clears the
+     * stored scope.
+     */
+    @Transactional
+    public void saveHdsScope(UUID conversationId, List<String> hdsVersionIds) {
+        AiConversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation", conversationId.toString()));
+        conv.setHdsVersionIds(hdsVersionIds == null || hdsVersionIds.isEmpty() ? null : hdsVersionIds);
         conversationRepository.save(conv);
     }
 }

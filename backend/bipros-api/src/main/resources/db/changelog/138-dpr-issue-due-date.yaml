@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: 138-dpr-issue-due-date
+      author: claude
+      comment: Act-by date on DPR issues (AI Agent sheet Issues row — "assign the responsible person along with time frame")
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: dpr_issues
+            columns:
+              - column: {name: due_date, type: DATE}
+      rollback:
+        - dropColumn: {schemaName: project, tableName: dpr_issues, columnName: due_date}

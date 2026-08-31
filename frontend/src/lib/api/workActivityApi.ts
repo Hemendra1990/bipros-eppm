@@ -1,6 +1,15 @@
 import { apiClient } from "./client";
 import type { ApiResponse } from "../types";
 
+/**
+ * How Manpower + Equipment productivity norms combine into the single "expected output / day"
+ * figure on the DPR preview. Ignored when only one side has a norm.
+ *   SERIES     — min(MP, EQ); same-unit-of-output, work in sequence (default).
+ *   PARALLEL   — MP + EQ; independent teams on different stretches.
+ *   SUBSTITUTE — max(MP, EQ); either side alone finishes the unit.
+ */
+export type NormCombination = "SERIES" | "PARALLEL" | "SUBSTITUTE";
+
 export interface WorkActivityResponse {
   id: string;
   code: string;
@@ -10,10 +19,41 @@ export interface WorkActivityResponse {
   description: string | null;
   sortOrder: number | null;
   active: boolean;
+  normCombination: NormCombination;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;
   updatedBy: string | null;
+}
+
+export interface ProductivityCoverageNorm {
+  scope: "VARIANT" | "ROLE" | "UNSCOPED";
+  label: string;
+  outputPerDay: number | null;
+  outputPerManPerDay: number | null;
+  workingHoursPerDay: number | null;
+}
+
+export interface ProductivityCoverageSide {
+  configured: boolean;
+  norms: ProductivityCoverageNorm[];
+}
+
+export type ProductivityCoverageSummary =
+  | "MANPOWER_ONLY"
+  | "EQUIPMENT_ONLY"
+  | "BOTH"
+  | "NONE";
+
+export interface ProductivityCoverageResponse {
+  workActivityId: string;
+  workActivityName: string;
+  defaultUnit: string | null;
+  manpower: ProductivityCoverageSide;
+  equipment: ProductivityCoverageSide;
+  summary: ProductivityCoverageSummary;
+  /** From the Work Activity master — drives the wording in coverage chips and DPR banners. */
+  normCombination: NormCombination;
 }
 
 export interface CreateWorkActivityRequest {
@@ -24,6 +64,8 @@ export interface CreateWorkActivityRequest {
   description?: string | null;
   sortOrder?: number | null;
   active?: boolean;
+  /** Server defaults to SERIES when omitted (and keeps existing value on update). */
+  normCombination?: NormCombination;
 }
 
 export const workActivityApi = {
@@ -36,6 +78,13 @@ export const workActivityApi = {
 
   get: (id: string) =>
     apiClient.get<ApiResponse<WorkActivityResponse>>(`/v1/work-activities/${id}`).then((r) => r.data),
+
+  productivityCoverage: (id: string) =>
+    apiClient
+      .get<ApiResponse<ProductivityCoverageResponse>>(
+        `/v1/work-activities/${id}/productivity-coverage`,
+      )
+      .then((r) => r.data),
 
   create: (request: CreateWorkActivityRequest) =>
     apiClient

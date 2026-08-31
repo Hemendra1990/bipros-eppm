@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { activityApi } from "@/lib/api/activityApi";
 import type { RelationshipResponse, RelationshipType, ActivityResponse } from "@/lib/api/activityApi";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
 import { Plus, Trash2, ArrowRight, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { useScheduleStaleStore } from "@/lib/state/scheduleStaleStore";
 
 const RELATIONSHIP_TYPE_LABELS: Record<RelationshipType, string> = {
   FINISH_TO_START: "Finish to Start (FS)",
@@ -32,6 +35,7 @@ interface ActivityDependenciesProps {
 
 export function ActivityDependencies({ projectId, activityId, activityName }: ActivityDependenciesProps) {
   const queryClient = useQueryClient();
+  const markScheduleStale = useScheduleStaleStore((s) => s.markScheduleStale);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addDirection, setAddDirection] = useState<"predecessor" | "successor">("predecessor");
 
@@ -45,14 +49,26 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
     queryFn: () => activityApi.getSuccessors(projectId, activityId),
   });
 
+  // Share cache with the activities listing page (which uses ["activities",
+  // projectId]); avoids a duplicate 209-row fetch when the user clicks View
+  // from /activities and lands here.
   const { data: allActivitiesData } = useQuery({
-    queryKey: ["activities", projectId, "all"],
+    queryKey: ["activities", projectId],
     queryFn: () => activityApi.listActivities(projectId, 0, 500),
   });
 
-  const allActivities = allActivitiesData?.data?.content ?? [];
-  const predecessors = predecessorsData?.data ?? [];
-  const successors = successorsData?.data ?? [];
+  const allActivities = useMemo(
+    () => allActivitiesData?.data?.content ?? [],
+    [allActivitiesData]
+  );
+  const predecessors = useMemo(
+    () => predecessorsData?.data ?? [],
+    [predecessorsData]
+  );
+  const successors = useMemo(
+    () => successorsData?.data ?? [],
+    [successorsData]
+  );
 
   const deleteMutation = useMutation({
     mutationFn: (relationshipId: string) =>
@@ -61,6 +77,7 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
       queryClient.invalidateQueries({ queryKey: ["predecessors", projectId, activityId] });
       queryClient.invalidateQueries({ queryKey: ["successors", projectId, activityId] });
       queryClient.invalidateQueries({ queryKey: ["relationships", projectId] });
+      markScheduleStale(projectId);
       toast.success("Dependency removed");
     },
     onError: (err: unknown) => {
@@ -68,17 +85,126 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
     },
   });
 
-  const getActivity = (id: string) => allActivities.find((a) => a.id === id);
+  const activityById = useMemo(() => {
+    const m = new Map<string, (typeof allActivities)[number]>();
+    for (const a of allActivities) m.set(a.id, a);
+    return m;
+  }, [allActivities]);
 
-  const getActivityName = (id: string) => {
-    const act = getActivity(id);
-    return act ? `${act.code} - ${act.name}` : id;
-  };
+  const getActivityName = useCallback(
+    (id: string) => {
+      const act = activityById.get(id);
+      return act ? `${act.code} - ${act.name}` : id;
+    },
+    [activityById]
+  );
 
   const handleOpenAdd = (direction: "predecessor" | "successor") => {
     setAddDirection(direction);
     setShowAddForm(true);
   };
+
+  const predecessorColumns = useMemo<ColumnDef<RelationshipResponse>[]>(
+    () => [
+      {
+        header: "Activity",
+        accessorKey: "predecessorActivityId",
+        cell: ({ getValue }) => {
+          const id = String(getValue());
+          return (
+            <Link
+              href={`/projects/${projectId}/activities/${id}`}
+              className="text-text-primary hover:text-accent hover:underline"
+            >
+              {getActivityName(id)}
+            </Link>
+          );
+        },
+      },
+      {
+        header: "Type",
+        accessorKey: "relationshipType",
+        cell: ({ getValue }) => (
+          <span className="text-text-secondary">
+            {RELATIONSHIP_TYPE_SHORT[String(getValue())] ?? String(getValue())}
+          </span>
+        ),
+      },
+      {
+        header: "Lag",
+        accessorKey: "lag",
+        cell: ({ getValue }) => (
+          <span className="text-text-secondary">{Number(getValue() ?? 0)}d</span>
+        ),
+      },
+      {
+        header: "",
+        id: "actions",
+        cell: ({ row }) => (
+          <button
+            onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(row.original.id); }}
+            disabled={deleteMutation.isPending}
+            className="text-danger hover:text-danger"
+            title="Remove dependency"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        ),
+      },
+    ],
+    [projectId, getActivityName, deleteMutation]
+  );
+
+  const successorColumns = useMemo<ColumnDef<RelationshipResponse>[]>(
+    () => [
+      {
+        header: "Activity",
+        accessorKey: "successorActivityId",
+        cell: ({ getValue }) => {
+          const id = String(getValue());
+          return (
+            <Link
+              href={`/projects/${projectId}/activities/${id}`}
+              className="text-text-primary hover:text-accent hover:underline"
+            >
+              {getActivityName(id)}
+            </Link>
+          );
+        },
+      },
+      {
+        header: "Type",
+        accessorKey: "relationshipType",
+        cell: ({ getValue }) => (
+          <span className="text-text-secondary">
+            {RELATIONSHIP_TYPE_SHORT[String(getValue())] ?? String(getValue())}
+          </span>
+        ),
+      },
+      {
+        header: "Lag",
+        accessorKey: "lag",
+        cell: ({ getValue }) => (
+          <span className="text-text-secondary">{Number(getValue() ?? 0)}d</span>
+        ),
+      },
+      {
+        header: "",
+        id: "actions",
+        cell: ({ row }) => (
+          <button
+            onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(row.original.id); }}
+            disabled={deleteMutation.isPending}
+            className="text-danger hover:text-danger"
+            title="Remove dependency"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        ),
+      },
+    ],
+    [projectId, getActivityName, deleteMutation]
+  );
 
   return (
     <div className="space-y-6">
@@ -107,45 +233,15 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
         ) : predecessors.length === 0 ? (
           <div className="text-sm text-text-muted">No predecessors. This activity can start independently.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-text-secondary">
-                <th className="pb-2">Activity</th>
-                <th className="pb-2">Type</th>
-                <th className="pb-2">Lag</th>
-                <th className="pb-2 w-16"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {predecessors.map((rel) => (
-                  <tr key={rel.id} className="border-b border-border/50">
-                    <td className="py-2">
-                      <Link
-                        href={`/projects/${projectId}/activities/${rel.predecessorActivityId}`}
-                        className="text-text-primary hover:text-accent hover:underline"
-                      >
-                        {getActivityName(rel.predecessorActivityId)}
-                      </Link>
-                    </td>
-                    <td className="py-2 text-text-secondary">{RELATIONSHIP_TYPE_SHORT[rel.relationshipType] ?? rel.relationshipType}</td>
-                    <td className="py-2 text-text-secondary">{rel.lag ?? 0}d</td>
-                    <td className="py-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(rel.id); }}
-                        disabled={deleteMutation.isPending}
-                        className="text-danger hover:text-danger"
-                        title="Remove dependency"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                   </tr>
-               ))}
-             </tbody>
-           </table>
-         )}
- 
-         {showAddForm && addDirection === "predecessor" && (
+          <SimpleTable
+            data={predecessors}
+            columns={predecessorColumns}
+            sortable={false}
+            className="rounded-lg border-0"
+          />
+        )}
+
+        {showAddForm && addDirection === "predecessor" && (
           <AddDependencyForm
             projectId={projectId}
             activityId={activityId}
@@ -188,42 +284,12 @@ export function ActivityDependencies({ projectId, activityId, activityName }: Ac
         ) : successors.length === 0 ? (
           <div className="text-sm text-text-muted">No successors. No activities depend on this one.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-text-secondary">
-                <th className="pb-2">Activity</th>
-                <th className="pb-2">Type</th>
-                <th className="pb-2">Lag</th>
-                <th className="pb-2 w-16"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {successors.map((rel) => (
-                  <tr key={rel.id} className="border-b border-border/50">
-                    <td className="py-2">
-                      <Link
-                        href={`/projects/${projectId}/activities/${rel.successorActivityId}`}
-                        className="text-text-primary hover:text-accent hover:underline"
-                      >
-                        {getActivityName(rel.successorActivityId)}
-                      </Link>
-                    </td>
-                    <td className="py-2 text-text-secondary">{RELATIONSHIP_TYPE_SHORT[rel.relationshipType] ?? rel.relationshipType}</td>
-                    <td className="py-2 text-text-secondary">{rel.lag ?? 0}d</td>
-                    <td className="py-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(rel.id); }}
-                        disabled={deleteMutation.isPending}
-                        className="text-danger hover:text-danger"
-                        title="Remove dependency"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-              ))}
-            </tbody>
-          </table>
+          <SimpleTable
+            data={successors}
+            columns={successorColumns}
+            sortable={false}
+            className="rounded-lg border-0"
+          />
         )}
 
         {showAddForm && addDirection === "successor" && (
@@ -271,6 +337,7 @@ function AddDependencyForm({
   onClose,
   onSuccess,
 }: AddDependencyFormProps) {
+  const markScheduleStale = useScheduleStaleStore((s) => s.markScheduleStale);
   const [selectedActivityId, setSelectedActivityId] = useState("");
   const [relationshipType, setRelationshipType] = useState<RelationshipType>("FINISH_TO_START");
   const [lag, setLag] = useState<number | "">(0);
@@ -295,6 +362,7 @@ function AddDependencyForm({
       return activityApi.createRelationship(projectId, data);
     },
     onSuccess: () => {
+      markScheduleStale(projectId);
       toast.success("Dependency added");
       onSuccess();
     },
@@ -316,7 +384,7 @@ function AddDependencyForm({
   };
 
   return (
-    <div className="rounded-lg border border-blue-800/50 bg-blue-900/10 p-4">
+    <div className="rounded-lg border border-info/20 bg-info/10 p-4">
       <h4 className="mb-3 text-sm font-medium text-text-primary">
         Add {direction === "predecessor" ? "Predecessor" : "Successor"}
       </h4>

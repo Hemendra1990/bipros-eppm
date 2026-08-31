@@ -2,6 +2,7 @@ package com.bipros.resource.presentation.controller;
 
 import com.bipros.common.dto.ApiResponse;
 import com.bipros.resource.application.dto.CreateMaterialRequest;
+import com.bipros.resource.application.dto.MaterialRateMasterResponse;
 import com.bipros.resource.application.dto.MaterialResponse;
 import com.bipros.resource.application.service.MaterialService;
 import com.bipros.resource.domain.model.MaterialCategory;
@@ -31,7 +32,7 @@ public class MaterialController {
 
     private final MaterialService service;
 
-    @PreAuthorize("@projectAccess.canRead(#projectId)")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.READ')")
     @GetMapping("/projects/{projectId}/materials")
     public ResponseEntity<ApiResponse<List<MaterialResponse>>> listByProject(
             @PathVariable UUID projectId,
@@ -40,7 +41,7 @@ public class MaterialController {
     }
 
     @PostMapping("/projects/{projectId}/materials")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.UPDATE')")
     public ResponseEntity<ApiResponse<MaterialResponse>> create(
             @PathVariable UUID projectId,
             @Valid @RequestBody CreateMaterialRequest request) {
@@ -49,12 +50,13 @@ public class MaterialController {
     }
 
     @GetMapping("/materials/{id}")
+    @PreAuthorize("hasPermission(null, 'STORE.READ')")
     public ResponseEntity<ApiResponse<MaterialResponse>> get(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(service.get(id)));
     }
 
     @PutMapping("/materials/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+    @PreAuthorize("hasPermission(null, 'STORE.UPDATE')")
     public ResponseEntity<ApiResponse<MaterialResponse>> update(
             @PathVariable UUID id,
             @Valid @RequestBody CreateMaterialRequest request) {
@@ -62,9 +64,16 @@ public class MaterialController {
     }
 
     @DeleteMapping("/materials/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasPermission(null, 'STORE.DELETE')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         service.delete(id);
         return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @GetMapping("/materials/{id}/effective-rate")
+    @PreAuthorize("hasPermission(null, 'STORE.READ')")
+    public ResponseEntity<ApiResponse<MaterialRateMasterResponse>> getEffectiveRate(
+        @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(service.getEffectiveRate(id)));
     }
 }

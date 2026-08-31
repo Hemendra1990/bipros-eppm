@@ -213,8 +213,10 @@ public class OmanGisSeeder implements CommandLineRunner {
                 snap.setAlertFlag(alertFlag);
                 snap.setAnalysisMethod(ProgressAnalysisMethod.AI_SEGMENTATION);
                 snap.setAnalyzerId("claude-vision:claude-sonnet-4-6");
-                snap.setAnalysisDurationMs(1500 + rng.nextInt(3000));
-                snap.setAnalysisCostMicros(2500L + rng.nextInt(5000));
+                // Deterministic per-(node, day) duration + cost — no RNG.
+                int gisHash = Math.abs(node.getId().hashCode()) + d * 31;
+                snap.setAnalysisDurationMs(1500 + (gisHash % 3001));
+                snap.setAnalysisCostMicros(2500L + (gisHash % 5001L));
                 snap.setRemarks("Satellite scene " + (d + 1) + " for " + node.getCode());
                 constructionProgressSnapshotRepository.save(snap);
                 created++;

@@ -36,11 +36,14 @@ interface MapViewerProps {
   selectedScene: SatelliteImage | null;
   sceneBlobUrl: string | null;
   fitPolygonsSignal: number;
+  highlightId?: string | null;
   mode?: MapMode;
   onDrawEnd?: (geom: Polygon) => void;
   onModifyEnd?: (feature: Feature) => void;
   onDeleteClick?: (feature: Feature) => void;
   onSelectFeature?: (feature: Feature | null) => void;
+  /** View-mode click on a polygon — used to scope scenes to that polygon. */
+  onViewSelectFeature?: (id: string | null) => void;
 }
 
 /**
@@ -58,11 +61,13 @@ export function MapViewer({
   selectedScene,
   sceneBlobUrl,
   fitPolygonsSignal,
+  highlightId = null,
   mode = "view",
   onDrawEnd,
   onModifyEnd,
   onDeleteClick,
   onSelectFeature,
+  onViewSelectFeature,
 }: MapViewerProps) {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
@@ -81,13 +86,25 @@ export function MapViewer({
   const onModifyEndRef = useRef(onModifyEnd);
   const onDeleteClickRef = useRef(onDeleteClick);
   const onSelectFeatureRef = useRef(onSelectFeature);
+  const onViewSelectFeatureRef = useRef(onViewSelectFeature);
+  // Latest highlightId held in a ref so the vector style function reads the
+  // current value without the layer being rebuilt on every selection change.
+  const highlightIdRef = useRef<string | null>(highlightId);
   useEffect(() => {
     modeRef.current = mode;
     onDrawEndRef.current = onDrawEnd;
     onModifyEndRef.current = onModifyEnd;
     onDeleteClickRef.current = onDeleteClick;
     onSelectFeatureRef.current = onSelectFeature;
-  }, [mode, onDrawEnd, onModifyEnd, onDeleteClick, onSelectFeature]);
+    onViewSelectFeatureRef.current = onViewSelectFeature;
+  }, [
+    mode,
+    onDrawEnd,
+    onModifyEnd,
+    onDeleteClick,
+    onSelectFeature,
+    onViewSelectFeature,
+  ]);
 
   const [selectedPolygon, setSelectedPolygon] = useState<
     Record<string, unknown> | null
@@ -106,14 +123,21 @@ export function MapViewer({
       source: vectorSource,
       style: (feature) => {
         const props = feature.getProperties();
+        const isHighlighted =
+          highlightIdRef.current != null &&
+          props.id === highlightIdRef.current;
         return new Style({
           fill: new Fill({ color: props.fillColor || "#3388ff" }),
           stroke: new Stroke({
-            color: props.strokeColor || "#000000",
-            width: 2,
+            // Highlighted polygon gets an accent colour + thicker outline so it
+            // stands out from the other features; others keep their own colour.
+            color: isHighlighted
+              ? "#f59e0b"
+              : props.strokeColor || "#000000",
+            width: isHighlighted ? 4 : 2,
           }),
           text: new Text({
-            text: props.wbsCode || "",
+            text: props.name || props.wbsCode || "",
             fill: new Fill({ color: "#000" }),
             font: "12px Arial",
           }),
@@ -163,11 +187,12 @@ export function MapViewer({
         return;
       }
 
-      // view mode: keep the popup behaviour.
+      // view mode: select the polygon (scopes scenes/gallery to it) + popup.
       if (clickedFeature) {
         const feat = clickedFeature as Feature;
         const props = feat.getProperties();
         setSelectedPolygon(props);
+        onViewSelectFeatureRef.current?.((props.id as string) ?? null);
         const extent = feat.getGeometry()?.getExtent();
         if (extent) {
           const center: [number, number] = [
@@ -243,12 +268,45 @@ export function MapViewer({
     src.addFeatures(feats);
   }, [geoJsonData]);
 
-  // Swap the raster when the scene (or its blob URL) changes.
+  // Restyle (not rebuild) the vector layer when the highlighted polygon
+  // changes. The style function reads highlightIdRef, so we only need to push
+  // the latest value into the ref and ask OL to recompute feature styles.
+  useEffect(() => {
+    highlightIdRef.current = highlightId;
+    const layer = vectorLayerRef.current;
+    layer?.changed();
+    layer?.getSource()?.changed();
+    // Frame the selected polygon so picking it from the list zooms to it.
+    if (highlightId && layer) {
+      const feat = layer
+        .getSource()
+        ?.getFeatures()
+        .find((f) => f.get("id") === highlightId);
+      const extent = feat?.getGeometry()?.getExtent();
+      const map = mapRef.current;
+      if (map && extent && !isExtentEmpty(extent)) {
+        map.getView().fit(extent, {
+          padding: [60, 60, 60, 60],
+          maxZoom: 17,
+          duration: 300,
+        });
+      }
+    }
+  }, [highlightId]);
+
+  // Swap the raster when the scene (or its blob URL) changes. Whenever there's
+  // no valid scene, HIDE the layer as well as nulling the source: an ImageLayer
+  // left visible with a null source makes OL's renderer dereference the source
+  // (getInterpolate) on the next frame and crash.
   useEffect(() => {
     const layer = rasterLayerRef.current;
     if (!layer) return;
-    if (!selectedScene || !sceneBlobUrl) {
+    const clear = () => {
+      layer.setVisible(false);
       layer.setSource(null as unknown as ImageStatic);
+    };
+    if (!selectedScene || !sceneBlobUrl) {
+      clear();
       return;
     }
     const { westBound: w, southBound: s, eastBound: e, northBound: n } =
@@ -259,7 +317,7 @@ export function MapViewer({
       typeof e !== "number" ||
       typeof n !== "number"
     ) {
-      layer.setSource(null as unknown as ImageStatic);
+      clear();
       return;
     }
     if (w > e) {
@@ -267,7 +325,7 @@ export function MapViewer({
       console.warn("[MapViewer] skipping antimeridian-crossing raster", {
         w, e, sceneId: selectedScene.id,
       });
-      layer.setSource(null as unknown as ImageStatic);
+      clear();
       return;
     }
     const extent3857 = transformExtent(
@@ -283,16 +341,18 @@ export function MapViewer({
         crossOrigin: undefined,
       })
     );
-  }, [selectedScene, sceneBlobUrl]);
+    layer.setVisible(visibility.satellite);
+  }, [selectedScene, sceneBlobUrl, visibility.satellite]);
 
   // Live visibility + opacity — no rebuild.
   useEffect(() => {
     baseLayerRef.current?.setVisible(visibility.baseMap);
     vectorLayerRef.current?.setVisible(visibility.polygons);
-    rasterLayerRef.current?.setVisible(visibility.satellite);
-    rasterLayerRef.current?.setOpacity(
-      Math.max(0, Math.min(1, satelliteOpacity))
-    );
+    // Only show the raster when it actually has a source; a visible ImageLayer
+    // with a null source crashes OL's renderer (getInterpolate on null).
+    const raster = rasterLayerRef.current;
+    raster?.setVisible(visibility.satellite && !!raster.getSource());
+    raster?.setOpacity(Math.max(0, Math.min(1, satelliteOpacity)));
   }, [visibility, satelliteOpacity]);
 
   // Fit view to polygon extent when data loads or the parent re-requests it.
@@ -387,7 +447,7 @@ export function MapViewer({
         className="w-full h-[32rem] bg-surface-hover rounded-lg border border-border"
       />
       {selectedPolygon && (
-        <div className="mt-4 p-3 bg-blue-950 border border-blue-700 rounded">
+        <div className="mt-4 p-3 bg-info/10 border border-info/20 rounded">
           <p className="text-sm font-medium text-text-primary">
             Selected: {String(selectedPolygon.wbsCode ?? "")}
           </p>

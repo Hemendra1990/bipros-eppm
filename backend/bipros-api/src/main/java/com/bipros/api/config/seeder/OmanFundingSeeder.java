@@ -102,13 +102,15 @@ public class OmanFundingSeeder implements CommandLineRunner {
             BigDecimal planned = computePlannedAmount(i);
             BigDecimal actual;
             BigDecimal forecast;
+            // Deterministic variation factor from the period index — no RNG. Cash-flow
+            // numbers must reproduce so funding reports stay consistent across reseeds.
             if (i < 9) {
-                double variation = 0.88 + rng.nextDouble() * 0.24;
+                double variation = 0.88 + ((i * 13) % 24) / 100.0; // 0.88..1.11
                 actual = planned.multiply(BigDecimal.valueOf(variation)).setScale(2, RoundingMode.HALF_UP);
                 forecast = actual;
             } else {
                 actual = null;
-                double variation = 0.90 + rng.nextDouble() * 0.20;
+                double variation = 0.90 + ((i * 7) % 20) / 100.0; // 0.90..1.09
                 forecast = planned.multiply(BigDecimal.valueOf(variation)).setScale(2, RoundingMode.HALF_UP);
             }
 

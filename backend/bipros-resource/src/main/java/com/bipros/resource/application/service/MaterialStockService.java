@@ -5,6 +5,7 @@ import com.bipros.resource.application.dto.MaterialStockResponse;
 import com.bipros.resource.domain.model.GoodsReceiptNote;
 import com.bipros.resource.domain.model.Material;
 import com.bipros.resource.domain.model.MaterialIssue;
+import com.bipros.resource.domain.model.MaterialReturn;
 import com.bipros.resource.domain.model.MaterialStock;
 import com.bipros.resource.domain.model.StockStatusTag;
 import com.bipros.resource.domain.repository.GoodsReceiptNoteRepository;
@@ -84,6 +85,28 @@ public class MaterialStockService {
         }
         recomputeDerivedFields(stock, null);
         return stockRepository.save(stock);
+    }
+
+    /**
+     * Apply a usable return: += quantity back on the shelf, and reverse the issue-side counters
+     * it was booked against. Only USABLE returns reach this method — scrap never re-enters stock.
+     * Counters are clamped at zero: a return can only undo an issue, never drive the register
+     * negative if the two were recorded out of order.
+     */
+    public MaterialStock recordReturn(MaterialReturn ret) {
+        MaterialStock stock = getOrCreate(ret.getProjectId(), ret.getMaterialId());
+        stock.setCurrentStock(zero(stock.getCurrentStock()).add(ret.getQuantity()));
+        if (inCurrentMonth(ret.getReturnDate())) {
+            stock.setIssuedMonth(clampZero(zero(stock.getIssuedMonth()).subtract(ret.getQuantity())));
+        }
+        stock.setCumulativeConsumed(
+            clampZero(zero(stock.getCumulativeConsumed()).subtract(ret.getQuantity())));
+        recomputeDerivedFields(stock, null);
+        return stockRepository.save(stock);
+    }
+
+    private static BigDecimal clampZero(BigDecimal v) {
+        return v.signum() < 0 ? BigDecimal.ZERO : v;
     }
 
     /**

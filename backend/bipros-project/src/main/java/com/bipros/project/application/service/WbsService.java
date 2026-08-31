@@ -1,5 +1,7 @@
 package com.bipros.project.application.service;
 
+import com.bipros.common.event.WbsCreatedEvent;
+import com.bipros.common.event.WbsUpdatedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
@@ -14,6 +16,7 @@ import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +34,7 @@ public class WbsService {
     private final ProjectRepository projectRepository;
     private final ProjectActivityCounter projectActivityCounter;
     private final AuditService auditService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public WbsNodeResponse createNode(CreateWbsNodeRequest request) {
         log.info("Creating WBS node with code: {}", request.code());
@@ -73,6 +77,10 @@ public class WbsService {
         WbsNode saved = wbsNodeRepository.save(node);
         log.info("WBS node created with ID: {}", saved.getId());
         auditService.logCreate("WbsNode", saved.getId(), request);
+
+        eventPublisher.publishEvent(
+            new WbsCreatedEvent(saved.getProjectId(), saved.getId(), saved.getCode(), saved.getName())
+        );
 
         return buildNodeResponse(saved);
     }
@@ -126,6 +134,10 @@ public class WbsService {
         if (request.parentId() != null && !request.parentId().equals(oldParentId)) {
             auditService.logUpdate("WbsNode", id, "parentId", oldParentId, updated.getParentId());
         }
+
+        eventPublisher.publishEvent(
+            new WbsUpdatedEvent(updated.getProjectId(), updated.getId(), updated.getCode(), updated.getName())
+        );
 
         return buildNodeResponse(updated);
     }

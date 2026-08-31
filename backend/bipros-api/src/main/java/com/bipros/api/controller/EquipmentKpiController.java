@@ -18,17 +18,17 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/projects/{projectId}/kpis/equipment")
-@PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','PROGRAMME_MANAGER','TEAM_MEMBER','VIEWER')")
 @RequiredArgsConstructor
 public class EquipmentKpiController {
 
   private final EquipmentKpiService service;
 
   @GetMapping
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'REPORT.READ')")
   public ResponseEntity<ApiResponse<EquipmentKpiResponse>> getKpis(
       @PathVariable UUID projectId,
-      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
     return ResponseEntity.ok(ApiResponse.ok(service.compute(projectId, from, to)));
   }
 }

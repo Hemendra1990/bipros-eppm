@@ -1,0 +1,40 @@
+databaseChangeLog:
+  # Per-project site location for real-weather monitoring. All additive nullable columns (dev
+  # ddl-auto:update adds them automatically; this is the prod source of truth). Resolved from
+  # Open-Meteo geocoding when an admin sets the project's site location; drives the scheduled
+  # weather ingest and the weather-risk agent. No changes to existing columns.
+  - changeSet:
+      id: 120-project-site-location
+      author: hemendra
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: projects
+            columns:
+              - column: { name: site_latitude, type: DOUBLE }
+              - column: { name: site_longitude, type: DOUBLE }
+              - column: { name: site_place_label, type: VARCHAR(200) }
+              - column: { name: site_country, type: VARCHAR(100) }
+              - column: { name: site_country_code, type: VARCHAR(2) }
+              - column: { name: site_region, type: VARCHAR(120) }
+              - column: { name: site_city, type: VARCHAR(120) }
+              - column: { name: site_timezone, type: VARCHAR(60) }
+              - column:
+                  name: weather_monitoring_enabled
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints: { nullable: false }
+      rollback:
+        - dropColumn:
+            schemaName: project
+            tableName: projects
+            columns:
+              - column: { name: site_latitude }
+              - column: { name: site_longitude }
+              - column: { name: site_place_label }
+              - column: { name: site_country }
+              - column: { name: site_country_code }
+              - column: { name: site_region }
+              - column: { name: site_city }
+              - column: { name: site_timezone }
+              - column: { name: weather_monitoring_enabled }

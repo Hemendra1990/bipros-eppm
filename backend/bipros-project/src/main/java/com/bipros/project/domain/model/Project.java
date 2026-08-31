@@ -93,6 +93,56 @@ public class Project extends BaseEntity {
     @Column(name = "total_length_km", precision = 10, scale = 3)
     private BigDecimal totalLengthKm;
 
+    // ── Site location (drives real-weather monitoring & weather-risk agent) ──
+    // Resolved from Open-Meteo geocoding when an admin sets the project's site location.
+    // Nullable: a project with no coordinates is simply skipped by the weather pipeline.
+
+    /** WGS84 latitude of the monitored site. */
+    @Column(name = "site_latitude")
+    private Double siteLatitude;
+
+    /** WGS84 longitude of the monitored site. */
+    @Column(name = "site_longitude")
+    private Double siteLongitude;
+
+    /** Human-readable label, e.g. "Khasab, Musandam, Oman". */
+    @Column(name = "site_place_label", length = 200)
+    private String sitePlaceLabel;
+
+    /** Country display name, e.g. "Oman". */
+    @Column(name = "site_country", length = 100)
+    private String siteCountry;
+
+    /** ISO-3166 alpha-2 country code, e.g. "OM". */
+    @Column(name = "site_country_code", length = 2)
+    private String siteCountryCode;
+
+    /** First-level admin region / state, e.g. "Musandam". */
+    @Column(name = "site_region", length = 120)
+    private String siteRegion;
+
+    /** City / place name, e.g. "Khasab". */
+    @Column(name = "site_city", length = 120)
+    private String siteCity;
+
+    /** IANA timezone id for the site, e.g. "Asia/Muscat". */
+    @Column(name = "site_timezone", length = 60)
+    private String siteTimezone;
+
+    /**
+     * When true, the scheduled weather ingest + weather-risk agent run for this project.
+     * Defaults to ON (client decision 2026-08-18): any project whose site coordinates are set
+     * gets automatic weather updates without a second switch — no coordinates still means the
+     * pipeline skips it. {@code columnDefinition} carries a DB default so {@code ddl-auto:update}
+     * can add this NOT NULL column to a table that already has rows (a plain
+     * {@code add column ... not null} would be rejected by Postgres). Existing rows created
+     * before this change keep their stored value — enable them with a one-time
+     * {@code UPDATE project.projects SET weather_monitoring_enabled = true}.
+     */
+    @Column(name = "weather_monitoring_enabled", nullable = false,
+            columnDefinition = "boolean not null default true")
+    private boolean weatherMonitoringEnabled = true;
+
     /**
      * Soft pointer to the project's currently-active baseline (P6's "Project Baseline").
      * Variance reports default to this when no baselineId is supplied. Soft FK — it lives in

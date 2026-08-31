@@ -32,6 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,6 +52,7 @@ public class UserService {
     private final ProfileRepository profileRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final CurrentUserService currentUserService;
 
     @Transactional(readOnly = true)
     public UserResponse getCurrentUser() {
@@ -65,13 +67,40 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public Page<UserResponse> listUsers(Pageable pageable) {
-        Page<User> users = userRepository.findAll(pageable);
+        return listUsers(pageable, null);
+    }
+
+    /**
+     * List users, optionally filtered to those holding ANY of the given role names. Used by
+     * the supervisor / staff picker on the frontend (e.g. {@code ?roles=SUPERVISOR,FOREMAN})
+     * to narrow the list to operationally-relevant candidates. {@code null} or blank
+     * {@code rolesCsv} falls back to the unfiltered listing.
+     */
+    @Transactional(readOnly = true)
+    public Page<UserResponse> listUsers(Pageable pageable, String rolesCsv) {
+        List<String> roleNames = parseRoleNames(rolesCsv);
+        Page<User> users = roleNames.isEmpty()
+                ? userRepository.findAll(pageable)
+                : userRepository.findByRoleNamesAndEnabled(roleNames, pageable);
         Map<UUID, Profile> profilesById = loadProfilesFor(users.getContent());
         List<UserResponse> responses = users.getContent().stream()
-                .map(u -> toResponse(u, profilesById.get(u.getProfileId())))
+                .map(u -> toResponse(u, u.getProfileId() == null ? null : profilesById.get(u.getProfileId())))
                 .collect(Collectors.toList());
 
         return new PageImpl<>(responses, pageable, users.getTotalElements());
+    }
+
+    /** Split a {@code roles=A,B,C} query string into a clean uppercase role-name list. */
+    private static List<String> parseRoleNames(String rolesCsv) {
+        if (rolesCsv == null || rolesCsv.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(rolesCsv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(String::toUpperCase)
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
@@ -79,6 +108,19 @@ public class UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", id));
         return toResponse(user);
+    }
+
+    /**
+     * Admin override: set (reset) a user's password by username. No current-password check — this
+     * is a privileged reset path (gated by {@code ADMIN_USER.UPDATE} at the controller). Hashes
+     * with the same {@link PasswordEncoder} used at create time so the new password works for login.
+     */
+    public void setPasswordByUsername(String username, String rawPassword) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User", username));
+        user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        userRepository.save(user);
+        log.info("Admin reset password for user '{}' (id={})", user.getUsername(), user.getId());
     }
 
     /** Create a new user with hashed password and (optionally) assign a profile. */
@@ -237,8 +279,25 @@ public class UserService {
                 extractRoles(user),
                 profile != null ? profile.getId() : null,
                 profile != null ? profile.getName() : null,
-                List.of()
+                List.of(),
+                effectivePermissions(user),
+                resolveDataScope(user, profile)
         );
+    }
+
+    /** Gate-3 scope for the client: ADMIN is always ALL; else the profile's scope (default PROJECT). */
+    private String resolveDataScope(User user, Profile profile) {
+        boolean admin = user.getRoles().stream()
+                .map(ur -> ur.getRole() != null ? ur.getRole().getName() : null)
+                .anyMatch("ADMIN"::equals);
+        if (admin) return com.bipros.common.security.DataScope.ALL.name();
+        return profile != null ? profile.dataScopeOrDefault().name()
+                : com.bipros.common.security.DataScope.PROJECT.name();
+    }
+
+    /** Effective permission union for {@code user}, sorted ascending for stable client diffs. */
+    private List<String> effectivePermissions(User user) {
+        return new ArrayList<>(new TreeSet<>(currentUserService.permissionsFor(user)));
     }
 
     private Map<UUID, Profile> loadProfilesFor(List<User> users) {

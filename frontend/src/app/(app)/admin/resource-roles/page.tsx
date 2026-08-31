@@ -1,8 +1,11 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Settings2 } from "lucide-react";
+import Link from "next/link";
 import {
   resourceRoleApi,
   type ResourceRole,
@@ -12,6 +15,7 @@ import { resourceTypeApi } from "@/lib/api/resourceTypeApi";
 import { TabTip } from "@/components/common/TabTip";
 import { Badge } from "@/components/ui/badge";
 import { getErrorMessage } from "@/lib/utils/error";
+import { RoleWithVariantsEditor } from "@/components/role/RoleWithVariantsEditor";
 
 type TypeFilter = "ALL" | "MANPOWER" | "EQUIPMENT" | "MATERIAL";
 
@@ -20,7 +24,6 @@ interface RoleForm {
   name: string;
   description: string;
   resourceTypeId: string;
-  productivityUnit: string;
   sortOrder: string;
   active: boolean;
 }
@@ -30,7 +33,6 @@ const initialRoleForm = (): RoleForm => ({
   name: "",
   description: "",
   resourceTypeId: "",
-  productivityUnit: "",
   sortOrder: "",
   active: true,
 });
@@ -40,7 +42,6 @@ const formFromRole = (r: ResourceRole): RoleForm => ({
   name: r.name,
   description: r.description ?? "",
   resourceTypeId: r.resourceTypeId,
-  productivityUnit: r.productivityUnit ?? "",
   sortOrder: r.sortOrder == null ? "" : String(r.sortOrder),
   active: r.active,
 });
@@ -107,10 +108,14 @@ export default function ResourceRolesPage() {
   const filteredRoles = useMemo(() => {
     let list = roles;
     if (typeFilter !== "ALL") {
-      const targetId = typeIdByCode.get(typeFilter);
-      list = list.filter((r) =>
-        targetId ? r.resourceTypeId === targetId : r.resourceTypeCode === typeFilter
-      );
+      // The "Manpower" tab uses code "MANPOWER" but the seeded type code is "LABOR".
+      // Accept both so the filter actually matches.
+      list = list.filter((r) => {
+        if (typeFilter === "MANPOWER") {
+          return r.resourceTypeCode === "MANPOWER" || r.resourceTypeCode === "LABOR";
+        }
+        return r.resourceTypeCode === typeFilter;
+      });
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -165,7 +170,6 @@ export default function ResourceRolesPage() {
         name: form.name.trim(),
         description: form.description.trim() || null,
         resourceTypeId: form.resourceTypeId,
-        productivityUnit: form.productivityUnit.trim() || null,
         sortOrder: toIntOrNull(form.sortOrder),
         active: form.active,
       };
@@ -198,6 +202,78 @@ export default function ResourceRolesPage() {
     { key: "EQUIPMENT", label: "Equipment" },
     { key: "MATERIAL", label: "Material" },
   ];
+
+  const columns = useMemo<ColumnDef<ResourceRole>[]>(() => [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => (
+        <span className="font-mono text-[12px] font-medium text-gold-deep">
+          {row.original.code}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => (
+        <div>
+          <Link
+            href={`/admin/resource-roles/${row.original.id}`}
+            className="font-semibold text-charcoal hover:text-gold-deep hover:underline"
+            title="Open role and configure rates"
+          >
+            {row.original.name}
+          </Link>
+          {row.original.description && (
+            <div className="text-xs text-slate mt-0.5">{row.original.description}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "active",
+      header: "Active",
+      cell: ({ row }) =>
+        row.original.active ? (
+          <span className="text-emerald font-medium text-xs">Active</span>
+        ) : (
+          <span className="text-slate text-xs">Inactive</span>
+        ),
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <Link
+            href={`/admin/resource-roles/${row.original.id}`}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
+            aria-label="Configure rates"
+            title="Configure rates"
+          >
+            <Settings2 size={14} strokeWidth={1.5} />
+          </Link>
+          <button
+            onClick={() => openEdit(row.original)}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
+            aria-label="Edit"
+            title="Edit"
+          >
+            <Pencil size={14} strokeWidth={1.5} />
+          </button>
+          <button
+            onClick={() => handleDelete(row.original.id)}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy"
+            aria-label="Delete"
+            title="Delete"
+          >
+            <Trash2 size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      ),
+    },
+  ], [openEdit, handleDelete]);
 
   return (
     <div>
@@ -266,117 +342,45 @@ export default function ResourceRolesPage() {
       )}
 
       {showForm && (
-        <form
-          onSubmit={handleSubmit}
-          className="mb-6 rounded-xl border border-hairline bg-paper p-5 shadow-[0_1px_2px_rgba(28,28,28,0.04),0_8px_24px_-12px_rgba(28,28,28,0.08)]"
-        >
-          <h2 className="text-lg font-semibold text-charcoal mb-4">
-            {editingId ? "Edit Role" : "New Role"}
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1 text-text-secondary">
-                Code *
-              </label>
-              <input
-                type="text"
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1 text-text-secondary">
-                Name *
-              </label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
-                required
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1 text-text-secondary">
-                Description
-              </label>
-              <input
-                type="text"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1 text-text-secondary">
-                Resource Type *
-              </label>
-              <select
-                value={form.resourceTypeId}
-                onChange={(e) => setForm({ ...form, resourceTypeId: e.target.value })}
-                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
-                required
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-30 bg-black/50"
+            onClick={closeForm}
+            aria-hidden="true"
+          />
+          {/* Right-side drawer — matches ActivityDetailDrawer width */}
+          <aside
+            className="fixed right-0 top-0 z-40 flex h-screen w-full flex-col border-l border-border bg-paper shadow-xl md:w-[720px] lg:w-[880px]"
+            role="dialog"
+            aria-modal="true"
+            aria-label={editingId ? "Edit role" : "New role"}
+          >
+            <header className="flex items-center justify-between border-b border-hairline px-5 py-3">
+              <h2 className="text-base font-semibold">
+                {editingId ? "Edit Role" : "New Role"}
+              </h2>
+              <button
+                type="button"
+                onClick={closeForm}
+                aria-label="Close"
+                className="rounded-md p-1 text-slate hover:bg-ivory hover:text-charcoal"
               >
-                <option value="">— select —</option>
-                {types.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.code})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1 text-text-secondary">
-                Productivity Unit
-              </label>
-              <input
-                type="text"
-                value={form.productivityUnit}
-                onChange={(e) => setForm({ ...form, productivityUnit: e.target.value })}
-                placeholder="Hours/Day, Sqm/Day, Bags…"
-                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
+                ✕
+              </button>
+            </header>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <RoleWithVariantsEditor
+                editingRoleId={editingId}
+                onSaved={() => {
+                  closeForm();
+                  queryClient.invalidateQueries({ queryKey: ["resource-roles"] });
+                }}
+                onCancel={closeForm}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1 text-text-secondary">
-                Sort Order
-              </label>
-              <input
-                type="number"
-                value={form.sortOrder}
-                onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
-                className="w-full rounded-[10px] border border-hairline bg-paper px-3 py-2 text-sm text-charcoal placeholder:text-ash focus:border-gold focus:outline-none focus:shadow-[0_0_0_3px_rgba(212,175,55,0.18)]"
-              />
-            </div>
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 text-sm text-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={form.active}
-                  onChange={(e) => setForm({ ...form, active: e.target.checked })}
-                />
-                Active
-              </label>
-            </div>
-          </div>
-          <div className="flex gap-2 mt-4">
-            <button
-              type="submit"
-              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-gold px-4 text-sm font-semibold text-paper transition-all duration-200 hover:bg-gold-deep hover:shadow-[0_4px_14px_rgba(212,175,55,0.3)]"
-            >
-              {editingId ? "Save Changes" : "Create"}
-            </button>
-            <button
-              type="button"
-              onClick={closeForm}
-              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-hairline bg-paper px-4 text-sm font-semibold text-slate hover:border-gold hover:text-gold-deep"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+          </aside>
+        </>
       )}
 
       {rolesError && (() => {
@@ -423,91 +427,9 @@ export default function ResourceRolesPage() {
       )}
 
       {!rolesLoading && filteredRoles.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-hairline bg-paper">
-          <table className="w-full border-collapse text-sm">
-            <thead className="border-b border-hairline bg-ivory">
-              <tr>
-                {[
-                  "Code",
-                  "Name",
-                  "Type",
-                  "Productivity Unit",
-                  "Sort",
-                  "Active",
-                  "",
-                ].map((h, idx) => (
-                  <th
-                    key={`${h}-${idx}`}
-                    className={`px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep ${h === "" ? "text-right" : ""}`}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRoles.map((role) => (
-                <tr key={role.id} className="border-b border-hairline last:border-b-0 hover:bg-ivory">
-                  <td className="px-4 py-3.5">
-                    <span className="font-mono text-[12px] font-medium text-gold-deep">
-                      {role.code}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span className="font-semibold text-charcoal">{role.name}</span>
-                    {role.description && (
-                      <div className="text-xs text-slate mt-0.5">{role.description}</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <Badge variant={typeBadgeVariant(role.resourceTypeCode)} withDot>
-                      {role.resourceTypeName ?? role.resourceTypeCode}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3.5 text-slate">{role.productivityUnit ?? "—"}</td>
-                  <td className="px-4 py-3.5 text-right text-slate">{role.sortOrder ?? "—"}</td>
-                  <td className="px-4 py-3.5">
-                    {role.active ? (
-                      <span className="text-emerald font-medium text-xs">Active</span>
-                    ) : (
-                      <span className="text-slate text-xs">Inactive</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => openEdit(role)}
-                        className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
-                        aria-label="Edit"
-                        title="Edit"
-                      >
-                        <Pencil size={14} strokeWidth={1.5} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(role.id)}
-                        className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy"
-                        aria-label="Delete"
-                        title="Delete"
-                      >
-                        <Trash2 size={14} strokeWidth={1.5} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {!rolesLoading && filteredRoles.length > 0 && (
-        <div className="pt-3 text-center text-xs text-slate">
-          Showing{" "}
-          <span className="font-semibold text-charcoal">
-            {filteredRoles.length} of {roles.length}
-          </span>
-        </div>
+        <VirtualDataTable columns={columns} data={filteredRoles} sortable resizable searchable={false} />
       )}
     </div>
   );
 }
+

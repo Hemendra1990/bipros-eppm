@@ -46,6 +46,26 @@ export const projectApi = {
   getProject: (id: string) =>
     apiClient.get<ApiResponse<ProjectResponse>>(`/v1/projects/${id}`).then((r) => r.data),
 
+  /**
+   * Slim list of every project the current user can see — used by the AI chat
+   * panel's portfolio-mode banner ("All accessible projects (N)") and by any
+   * other surface that needs an unpaged roster of code/name pairs.
+   *
+   * Backend exposes the full {@link ProjectResponse} via the paginated
+   * {@link listProjects} endpoint; the dedicated `/v1/projects/accessible`
+   * endpoint is not yet wired (planned in a sibling phase). Until then we
+   * fall back to a large page from `/v1/projects` and project to the slim
+   * shape so callers can swap implementations without touching the call site.
+   */
+  listAccessible: async (): Promise<ApiResponse<Array<{ id: string; code: string; name: string }>>> => {
+    const res = await apiClient.get<ApiResponse<PagedResponse<ProjectResponse>>>("/v1/projects", {
+      params: { page: 0, size: 500 },
+    });
+    const envelope = res.data;
+    const slim = (envelope.data?.content ?? []).map((p) => ({ id: p.id, code: p.code, name: p.name }));
+    return { ...envelope, data: slim };
+  },
+
   createProject: (data: CreateProjectRequest) =>
     apiClient.post<ApiResponse<ProjectResponse>>("/v1/projects", data).then((r) => r.data),
 

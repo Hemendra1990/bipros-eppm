@@ -151,6 +151,20 @@ public class FormulaMasterSeeder {
                 "{\"BUDGET\": \"BigDecimal\", \"ACTUAL\": \"BigDecimal\"}",
                 FormulaOutputType.CURRENCY, 4, "cost", sort++);
 
+        // Supervisor-level cost variance formulas. Read by SupervisorPerformanceCalculator
+        // when rolling up per-supervisor cost performance for the AI tools.
+        formulaService.seedFormula("SUP_COST_VARIANCE", "Supervisor Cost Variance", FormulaCategory.COST,
+                "Supervisor cost variance (actual - planned)",
+                "$ACTUAL - $PLANNED",
+                "{\"ACTUAL\": \"BigDecimal\", \"PLANNED\": \"BigDecimal\"}",
+                FormulaOutputType.CURRENCY, 4, "cost", sort++);
+
+        formulaService.seedFormula("SUP_COST_VARIANCE_PCT", "Supervisor Cost Variance %", FormulaCategory.COST,
+                "Supervisor cost variance as percentage of planned",
+                "IF($PLANNED = 0, 0, ($ACTUAL - $PLANNED) * 100 / $PLANNED)",
+                "{\"ACTUAL\": \"BigDecimal\", \"PLANNED\": \"BigDecimal\"}",
+                FormulaOutputType.PERCENTAGE, 4, "cost", sort++);
+
         formulaService.seedFormula("COST_CPI", "Cost Performance Index (Budget/Actual)", FormulaCategory.COST,
                 "CPI from total budget and actual",
                 "IF($ACTUAL = 0, 0, $BUDGET / $ACTUAL)",

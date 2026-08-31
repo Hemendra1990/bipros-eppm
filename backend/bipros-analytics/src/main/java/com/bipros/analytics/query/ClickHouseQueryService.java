@@ -23,7 +23,7 @@ public class ClickHouseQueryService {
     private final ClickHouseTemplate clickHouse;
     private final SqlGuard sqlGuard;
     private final ProjectAccessGuard projectAccess;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     public QueryResult runGuarded(String sql, List<UUID> scopedProjectIds, Integer rowLimit) {
         sqlGuard.validate(sql, scopedProjectIds.stream().map(UUID::toString).toList());

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -30,6 +30,14 @@ function isTabId(value: string | null): value is TabId {
 }
 
 export default function RiskDetailPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-text-muted">Loading…</div>}>
+      <RiskDetailPageInner />
+    </Suspense>
+  );
+}
+
+function RiskDetailPageInner() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();

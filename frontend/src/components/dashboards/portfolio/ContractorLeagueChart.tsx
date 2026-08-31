@@ -11,14 +11,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { formatMoney } from "@/lib/currency/format";
 import { portfolioReportApi } from "@/lib/api/portfolioReportApi";
 import { ragFill, ragFromScore } from "@/lib/utils/rag";
 import {
   CHART_TOOLTIP_STYLE,
+  CHART_TOOLTIP_LABEL_STYLE,
+  CHART_TOOLTIP_ITEM_STYLE,
   EmptyBlock,
   LoadingBlock,
   SectionCard,
-  formatCrore,
   truncate,
 } from "@/components/common/dashboard/primitives";
 
@@ -43,10 +45,10 @@ export function ContractorLeagueChart() {
     );
 
   const rows = data ?? [];
-  if (rows.length === 0) {
+  if (rows.length === 0 || rows.every((r) => (r.avgPerformance ?? 0) <= 0)) {
     return (
-      <SectionCard title="Contractor Performance">
-        <EmptyBlock label="No contractor data" />
+      <SectionCard title="Contractor Performance" subtitle="Average performance score across all contracts">
+        <EmptyBlock label="No contractor scores yet" />
       </SectionCard>
     );
   }
@@ -65,7 +67,7 @@ export function ContractorLeagueChart() {
   return (
     <SectionCard
       title="Contractor Performance"
-      subtitle="Average performance score across all contracts. Sorted best-to-worst."
+      subtitle="Average performance score across all contracts. Sorted best-to-worst. (mixed currencies — not summed)"
     >
       <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 40)}>
         <BarChart
@@ -73,7 +75,7 @@ export function ContractorLeagueChart() {
           layout="vertical"
           margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis
             type="number"
             stroke="#64748b"
@@ -90,10 +92,15 @@ export function ContractorLeagueChart() {
           />
           <Tooltip
             contentStyle={CHART_TOOLTIP_STYLE}
+            labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+            itemStyle={CHART_TOOLTIP_ITEM_STYLE}
             formatter={(value, _name, props) => {
               const row = props.payload as (typeof chartData)[number];
+              const cv = row.contractValue;
+              // totalContractValueCrores is crore-scaled (×1e7); INR-relabelled (contractor money is mixed-currency/incidental)
+              const compactCv = formatMoney((cv ?? 0) * 1e7, { code: "INR" }, { compact: true });
               return [
-                `${Number(value ?? 0).toFixed(1)} · ${row.projects} projects · ${formatCrore(row.contractValue)}`,
+                `${Number(value ?? 0).toFixed(1)} · ${row.projects} projects · ${compactCv}`,
                 "Perf",
               ];
             }}

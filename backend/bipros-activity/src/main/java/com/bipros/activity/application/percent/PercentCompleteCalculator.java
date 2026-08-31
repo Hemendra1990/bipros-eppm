@@ -16,8 +16,7 @@ import java.time.temporal.ChronoUnit;
  *   <li><b>UNITS</b> — {@code actualUnitsSum / plannedUnitsSum * 100}, capped at 100.
  *   Protects against division by zero (returns {@link Result#KEEP_PRIOR}).</li>
  *   <li><b>DURATION</b> — elapsed days since {@code actualStartDate} divided by
- *   {@code originalDuration}, capped at 99.99 (P6 only forces 100 when
- *   {@code actualFinishDate} is set).</li>
+ *   {@code originalDuration}, capped at 100 (full elapsed time completes the activity).</li>
  * </ul>
  * Every branch derives {@link ActivityStatus} and optionally forces
  * {@code actualFinishDate = statusDate} (UNITS hitting 100%).
@@ -44,6 +43,38 @@ public class PercentCompleteCalculator {
             case UNITS -> calculateUnits(activity, plannedUnitsSum, actualUnitsSum, statusDate);
             case DURATION -> calculateDuration(activity, statusDate);
         };
+    }
+
+    /**
+     * BOQ workdone branch (precedence #1). Mirrors {@link #calculateUnits}: percent is
+     * {@code workdone / denominator * 100} capped at 100, with status derived and
+     * {@code actualFinishDate} forced to {@code statusDate} on reaching 100.
+     *
+     * <p>Denominator (BOQ-link design §5.3, owner-approved 04 Aug 2026): the activity's own
+     * {@code plannedQty} when set — so several activities sharing one BOQ line each show an
+     * honest % of their own share — else the line quantity, which is the pre-link behaviour
+     * byte-for-byte (calculation change log entry 7).
+     *
+     * @param workdone this activity's own Σ qtyExecuted on its BOQ-linked DPRs
+     * @param boqQty   Σ boqQty of the distinct BOQ items the activity references
+     */
+    public Result calculateBoq(Activity activity, Double workdone, Double boqQty, LocalDate statusDate) {
+        java.math.BigDecimal planned = activity.getPlannedQty();
+        // No ternary here — mixing double/Double operands would unbox a null boqQty and NPE.
+        Double denominator = boqQty;
+        if (planned != null && planned.signum() > 0) {
+            denominator = planned.doubleValue();
+        }
+        if (denominator == null || denominator <= 0) {
+            return Result.KEEP_PRIOR;
+        }
+        double raw = workdone != null ? (workdone / denominator) * 100.0 : 0.0;
+        double pct = Math.min(raw, 100.0);
+        pct = round2(pct);
+        ActivityStatus status = ActivityStatusDerivation.derive(pct, activity.getActualStartDate());
+        LocalDate forcedActualFinish = (pct >= 100.0 && activity.getActualFinishDate() == null)
+                ? statusDate : null;
+        return new Result(pct, status, forcedActualFinish);
     }
 
     private Result calculatePhysical(Activity activity) {
@@ -91,10 +122,12 @@ public class PercentCompleteCalculator {
             elapsed = 0;
         }
         double raw = ((double) elapsed / originalDuration) * 100.0;
-        double pct = Math.max(0.0, Math.min(raw, 99.99)); // P6 cap — only actualFinish forces 100
+        double pct = Math.max(0.0, Math.min(raw, 100.0)); // full elapsed time → 100 (100 ⇔ Completed)
         pct = round2(pct);
         ActivityStatus status = ActivityStatusDerivation.derive(pct, activity.getActualStartDate());
-        return new Result(pct, status, null);
+        LocalDate forcedActualFinish = (pct >= 100.0 && activity.getActualFinishDate() == null)
+                ? statusDate : null;
+        return new Result(pct, status, forcedActualFinish);
     }
 
     private static double clamp(double value, double min, double max) {

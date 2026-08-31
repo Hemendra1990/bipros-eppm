@@ -1,15 +1,28 @@
 package com.bipros.analytics.etl;
 
+import com.bipros.activity.domain.model.Activity;
 import com.bipros.analytics.etl.dto.RiskSnapshotRow;
 import com.bipros.analytics.store.ClickHouseTemplate;
+import com.bipros.baseline.domain.Baseline;
+import com.bipros.contract.domain.model.VariationOrder;
+import com.bipros.cost.domain.entity.CostAccount;
+import com.bipros.project.domain.model.Project;
+import com.bipros.project.domain.model.WbsNode;
+import com.bipros.resource.domain.model.Resource;
+import com.bipros.resource.domain.model.WorkActivity;
+import com.bipros.resource.domain.repository.WorkActivityRepository;
+import com.bipros.scheduling.domain.model.ScheduleResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -24,7 +37,31 @@ public class AnalyticsEtlService {
 
     private final ClickHouseTemplate clickHouse;
 
-    private long nowVersion() {
+    /**
+     * Optional dependency — kept nullable so existing test fixtures that wire AnalyticsEtlService
+     * directly via {@code new AnalyticsEtlService(template)} don't have to be updated. Production
+     * Spring wiring injects it via {@link #setWorkActivityRepository(WorkActivityRepository)}.
+     */
+    @Autowired(required = false)
+    private WorkActivityRepository workActivityRepository;
+
+    public void setWorkActivityRepository(WorkActivityRepository repo) {
+        this.workActivityRepository = repo;
+    }
+
+    private String resolveWorkActivityCode(java.util.UUID workActivityId) {
+        if (workActivityId == null || workActivityRepository == null) return null;
+        return workActivityRepository.findById(workActivityId)
+                .map(WorkActivity::getCode).orElse(null);
+    }
+
+    /**
+     * Visible for tests + per-dim upsert paths in this package. Live writes use this so
+     * every event-driven row has a strictly newer {@code _version} than the nightly batch
+     * (which fixes {@code VERSION} once per JVM start), letting ReplacingMergeTree converge
+     * to the live state on merge.
+     */
+    long nowVersion() {
         return System.currentTimeMillis();
     }
 
@@ -165,6 +202,15 @@ public class AnalyticsEtlService {
         log.debug("Inserted evm_daily: project={} date={}", projectId, date);
     }
 
+    /**
+     * Phase 4.3: the value written into {@code supervisor_user_id} is now the supervisor's
+     * USER id (FK to {@code public.users.id}) — the canonical identity after the role-only
+     * assignment refactor. The ClickHouse column was added with the {@code supervisor_user_id}
+     * name from the start; only the OLTP rename (Liquibase 087 / 091) and the Java contract
+     * are catching up. Older fact rows written before this phase carry resource ids in the
+     * same column — query callers must be aware until a backfill rewrites them. See
+     * clickhouse-init.sql.
+     */
     public void insertDprLog(
             UUID projectId, UUID activityId, UUID dprId, LocalDate reportDate,
             UUID supervisorUserId, String supervisorName,
@@ -200,6 +246,211 @@ public class AnalyticsEtlService {
 
         clickHouse.execute(sql, params);
         log.debug("Inserted dpr_log: project={} dpr={} date={}", projectId, dprId, reportDate);
+    }
+
+    /**
+     * Manpower line items deployed under a single DPR row, denormalised into one fact row per
+     * (dpr, trade-row). Expected ClickHouse DDL:
+     * <pre>
+     * CREATE TABLE bipros_analytics.fact_dpr_manpower_daily (
+     *   project_id UUID, activity_id UUID, dpr_id UUID, manpower_row_id UUID,
+     *   report_date Date, trade String, category String, contractor_name String,
+     *   nos UInt16, working_hours Float32, ot_hours Float32,
+     *   event_ts DateTime64(3), _version UInt64
+     * ) ENGINE = ReplacingMergeTree(_version)
+     * PARTITION BY toYYYYMM(report_date) ORDER BY (project_id, dpr_id, manpower_row_id);
+     * </pre>
+     */
+    public void insertDprManpowerDaily(
+            UUID projectId, UUID activityId, UUID dprId, UUID manpowerRowId, LocalDate reportDate,
+            String trade, String category, String contractorName,
+            Integer nos, Double workingHours, Double otHours) {
+
+        String sql = """
+            INSERT INTO bipros_analytics.fact_dpr_manpower_daily
+            (project_id, activity_id, dpr_id, manpower_row_id, report_date,
+             trade, category, contractor_name, nos, working_hours, ot_hours,
+             event_ts, _version)
+            VALUES (:projectId, :activityId, :dprId, :manpowerRowId, :reportDate,
+                    :trade, :category, :contractorName, :nos, :workingHours, :otHours,
+                    now64(3), :version)
+            """;
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("projectId", projectId);
+        params.put("activityId", activityId != null ? activityId : new UUID(0L, 0L));
+        params.put("dprId", dprId);
+        params.put("manpowerRowId", manpowerRowId);
+        params.put("reportDate", reportDate);
+        params.put("trade", emptyIfNull(trade));
+        params.put("category", emptyIfNull(category));
+        params.put("contractorName", emptyIfNull(contractorName));
+        params.put("nos", nos != null ? nos : 0);
+        params.put("workingHours", workingHours);
+        params.put("otHours", otHours);
+        params.put("version", nowVersion());
+
+        clickHouse.execute(sql, params);
+    }
+
+    /**
+     * Equipment / PMV line items under a DPR row. Expected ClickHouse DDL:
+     * <pre>
+     * CREATE TABLE bipros_analytics.fact_dpr_equipment_daily (
+     *   project_id UUID, activity_id UUID, dpr_id UUID, equipment_row_id UUID,
+     *   report_date Date, equipment_type String, fleet_no String, ownership String,
+     *   nos UInt16, working_hours Float32, idle_hours Float32, breakdown_hours Float32,
+     *   fuel_litres Float32, operator_name String, availability_status String,
+     *   event_ts DateTime64(3), _version UInt64
+     * ) ENGINE = ReplacingMergeTree(_version)
+     * PARTITION BY toYYYYMM(report_date) ORDER BY (project_id, dpr_id, equipment_row_id);
+     * </pre>
+     */
+    public void insertDprEquipmentDaily(
+            UUID projectId, UUID activityId, UUID dprId, UUID equipmentRowId, LocalDate reportDate,
+            String equipmentType, String fleetNo, String ownership, Integer nos,
+            Double workingHours, Double idleHours, Double breakdownHours,
+            Double fuelLitres, String operatorName, String availabilityStatus) {
+
+        String sql = """
+            INSERT INTO bipros_analytics.fact_dpr_equipment_daily
+            (project_id, activity_id, dpr_id, equipment_row_id, report_date,
+             equipment_type, fleet_no, ownership, nos, working_hours, idle_hours,
+             breakdown_hours, fuel_litres, operator_name, availability_status,
+             event_ts, _version)
+            VALUES (:projectId, :activityId, :dprId, :equipmentRowId, :reportDate,
+                    :equipmentType, :fleetNo, :ownership, :nos, :workingHours, :idleHours,
+                    :breakdownHours, :fuelLitres, :operatorName, :availabilityStatus,
+                    now64(3), :version)
+            """;
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("projectId", projectId);
+        params.put("activityId", activityId != null ? activityId : new UUID(0L, 0L));
+        params.put("dprId", dprId);
+        params.put("equipmentRowId", equipmentRowId);
+        params.put("reportDate", reportDate);
+        params.put("equipmentType", emptyIfNull(equipmentType));
+        params.put("fleetNo", emptyIfNull(fleetNo));
+        params.put("ownership", emptyIfNull(ownership));
+        params.put("nos", nos != null ? nos : 0);
+        params.put("workingHours", workingHours);
+        params.put("idleHours", idleHours);
+        params.put("breakdownHours", breakdownHours);
+        params.put("fuelLitres", fuelLitres);
+        params.put("operatorName", emptyIfNull(operatorName));
+        params.put("availabilityStatus", emptyIfNull(availabilityStatus));
+        params.put("version", nowVersion());
+
+        clickHouse.execute(sql, params);
+    }
+
+    /**
+     * Material consumption line items under a DPR row. Expected ClickHouse DDL:
+     * <pre>
+     * CREATE TABLE bipros_analytics.fact_dpr_material_daily (
+     *   project_id UUID, activity_id UUID, dpr_id UUID, material_row_id UUID,
+     *   report_date Date, material_name String, unit String, quantity Float64,
+     *   source String, vendor_name String, batch_no String,
+     *   event_ts DateTime64(3), _version UInt64
+     * ) ENGINE = ReplacingMergeTree(_version)
+     * PARTITION BY toYYYYMM(report_date) ORDER BY (project_id, dpr_id, material_row_id);
+     * </pre>
+     */
+    public void insertDprMaterialDaily(
+            UUID projectId, UUID activityId, UUID dprId, UUID materialRowId, LocalDate reportDate,
+            String materialName, String unit, Double quantity,
+            String source, String vendorName, String batchNo) {
+
+        String sql = """
+            INSERT INTO bipros_analytics.fact_dpr_material_daily
+            (project_id, activity_id, dpr_id, material_row_id, report_date,
+             material_name, unit, quantity, source, vendor_name, batch_no,
+             event_ts, _version)
+            VALUES (:projectId, :activityId, :dprId, :materialRowId, :reportDate,
+                    :materialName, :unit, :quantity, :source, :vendorName, :batchNo,
+                    now64(3), :version)
+            """;
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("projectId", projectId);
+        params.put("activityId", activityId != null ? activityId : new UUID(0L, 0L));
+        params.put("dprId", dprId);
+        params.put("materialRowId", materialRowId);
+        params.put("reportDate", reportDate);
+        params.put("materialName", emptyIfNull(materialName));
+        params.put("unit", emptyIfNull(unit));
+        params.put("quantity", quantity);
+        params.put("source", emptyIfNull(source));
+        params.put("vendorName", emptyIfNull(vendorName));
+        params.put("batchNo", emptyIfNull(batchNo));
+        params.put("version", nowVersion());
+
+        clickHouse.execute(sql, params);
+    }
+
+    /**
+     * Field-issue log entries attached to a DPR row. Expected ClickHouse DDL is in
+     * {@code docker/clickhouse-init.sql} (table {@code fact_dpr_issues_daily}). One row per
+     * issue per upsert; the engine ({@code ReplacingMergeTree(_version)}) collapses to the
+     * highest version on FINAL queries, so a PATCH that flips status produces a strictly
+     * newer row.
+     *
+     * <p>{@code resolutionAgeHours} is precomputed by the caller (or null when the issue is
+     * still open) to keep aggregation cheap downstream.
+     */
+    public void insertDprIssue(
+            UUID projectId, UUID dprId, UUID issueId, UUID activityId, String activityName,
+            UUID supervisorResourceId, String supervisorName,
+            UUID assignedToResourceId, String assignedToName,
+            LocalDate reportDate, Instant openedAt, Instant resolvedAt,
+            Double resolutionAgeHours,
+            String category, String severity, String status,
+            String title, String description,
+            Double chainageFromM, Double chainageToM) {
+
+        String sql = """
+            INSERT INTO bipros_analytics.fact_dpr_issues_daily
+            (project_id, dpr_id, issue_id, activity_id, activity_name,
+             supervisor_resource_id, supervisor_name,
+             assigned_to_resource_id, assigned_to_name,
+             report_date, opened_at, resolved_at, resolution_age_hours,
+             category, severity, status, title, description,
+             chainage_from_m, chainage_to_m,
+             event_ts, _version)
+            VALUES (:projectId, :dprId, :issueId, :activityId, :activityName,
+                    :supervisorResourceId, :supervisorName,
+                    :assignedToResourceId, :assignedToName,
+                    :reportDate, :openedAt, :resolvedAt, :resolutionAgeHours,
+                    :category, :severity, :status, :title, :description,
+                    :chainageFromM, :chainageToM,
+                    now64(3), :version)
+            """;
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("projectId", projectId);
+        params.put("dprId", dprId);
+        params.put("issueId", issueId);
+        params.put("activityId", activityId);
+        params.put("activityName", emptyIfNull(activityName));
+        params.put("supervisorResourceId", supervisorResourceId);
+        params.put("supervisorName", emptyIfNull(supervisorName));
+        params.put("assignedToResourceId", assignedToResourceId);
+        params.put("assignedToName", emptyIfNull(assignedToName));
+        params.put("reportDate", reportDate);
+        params.put("openedAt", openedAt);
+        params.put("resolvedAt", resolvedAt);
+        params.put("resolutionAgeHours", resolutionAgeHours);
+        params.put("category", emptyIfNull(category));
+        params.put("severity", emptyIfNull(severity));
+        params.put("status", emptyIfNull(status));
+        params.put("title", emptyIfNull(title));
+        params.put("description", emptyIfNull(description));
+        params.put("chainageFromM", chainageFromM);
+        params.put("chainageToM", chainageToM);
+        params.put("version", nowVersion());
+
+        clickHouse.execute(sql, params);
     }
 
     public void insertRiskSnapshotDaily(
@@ -346,6 +597,132 @@ public class AnalyticsEtlService {
         clickHouse.execute(sql, params);
         log.debug("Inserted labour_daily: project={} date={} contractor={} skill={} source={}",
                 projectId, date, contractorName, skillCategory, source);
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // Live dimension upserts. Each one issues a single INSERT into a
+    // ReplacingMergeTree(_version) table with _version = nowVersion(), so it always
+    // overrides the most recent nightly batch row for the same key. Listeners route
+    // through here from the AFTER_COMMIT phase.
+    // ────────────────────────────────────────────────────────────────────────────
+
+    public void upsertProjectDimension(Project p) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_PROJECT,
+                AnalyticsDimensionSql.projectParams(p, nowVersion()));
+        log.debug("Upserted dim_project: id={} code={}", p.getId(), p.getCode());
+    }
+
+    public void upsertActivityDimension(Activity a) {
+        String waCode = resolveWorkActivityCode(a.getWorkActivityId());
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_ACTIVITY,
+                AnalyticsDimensionSql.activityParams(a, waCode, nowVersion()));
+        log.debug("Upserted dim_activity: id={} project={}", a.getId(), a.getProjectId());
+    }
+
+    /**
+     * Bulk dim_activity upsert. Used by P6 imports / sweep-style updates that touch
+     * thousands of activities at once. Falls back to per-row execute calls because
+     * ClickHouseTemplate's NamedParameter helper does not expose a multi-row VALUES
+     * builder out of the box. Internally batched via NamedParameterJdbcTemplate's
+     * SqlParameterSource[] batchUpdate path inside ClickHouseTemplate (TODO once
+     * batchUpdate is added there); for now this is N round-trips but with a single
+     * version stamp so dedup is consistent.
+     */
+    public void upsertActivitiesBulkDimension(List<Activity> activities) {
+        if (activities == null || activities.isEmpty()) {
+            return;
+        }
+        long version = nowVersion();
+        // Resolve work-activity codes once for the batch so dim_activity rows carry the
+        // master library code without N+1 lookups during sweep-style updates.
+        Map<java.util.UUID, String> waCodes = new HashMap<>();
+        if (workActivityRepository != null) {
+            List<java.util.UUID> waIds = activities.stream()
+                    .map(Activity::getWorkActivityId)
+                    .filter(java.util.Objects::nonNull)
+                    .distinct()
+                    .toList();
+            if (!waIds.isEmpty()) {
+                workActivityRepository.findAllById(waIds)
+                        .forEach(w -> waCodes.put(w.getId(),
+                                w.getCode() != null ? w.getCode() : ""));
+            }
+        }
+        List<Map<String, Object>> rows = new ArrayList<>(activities.size());
+        for (Activity a : activities) {
+            String waCode = a.getWorkActivityId() != null
+                    ? waCodes.getOrDefault(a.getWorkActivityId(), "")
+                    : "";
+            rows.add(AnalyticsDimensionSql.activityParams(a, waCode, version));
+        }
+        // Reuse the existing batchInsert hook on ClickHouseTemplate. It takes a table
+        // and a list of named-param maps — for ReplacingMergeTree the column order in
+        // the INSERT statement does not matter, only that the keys match the columns.
+        // Fall back to per-row execute if batchInsert is not appropriate here.
+        for (Map<String, Object> params : rows) {
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_ACTIVITY, params);
+        }
+        log.debug("Bulk-upserted {} activities into dim_activity (version={})",
+                activities.size(), version);
+    }
+
+    public void upsertResourceDimension(Resource r) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_RESOURCE,
+                AnalyticsDimensionSql.resourceParams(r, nowVersion()));
+        log.debug("Upserted dim_resource: id={} code={}", r.getId(), r.getCode());
+    }
+
+    public void upsertWbsDimension(WbsNode w) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_WBS,
+                AnalyticsDimensionSql.wbsParams(w, nowVersion()));
+        log.debug("Upserted dim_wbs: id={} project={}", w.getId(), w.getProjectId());
+    }
+
+    public void upsertCostAccountDimension(CostAccount c) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_COST_ACCOUNT,
+                AnalyticsDimensionSql.costAccountParams(c, nowVersion()));
+        log.debug("Upserted dim_cost_account: id={} code={}", c.getId(), c.getCode());
+    }
+
+    public void upsertBaselineDimension(Baseline b) {
+        upsertBaselineDimension(b, b.getIsActive() != null && b.getIsActive());
+    }
+
+    /**
+     * Explicit form for the {@code BaselineDeactivatedEvent} path: emit an is_active=0
+     * row with a strictly newer _version even when the in-memory entity still has
+     * {@code isActive=true} (rare race during the deactivation transaction).
+     */
+    public void upsertBaselineDimension(Baseline b, boolean active) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_BASELINE,
+                AnalyticsDimensionSql.baselineParams(b, active, nowVersion()));
+        log.debug("Upserted dim_baseline: id={} project={} active={}",
+                b.getId(), b.getProjectId(), active);
+    }
+
+    public void upsertScheduleRunDimension(ScheduleResult s) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_SCHEDULE_RUN,
+                AnalyticsDimensionSql.scheduleRunParams(s, nowVersion()));
+        log.debug("Upserted dim_schedule_run: id={} project={}", s.getId(), s.getProjectId());
+    }
+
+    /**
+     * Variation Order → dim_contract row. The VO's contract row links it to the project,
+     * so the listener must pass that projectId through (the VO entity does not carry it).
+     */
+    public void upsertContractDimension(VariationOrder vo, UUID projectId) {
+        clickHouse.execute(
+                AnalyticsDimensionSql.INSERT_CONTRACT,
+                AnalyticsDimensionSql.contractParams(vo, projectId, nowVersion()));
+        log.debug("Upserted dim_contract: voId={} contractId={} project={}",
+                vo.getId(), vo.getContractId(), projectId);
     }
 
     private static String emptyIfNull(String s) {

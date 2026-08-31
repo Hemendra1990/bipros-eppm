@@ -1,9 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
 import { portfolioReportApi } from "@/lib/api/portfolioReportApi";
 import { ragFromScore } from "@/lib/utils/rag";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import {
   EmptyBlock,
   LoadingBlock,
@@ -12,15 +15,33 @@ import {
 } from "@/components/common/dashboard/primitives";
 
 function tick(ok: boolean | null | undefined) {
-  if (ok === true) return <Check size={16} className="text-success" strokeWidth={3} />;
-  if (ok === false) return <X size={16} className="text-danger" strokeWidth={3} />;
+  if (ok === true)
+    return <Check size={16} className="text-success" strokeWidth={3} />;
+  if (ok === false)
+    return <X size={16} className="text-danger" strokeWidth={3} />;
   return <span className="text-text-muted">—</span>;
 }
 
 function scoreColor(score: number): string {
   const rag = ragFromScore(score);
-  return rag === "GREEN" ? "text-success" : rag === "AMBER" ? "text-warning" : "text-danger";
+  return rag === "GREEN"
+    ? "text-success"
+    : rag === "AMBER"
+      ? "text-warning"
+      : "text-danger";
 }
+
+type Row = {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  pfmsSanctionOk: boolean | null;
+  gstnCheckOk: boolean | null;
+  gemLinkedOk: boolean | null;
+  cpppPublishedOk: boolean | null;
+  pariveshClearanceOk: boolean | null;
+  overallScore: number;
+};
 
 export function CompliancePanel() {
   const { data, isLoading, isError } = useQuery({
@@ -28,6 +49,73 @@ export function CompliancePanel() {
     queryFn: () => portfolioReportApi.getCompliance(),
     staleTime: 60_000,
   });
+
+  const rows = useMemo(() => (data ?? []) as Row[], [data]);
+
+  const columns = useMemo<ColumnDef<Row>[]>(() => [
+    {
+      accessorKey: "projectName",
+      header: "Project",
+      cell: ({ row }) => (
+        <div className="flex flex-col">
+          <span className="font-mono text-[10px] text-text-muted">
+            {row.original.projectCode}
+          </span>
+          <span className="text-text-primary">
+            {truncate(row.original.projectName, 48)}
+          </span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "pfmsSanctionOk",
+      header: "PFMS",
+      cell: ({ row }) => (
+        <div className="text-center">{tick(row.original.pfmsSanctionOk)}</div>
+      ),
+    },
+    {
+      accessorKey: "gstnCheckOk",
+      header: "GSTN",
+      cell: ({ row }) => (
+        <div className="text-center">{tick(row.original.gstnCheckOk)}</div>
+      ),
+    },
+    {
+      accessorKey: "gemLinkedOk",
+      header: "GeM",
+      cell: ({ row }) => (
+        <div className="text-center">{tick(row.original.gemLinkedOk)}</div>
+      ),
+    },
+    {
+      accessorKey: "cpppPublishedOk",
+      header: "CPPP",
+      cell: ({ row }) => (
+        <div className="text-center">{tick(row.original.cpppPublishedOk)}</div>
+      ),
+    },
+    {
+      accessorKey: "pariveshClearanceOk",
+      header: "PARIVESH",
+      cell: ({ row }) => (
+        <div className="text-center">
+          {tick(row.original.pariveshClearanceOk)}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "overallScore",
+      header: "Score",
+      cell: ({ row }) => (
+        <div className="text-right">
+          <span className={`font-semibold ${scoreColor(row.original.overallScore)}`}>
+            {row.original.overallScore.toFixed(0)}%
+          </span>
+        </div>
+      ),
+    },
+  ], []);
 
   if (isLoading)
     return (
@@ -42,7 +130,6 @@ export function CompliancePanel() {
       </SectionCard>
     );
 
-  const rows = data ?? [];
   if (rows.length === 0) {
     return (
       <SectionCard title="Compliance Status">
@@ -56,43 +143,12 @@ export function CompliancePanel() {
       title="Compliance Status"
       subtitle="Regulatory and integration checks per project"
     >
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-text-muted">
-              <th className="px-2 py-2 font-medium">Project</th>
-              <th className="px-2 py-2 text-center font-medium">PFMS</th>
-              <th className="px-2 py-2 text-center font-medium">GSTN</th>
-              <th className="px-2 py-2 text-center font-medium">GeM</th>
-              <th className="px-2 py-2 text-center font-medium">CPPP</th>
-              <th className="px-2 py-2 text-center font-medium">PARIVESH</th>
-              <th className="px-2 py-2 text-right font-medium">Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.projectId} className="border-b border-border/50">
-                <td className="px-2 py-2">
-                  <div className="flex flex-col">
-                    <span className="font-mono text-[10px] text-text-muted">{r.projectCode}</span>
-                    <span className="text-text-primary">{truncate(r.projectName, 48)}</span>
-                  </div>
-                </td>
-                <td className="px-2 py-2 text-center">{tick(r.pfmsSanctionOk)}</td>
-                <td className="px-2 py-2 text-center">{tick(r.gstnCheckOk)}</td>
-                <td className="px-2 py-2 text-center">{tick(r.gemLinkedOk)}</td>
-                <td className="px-2 py-2 text-center">{tick(r.cpppPublishedOk)}</td>
-                <td className="px-2 py-2 text-center">{tick(r.pariveshClearanceOk)}</td>
-                <td className="px-2 py-2 text-right">
-                  <span className={`font-semibold ${scoreColor(r.overallScore)}`}>
-                    {r.overallScore.toFixed(0)}%
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <SimpleTable
+        data={rows}
+        columns={columns}
+        sortable
+        className="border-0 rounded-none"
+      />
     </SectionCard>
   );
 }

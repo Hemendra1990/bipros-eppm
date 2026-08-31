@@ -88,4 +88,17 @@ export const analyticsApi = {
         `/v1/analytics/contractor-performance`
       )
       .then((r) => r.data.data ?? []),
+
+  /**
+   * Per-table freshness/health snapshot used by the AI chat header indicator
+   * ("Last analytics sync: 2m ago"). Each row maps to a ClickHouse dim/fact
+   * table with the row count, the highest {@code _version} observed (so the UI
+   * can detect a stalled ETL), and the last upsert timestamp.
+   */
+  getHealth: (): Promise<ApiResponse<Array<{ table: string; rowCount: number; maxVersion: number; lastUpdated: string | null }>>> =>
+    apiClient
+      .get<ApiResponse<Array<{ table: string; rowCount: number; maxVersion: number; lastUpdated: string | null }>>>(
+        `/v1/analytics/health`,
+      )
+      .then((r) => r.data),
 };

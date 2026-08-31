@@ -199,6 +199,12 @@ export interface ResourceResponse {
   availability?: number | null;
   costPerUnit?: number | null;
   unit?: string | null;
+  /**
+   * FK to the type-appropriate rate master row (manpower / equipment / material). When set,
+   * Resource.unit and Resource.costPerUnit are snapshots of the rate master row's values
+   * and are kept in sync when the rate master row is edited.
+   */
+  rateMasterId?: string | null;
   status: ResourceStatus;
   calendarId?: string | null;
   parentId?: string | null;
@@ -222,6 +228,7 @@ export interface CreateResourceRequest {
   availability?: number | null;
   costPerUnit?: number | null;
   unit?: string | null;
+  rateMasterId?: string | null;
   status?: ResourceStatus;
   calendarId?: string | null;
   parentId?: string | null;
@@ -286,6 +293,13 @@ export interface ResourceAssignmentResponse {
   /** Phase 2: original committed cost. Frozen unless an explicit Re-budget action runs. */
   budgetedCost: number | null;
   plannedUnits: number;
+  /** Raw nos the planner entered for manpower/equipment. plannedUnits = headcount × duration
+   *  (kept for DPR/EVA rollups); this field exposes the human-meaningful "nos". */
+  headcount: number | null;
+  /** Activity duration applied when computing plannedUnits. */
+  duration: number | null;
+  /** Raw quantity the planner entered for material assignments. */
+  quantity: number | null;
   actualUnits: number;
   remainingUnits: number | null;
   atCompletionUnits: number | null;
@@ -474,6 +488,25 @@ export const resourceApi = {
       )
       .then((r) => r.data),
 
+  /**
+   * Picker-mode lookup for the DPR drawer's Manpower / Equipment / Material searchable
+   * dropdowns. {@code kind} narrows by ResourceType (LABOR mapped to MANPOWER); {@code reportDate}
+   * picks the rate that was effective on that date. Result rows already carry the snapshotted
+   * {@code unitRate} so the row preview can compute cost without an extra round trip.
+   */
+  getAssignedResourcesByKind: (
+    projectId: string,
+    activityId: string,
+    kind: "MANPOWER" | "EQUIPMENT" | "MATERIAL",
+    reportDate?: string
+  ) =>
+    apiClient
+      .get<ApiResponse<import("../types/dpr").AssignedResourceOption[]>>(
+        `/v1/projects/${projectId}/resource-assignments/activity/${activityId}/picker`,
+        { params: { kind, reportDate } }
+      )
+      .then((r) => r.data),
+
   getTimePhasedUsage: (
     projectId: string,
     params?: { from?: string; to?: string }
@@ -557,7 +590,7 @@ export const resourceApi = {
    * Active LABOR resources whose role code is SUPERVISOR or FOREMAN, scoped to the project's
    * resource pool (falls back to project-agnostic when the project has no allocations yet).
    * Powers the DPR form's Supervisor dropdown — free-text "Other" entries on the form leave
-   * supervisorResourceId null.
+   * supervisorUserId null.
    */
   getEligibleSupervisors: (projectId: string) =>
     apiClient

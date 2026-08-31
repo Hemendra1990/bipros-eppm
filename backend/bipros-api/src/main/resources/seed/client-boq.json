@@ -1,0 +1,4589 @@
+{
+  "version": 1,
+  "source": "Requirements final - 01 Aug 2026.xlsx / BOQ + BOQ1 sheets",
+  "notes": "Quantities are OWNER-APPROVED DEFAULTS (LS/PS/Included=1, monthly=12, else 100) - the workbook has no quantity column. Rates 4 dp; missing rate = null. Duplicate item numbers in the sheet carry a -2 suffix. The client's struck row 13.1.7(i)b ('deleted') is excluded (owner 2026-08-12). Split weights are engineering estimates (editable in-app); measure op = billable-quantity step.",
+  "targetProjectCodes": [
+    "KHASAB-2026",
+    "KHASAB-001"
+  ],
+  "items": [
+    {
+      "itemNo": "1.4.3(i)",
+      "description": "Mobilization and demobilization of Contractor's site facilities",
+      "unit": "LS",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "1.4.3(ii)",
+      "description": "Maintenance of Contractor's site facilities",
+      "unit": "monthly",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "12",
+      "rate": null
+    },
+    {
+      "itemNo": "1.5.13(i)",
+      "description": "Provision of Engineer's Office",
+      "unit": "LS",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "1.5.13(ii)",
+      "description": "Maintenance of Engineer's Office",
+      "unit": "monthly",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "12",
+      "rate": null
+    },
+    {
+      "itemNo": "1.5.13(iii)",
+      "description": "Provision of Surveying equipments for the Engineer as per Specifications",
+      "unit": "LS",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "1.5.13(iv)",
+      "description": "Maintenance of Surveying equipments for the Engineer",
+      "unit": "monthly",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "12",
+      "rate": null
+    },
+    {
+      "itemNo": "1.5.13(vii)",
+      "description": "Provision of Site Laboratory as detailed in the Specifications",
+      "unit": "LS",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "1.5.13(viii)",
+      "description": "Maintenance of Site Laboratory",
+      "unit": "monthly",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "12",
+      "rate": null
+    },
+    {
+      "itemNo": "1.7.6(i)a",
+      "description": "Construction and Maintenance and Protection of Traffic. Payment of preliminaries for all items will be as per approved achieved percentage(%) regardless of the original duration",
+      "unit": "LS",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "1.7.6(i)b",
+      "description": "Allow for all costs resulting from delays, standing time, disruption, temporary demobilization/ remobilization and similar effects on the progress of work caused by reason of suspension of works for V.V.I.P. traffic and the like on specific R.O.P.orders",
+      "unit": "included",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "1.10.6(i)",
+      "description": "Provision of 3 sets of monthly project progress includes photographs hardcopy & soft copy",
+      "unit": "Included",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "1.10.6(ii)",
+      "description": "Provision of monthly project progress Video recording - 2 sets with minimum 5min,to create final set of video end of project.",
+      "unit": "Included",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "1.11.8(i)",
+      "description": "Provision of As-built drawings, record drawings, record specifications and miscellaneous records as specified",
+      "unit": "LS",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "1.14.8(i)",
+      "description": "Provision, erection, relocation, maintenance and removal of project signboards (Aluminum)",
+      "unit": "nr.",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "100",
+      "rate": null
+    },
+    {
+      "itemNo": "1.15.4(i)",
+      "description": "Supply and erection of commemorative plaque Opening ceremony including all facilities",
+      "unit": "nr.",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "100",
+      "rate": null
+    },
+    {
+      "itemNo": "1.15.4(ii)",
+      "description": "Opening ceremony including all facilities",
+      "unit": "LS",
+      "chapter": "1 - PRELIMINARIES",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "2.1.5(i)",
+      "description": "Clear site of all boulders, rocks, trees less than 300mm, shrubs, vegetation including roots as necessary to commence the work excluding borrow pits and easement areas",
+      "unit": "sq.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "0.0574"
+    },
+    {
+      "itemNo": "2.1.5(i)a",
+      "description": "Removal and delivery of trees of 300mm trunk diameter or greater",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "69.8180"
+    },
+    {
+      "itemNo": "2.1.5(i)b",
+      "description": "Removal and disposal of trees of 300mm trunk diameter or greater",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "116.3540"
+    },
+    {
+      "itemNo": "2.1.5(i)c",
+      "description": "Removal and relocation of dates tree as per MM instruction",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "174.5380"
+    },
+    {
+      "itemNo": "2.2.5(i)a",
+      "description": "Removal of Existing substation building single - storey area up to 300 sq.m.",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "7274.7640"
+    },
+    {
+      "itemNo": "2.2.5(ii)a",
+      "description": "Removal of reinforced concrete for culverts, head wall, wing wall ,cut-off walls and drains",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "15.6912"
+    },
+    {
+      "itemNo": "2.2.5(ii)b",
+      "description": "Removal of reinforced concrete (wing walls and foundations for bridges)",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "41.1992"
+    },
+    {
+      "itemNo": "2.2.5(ii)c",
+      "description": "Removal of Concrete slab from embankment protection",
+      "unit": "sq.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "10.2998"
+    },
+    {
+      "itemNo": "2.2.5(iii)",
+      "description": "Removal of mass concrete of any type",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "9.2960"
+    },
+    {
+      "itemNo": "2.2.5(v)",
+      "description": "Removal and reuse of Concrete Curbs of any type",
+      "unit": "lin.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "1.5834"
+    },
+    {
+      "itemNo": "2.2.5(vi)",
+      "description": "Removal and reuse of interlocking tiles",
+      "unit": "sq.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "0.9660"
+    },
+    {
+      "itemNo": "2.2.5(vii)a",
+      "description": "Removal of pipe culvert (1050mm diameter)",
+      "unit": "lin.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "20.7760"
+    },
+    {
+      "itemNo": "2.2.5(vii)b",
+      "description": "Removal of pipe culvert (900mm diameter), any type",
+      "unit": "lin.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "20.7760"
+    },
+    {
+      "itemNo": "2.2.5(vii)b-2",
+      "description": "Removal of pipe culvert (800mm diameter)",
+      "unit": "lin.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "20.7760"
+    },
+    {
+      "itemNo": "2.2.5(vii)c",
+      "description": "Removal of pipe culvert (600mm diameter)",
+      "unit": "lin.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "20.7760"
+    },
+    {
+      "itemNo": "2.2.5(vii)d",
+      "description": "Removal of drainage pipe (600mm diameter)",
+      "unit": "lin.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "20.7690"
+    },
+    {
+      "itemNo": "2.2.5(vii)e",
+      "description": "Removal of drainage pipe (500mm diameter)",
+      "unit": "lin.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "20.7690"
+    },
+    {
+      "itemNo": "2.2.5(vii)f",
+      "description": "Removal of drainage pipe (400mm diameter)",
+      "unit": "lin.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "20.7690"
+    },
+    {
+      "itemNo": "2.2.5(vii)g",
+      "description": "Removal of pipe culvert (1200mm diameter)",
+      "unit": "lin.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "25.9700"
+    },
+    {
+      "itemNo": "2.2.5(viii)",
+      "description": "Removal and disposal of wearing coarse and bituminous pavement 200mm max. thickness in carriageways and paved areas",
+      "unit": "cu.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "15.3090"
+    },
+    {
+      "itemNo": "2.2.5(xi)a",
+      "description": "Removal of concrete barrier",
+      "unit": "lin.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "5.2052"
+    },
+    {
+      "itemNo": "2.2.5(xi)b",
+      "description": "Demolishing of existing bridge barrier and part of deck slab and exposing and cleaning the existing rebars for lapping with new stitch slab and barrier as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "36.7780"
+    },
+    {
+      "itemNo": "2.2.5(xx)",
+      "description": "Removal of Existing MSE Wall",
+      "unit": "sq.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "8.6030"
+    },
+    {
+      "itemNo": "2.2.5(xii)a",
+      "description": "Removal of sign boards (single post) and hand over to Muscat Municipality",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "18.6284"
+    },
+    {
+      "itemNo": "2.2.5(xii)b",
+      "description": "Removal of sign boards (multi-post) and hand over to Muscat Municipality",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "31.0520"
+    },
+    {
+      "itemNo": "2.2.5(xii)c",
+      "description": "Removal of Overhead Cantilever Sign Support including sign board and foundation and hand over to Muscat Municipality",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "448.8960"
+    },
+    {
+      "itemNo": "2.2.5(xii)d",
+      "description": "Removal of Overhead Gantry Sign Support including sign board and foundation and hand over to Muscat Municipality",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "963.3820"
+    },
+    {
+      "itemNo": "2.2.5(xii)e",
+      "description": "Removal of cantilever traffic signal including foundation and hand over to Muscat Municipality",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "1618.4000"
+    },
+    {
+      "itemNo": "2.2.5(xii)f",
+      "description": "Removal of ground mounted traffic signal and hand over to Muscat Municipality",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "710.9060"
+    },
+    {
+      "itemNo": "2.2.5(xii)g",
+      "description": "Removal of debris deflector Posts (Debris Collectors) including foundation and hand over to Muscat Municipality",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "18.0320"
+    },
+    {
+      "itemNo": "2.2.5(xiii)",
+      "description": "Removal of floodway marker posts and water depth gauge including foundation",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "18.0320"
+    },
+    {
+      "itemNo": "2.2.5(xv)",
+      "description": "Removal of Re-usable (as per Item no: 13.1.7(xiii)) W-Beam Guardrail including post and foundation",
+      "unit": "lin.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "3.4132"
+    },
+    {
+      "itemNo": "2.2.5(xvi)a",
+      "description": "Removal of re-usable filling station sign boards including foundation",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "741.5380"
+    },
+    {
+      "itemNo": "2.2.5(xviii)",
+      "description": "Removal of Mortared Riprap for slope protection and drains",
+      "unit": "cu.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "4.2350"
+    },
+    {
+      "itemNo": "2.2.5(xviii)a",
+      "description": "Removal of Loose Stone Riprap for slope protection",
+      "unit": "cu.m.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "4.2420"
+    },
+    {
+      "itemNo": "2.2.5(xviii)b",
+      "description": "Removal of Gabion Boxes",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "7.4256"
+    },
+    {
+      "itemNo": "2.2.5(xix)",
+      "description": "Removal and disposal of Existing Fence and gate (up to 2m high)",
+      "unit": "lin.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "14.7000"
+    },
+    {
+      "itemNo": "2.2.5(xx)-2",
+      "description": "Removal and disposal of Existing Masonry Wall (Block Type, up to 2m high)",
+      "unit": "lin.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "13.4820"
+    },
+    {
+      "itemNo": "2.2.5(xxvi)a",
+      "description": "Removal and reuse of Street Light Pole of less than 25 m height including cables and foundation and related works(as per Item no:15.8.6(ii)aa)",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "117.0442"
+    },
+    {
+      "itemNo": "2.2.5(xxvi)d",
+      "description": "Removal of Feeder pillar and handing over to the Muscat Municipality Street lighting department or the electrical authority",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "152.2220"
+    },
+    {
+      "itemNo": "2.2.5(xxvi)f",
+      "description": "Removal of under bridge lighting along with cables, junction box and all other accessories and handing over to Muscat Municipality Street lighting department",
+      "unit": "nr.",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "16.1980"
+    },
+    {
+      "itemNo": "2.3.6(i)",
+      "description": "Unclassified excavation",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "5.6784"
+    },
+    {
+      "itemNo": "2.3.6(iii)",
+      "description": "Unclassified Excavation under water",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "13.9748"
+    },
+    {
+      "itemNo": "2.3.6(v)",
+      "description": "Leveling and Grading for Wadi Training Works",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "2.6208"
+    },
+    {
+      "itemNo": "2.4.6(i)",
+      "description": "Borrow excavation",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "4.7516"
+    },
+    {
+      "itemNo": "2.6.6(i)",
+      "description": "Sub grade preparation in cut",
+      "unit": "sq.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "0.4718"
+    },
+    {
+      "itemNo": "2.7.6(i)",
+      "description": "Unclassified structural excavation (depth 0m to 2.0m)",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "4.7922"
+    },
+    {
+      "itemNo": "2.7.6(ii)",
+      "description": "Unclassified structural excavation (depth >2.0m to <4.0m)",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "7.2226"
+    },
+    {
+      "itemNo": "2.7.6(iii)",
+      "description": "Unclassified structural excavation (depth ≥ 4.0m)",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "10.1710"
+    },
+    {
+      "itemNo": "2.7.6(iv)",
+      "description": "Unclassified structural excavation (under water)",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "13.9748"
+    },
+    {
+      "itemNo": "2.10.5(i)",
+      "description": "Cleaning of existing culvert barrels and surrounding area of all muck blocking the passage of flood water",
+      "unit": "cu.m",
+      "chapter": "2 - EARTHWORKS",
+      "qty": "100",
+      "rate": "9.2064"
+    },
+    {
+      "itemNo": "3.2.6(ii)",
+      "description": "Granular Sub-Base Course (CBR > 60% Class B)",
+      "unit": "cu.m",
+      "chapter": "3 - GRANULAR SUB-BASE, AGGREGATE BASE COURSE AND STABILISED BASE COURSES",
+      "qty": "100",
+      "rate": "3.9550"
+    },
+    {
+      "itemNo": "3.3.6(i)",
+      "description": "Crushed Aggregate Base Course (CBR > 80% Class A)",
+      "unit": "cu.m",
+      "chapter": "3 - GRANULAR SUB-BASE, AGGREGATE BASE COURSE AND STABILISED BASE COURSES",
+      "qty": "100",
+      "rate": "9.4878"
+    },
+    {
+      "itemNo": "4.2.8(i)",
+      "description": "Bituminous Prime Coat",
+      "unit": "kg.",
+      "chapter": "4 - BITUMINOUS PAVEMENT",
+      "qty": "100",
+      "rate": "0.6188"
+    },
+    {
+      "itemNo": "4.2.8(ii)",
+      "description": "Bituminous Tack Coat",
+      "unit": "kg.",
+      "chapter": "4 - BITUMINOUS PAVEMENT",
+      "qty": "100",
+      "rate": "0.7420"
+    },
+    {
+      "itemNo": "4.2.8|(iii)",
+      "description": "Polymer modified Tack Coat",
+      "unit": "kg.",
+      "chapter": "4 - BITUMINOUS PAVEMENT",
+      "qty": "100",
+      "rate": "0.8232"
+    },
+    {
+      "itemNo": "4.4.14(i)b",
+      "description": "Bituminous Base Course (Class A)",
+      "unit": "cu.m",
+      "chapter": "4 - BITUMINOUS PAVEMENT",
+      "qty": "100",
+      "rate": "79.7818"
+    },
+    {
+      "itemNo": "4.5.14(ii)a",
+      "description": "Polymer modified Bituminous Wearing Course (Class A)",
+      "unit": "cu.m",
+      "chapter": "4 - BITUMINOUS PAVEMENT",
+      "qty": "100",
+      "rate": "119.3304"
+    },
+    {
+      "itemNo": "4.5.14(ii)b",
+      "description": "Polymer modified Bituminous Wearing Course on bridge decks including the regulating layers",
+      "unit": "cu.m",
+      "chapter": "4 - BITUMINOUS PAVEMENT",
+      "qty": "100",
+      "rate": "155.1312"
+    },
+    {
+      "itemNo": "4.5.14(v)b",
+      "description": "Bituminous Wearing Course on bridge decks including the regulating layers",
+      "unit": "cu.m",
+      "chapter": "4 - BITUMINOUS PAVEMENT",
+      "qty": "100",
+      "rate": "132.4400"
+    },
+    {
+      "itemNo": "4.9.11(i)",
+      "description": "Surface milling (up to 50mm thick)",
+      "unit": "sq.m",
+      "chapter": "4 - BITUMINOUS PAVEMENT",
+      "qty": "100",
+      "rate": "0.8750"
+    },
+    {
+      "itemNo": "4.9.11(vi)",
+      "description": "Making saw cut into asphalt pavement",
+      "unit": "lin.m",
+      "chapter": "4 - BITUMINOUS PAVEMENT",
+      "qty": "100",
+      "rate": "0.4704"
+    },
+    {
+      "itemNo": "4.12.10(i)",
+      "description": "International roughness index (IRI) for Asphalt pavement",
+      "unit": "lin.m",
+      "chapter": "4 - BITUMINOUS PAVEMENT",
+      "qty": "100",
+      "rate": "0.4382"
+    },
+    {
+      "itemNo": "5.1.7(i)a",
+      "description": "Concrete Class 16/20 blinding for all type of structures",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "64.8914"
+    },
+    {
+      "itemNo": "5.1.7(i)b",
+      "description": "Concrete Class 40/20 MS7 in Reinforced Concrete Box Culvert (new and extension) including headwalls, wing walls, apron slabs, cut-off walls and galvanized Dowel bars (including drilling, fixing and all necessary items required to complete the work as shown on dwg.)",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "83.9622"
+    },
+    {
+      "itemNo": "5.1.7(i)c",
+      "description": "Post-tensioned Concrete, Class 50/20 MS7 in Cast in-situ Post-tensioned Box Girders including Integral Abutment, Hanging Back wall etc. for Interchange Bridges",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "324.9498"
+    },
+    {
+      "itemNo": "5.1.7(i)d",
+      "description": "Post-tensioned Concrete, Class 50/20 MS7 in Cast in-situ Post-tensioned Box Girders including Integral Abutment, Hanging Back wall etc. for Wadi Bridges",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "282.5648"
+    },
+    {
+      "itemNo": "5.1.7(i)e",
+      "description": "Reinforced Concrete, Class 45/20 MS7 in Bridge abutment wall, abutment cap and Wing walls for Wadi Bridges",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "114.2876"
+    },
+    {
+      "itemNo": "5.1.7(i)f",
+      "description": "Reinforced Concrete, Class 45/20 MS7 in Bridge abutment wall, abutment cap and Wing walls for Interchange Bridges",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "114.2876"
+    },
+    {
+      "itemNo": "5.1.7(i)g",
+      "description": "Concrete Class 45/20 MS7 in Pier Columns and Pier Caps For Wadi Bridges",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "130.0698"
+    },
+    {
+      "itemNo": "5.1.7(i)h",
+      "description": "Concrete Class 45/20 MS7 in Pier Columns and Pier Caps For Interchange Bridges",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "130.0698"
+    },
+    {
+      "itemNo": "5.1.7(i)j",
+      "description": "Reinforced Concrete, Class 45/20 MS7 in open Foundation for Abutment and Pier for Wadi Bridges",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "116.8426"
+    },
+    {
+      "itemNo": "5.1.7(i)j-2",
+      "description": "Reinforced Concrete, Class 45/20 MS7 in pile cap and open Foundation for Abutment and Pier for interchange Bridges",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "116.8426"
+    },
+    {
+      "itemNo": "5.1.7(i)k",
+      "description": "Concrete Class 45/20 MS7 in foundation for protection of Wadi Bridge Structure",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "116.8440"
+    },
+    {
+      "itemNo": "5.1.7(i)l",
+      "description": "Reinforced Concrete, Class 40/20 MS7 in Retaining Wall & its Foundation",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "79.2274"
+    },
+    {
+      "itemNo": "5.1.7(i)m",
+      "description": "Concrete Class 40/20 MS7 in Approach Slabs including all necessary items required to complete the work as indicated on drawings",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "141.2908"
+    },
+    {
+      "itemNo": "5.1.7(i)n",
+      "description": "Reinforced Concrete Class 40/20 for rectangular closed and open drains",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "97.5142"
+    },
+    {
+      "itemNo": "5.1.7(i)o",
+      "description": "Reinforced Concrete Class 40/20 for concrete chutes",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "97.5142"
+    },
+    {
+      "itemNo": "5.1.7(i)p",
+      "description": "Mass Concrete Class 20/20",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "85.6800"
+    },
+    {
+      "itemNo": "5.1.7(i)q",
+      "description": "Mass Concrete Class 25/20",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "71.6520"
+    },
+    {
+      "itemNo": "5.1.7(i)q-2",
+      "description": "Mass Concrete Class 25/20 for Floodways cut-off walls",
+      "unit": "cu.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "71.6408"
+    },
+    {
+      "itemNo": "5.1.7(i)r",
+      "description": "Mass Concrete Class 30/20",
+      "unit": "cu.m",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "71.6520"
+    },
+    {
+      "itemNo": "5.1.7(i)s",
+      "description": "Mass Concrete Class 35/20",
+      "unit": "cu.m",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "71.6520"
+    },
+    {
+      "itemNo": "5.1.7(i)t",
+      "description": "Mass Concrete Class 40/20",
+      "unit": "cu.m",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "71.6520"
+    },
+    {
+      "itemNo": "5.1.7(i)u",
+      "description": "GRP Cladding to cover space between superstructure and Pier column and abutments (color to match with Pier and abutments)",
+      "unit": "sq.m",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "301.0812"
+    },
+    {
+      "itemNo": "5.2.6(ii)a",
+      "description": "High tensile steel bar reinforcement, Grade 500, Type 2 of any diameter for bridges",
+      "unit": "t",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "704.5164"
+    },
+    {
+      "itemNo": "5.2.6(ii)b",
+      "description": "High tensile steel bar reinforcement, Grade 500, Type 2 of any diameter for Box culverts, Drains, concrete chutes and retaining walls",
+      "unit": "t",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "704.5164"
+    },
+    {
+      "itemNo": "5.2.6(iii)",
+      "description": "Fabric wire mesh reinforcement of any size",
+      "unit": "t",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "806.7500"
+    },
+    {
+      "itemNo": "5.4.6(ii)",
+      "description": "Prestressing Cables - 0.6\" Diameter Strands Grade 270",
+      "unit": "t",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "1997.3198"
+    },
+    {
+      "itemNo": "5.10.6(i)",
+      "description": "Bitumen Water Proofing Paint for surfaces in contact with earth in Culverts, drains and retaining walls",
+      "unit": "sq.m",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "2.8826"
+    },
+    {
+      "itemNo": "5.10.6(ii)",
+      "description": "Waterproofing Membrane including Protection board for Bridge Abutments footings, Pier and Pier footings and Hanging Back Wall and culverts",
+      "unit": "sq.m",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "9.0986"
+    },
+    {
+      "itemNo": "5.11.5.7(i)",
+      "description": "Abrasion resistant (polyurethane based) paint system for wadi bridge piers, abutment wall, wing wall and pier cap",
+      "unit": "sq.m",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "4.7978"
+    },
+    {
+      "itemNo": "5.14.5(i)",
+      "description": "Concrete repairs for existing culverts as per Engineer's instructions",
+      "unit": "sq.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "15.2488"
+    },
+    {
+      "itemNo": "5.14.5(ii)",
+      "description": "Crack repairs for existing culverts as per Engineer's instructions",
+      "unit": "sq.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "21.7434"
+    },
+    {
+      "itemNo": "5.14.5(iii)",
+      "description": "Repair of existing expansion joints between barrel units",
+      "unit": "lin.m.",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "45.0100"
+    },
+    {
+      "itemNo": "5.14.5(iv)",
+      "description": "Repair of existing expansion joints",
+      "unit": "lin m",
+      "chapter": "5 - CONCRETE AND CONCRETE STRUCTURES",
+      "qty": "100",
+      "rate": "43.5540"
+    },
+    {
+      "itemNo": "6.6(ii)",
+      "description": "Steel railing (1m to 1.5m height) on top of the drop inlets in culverts as shown on dwg.",
+      "unit": "lin.m",
+      "chapter": "6 - STRUCTURAL STEEL AND OTHER METALWORK",
+      "qty": "100",
+      "rate": "964.4040"
+    },
+    {
+      "itemNo": "6.6(iii)",
+      "description": "Metal Access door for box girder bridges",
+      "unit": "nr.",
+      "chapter": "6 - STRUCTURAL STEEL AND OTHER METALWORK",
+      "qty": "100",
+      "rate": "2349.0880"
+    },
+    {
+      "itemNo": "7.6(i)",
+      "description": "Painting of Existing concrete structure matched with new concrete structures (Protective coating)",
+      "unit": "sq.m",
+      "chapter": "7 - PAINT",
+      "qty": "100",
+      "rate": "6.2174"
+    },
+    {
+      "itemNo": "8.1.6(ii)a",
+      "description": "Reinforced Precast Concrete Pipe Culvert (diameter 1000mm) including waterproofing including connection to the existing dia pipe culvert as detailed on the dwg.",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "184.0300"
+    },
+    {
+      "itemNo": "8.1.6(ii)b",
+      "description": "Reinforced Precast Concrete Pipe Culvert (diameter 900mm) including waterproofing including connection to the existing dia pipe culvert as detailed on the dwg",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "158.6200"
+    },
+    {
+      "itemNo": "8.1.6(ii)c",
+      "description": "Reinforced Precast Concrete Pipe Culvert (diameter 600mm) including waterproofing including connection to the existing dia pipe culvert as detailed on the dwg",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "77.3360"
+    },
+    {
+      "itemNo": "8.1.6(ii)d",
+      "description": "Reinforced Precast Concrete Pipe Culvert (diameter 800mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "140.3920"
+    },
+    {
+      "itemNo": "8.1.6(iii)",
+      "description": "Reinforced concrete arch pipe culvert(Tech Span, 20m diameter) as shown on drawing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "3590.9580"
+    },
+    {
+      "itemNo": "8.2.6(i)a",
+      "description": "Storm Sewer, HDPE Pipe (diameter 300mm)",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "37.5228"
+    },
+    {
+      "itemNo": "8.2.6(i)b",
+      "description": "Storm Sewer, HDPE Pipe (diameter 400mm)",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "44.1532"
+    },
+    {
+      "itemNo": "8.2.6(i)c",
+      "description": "Storm Sewer, HDPE Pipe (diameter 500mm)",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "82.5440"
+    },
+    {
+      "itemNo": "8.2.6(i)d",
+      "description": "Storm Sewer, HDPE Pipe (diameter 600mm)",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "126.5880"
+    },
+    {
+      "itemNo": "8.2.6(i)e",
+      "description": "Storm Sewer, RC Pipe (diameter 300mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "51.4080"
+    },
+    {
+      "itemNo": "8.2.6(i)f",
+      "description": "HDPE Pipe Culvert (diameter 1000mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "438.7320"
+    },
+    {
+      "itemNo": "8.2.6(i)g",
+      "description": "HDPE Pipe Culvert (diameter 600mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "126.5880"
+    },
+    {
+      "itemNo": "8.2.6(i)h",
+      "description": "HDPE Pipe Culvert (diameter 400mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "44.1560"
+    },
+    {
+      "itemNo": "8.2.6(i)ii",
+      "description": "Storm Sewer, RC Pipe (diameter 400mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "57.5680"
+    },
+    {
+      "itemNo": "8.2.6(i)ii-2",
+      "description": "Storm Sewer, RC Pipe (diameter 450mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "61.6322"
+    },
+    {
+      "itemNo": "8.2.6(i)j",
+      "description": "Storm Sewer, RC Pipe (diameter 500mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "64.9754"
+    },
+    {
+      "itemNo": "8.2.6(i)k",
+      "description": "Storm Sewer, RC Pipe (diameter 600mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "77.3360"
+    },
+    {
+      "itemNo": "8.2.6(i)l",
+      "description": "Storm Sewer, RC Pipe (diameter 800mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "140.3920"
+    },
+    {
+      "itemNo": "8.2.6(i)m",
+      "description": "Storm Sewer, RC Pipe (diameter 900mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "158.6200"
+    },
+    {
+      "itemNo": "8.2.6(i)o",
+      "description": "Storm Sewer, RC Pipe (diameter 1000mm) including waterproofing",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "160.4400"
+    },
+    {
+      "itemNo": "8.3.6(i)",
+      "description": "Storm water chamber (1000mm x 1000mm) with cover including waterproofing",
+      "unit": "nr.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "933.4640"
+    },
+    {
+      "itemNo": "8.3.6(ii)a",
+      "description": "Grated Inlet (450mm x 450mm) with DI grating and Locked frame including waterproofing",
+      "unit": "nr.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "511.5460"
+    },
+    {
+      "itemNo": "8.3.6(ii)b",
+      "description": "Grated Inlet (600mm x 600mm) with DI grating and Locked frame including waterproofing",
+      "unit": "nr.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "415.1602"
+    },
+    {
+      "itemNo": "8.3.6(ii)c",
+      "description": "Grated Inlet (1000mm x 1000mm) with DI grating and Locked frame including waterproofing",
+      "unit": "nr.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "915.2024"
+    },
+    {
+      "itemNo": "8.3.6(ii)d",
+      "description": "DI grating (600mm x 600mm) and Locked frame at Culvert for Median Drainage as shown on Dwg. (on the top of box culvert) including waterproofing",
+      "unit": "nr.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "770.4900"
+    },
+    {
+      "itemNo": "8.3.6(iii)",
+      "description": "Curb Inlet (600mm x 600mm) as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "507.0660"
+    },
+    {
+      "itemNo": "8.4.6(i)a",
+      "description": "Steel grating (3000mm x 1000mm) for wall opening as shown on dwg.",
+      "unit": "nr.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "1768.6620"
+    },
+    {
+      "itemNo": "8.4.6(i)b",
+      "description": "Steel grating (600mm x 600mm) on top of drains as shown on dwg.",
+      "unit": "nr.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "770.4900"
+    },
+    {
+      "itemNo": "8.4.6(ii)a",
+      "description": "Drainage pipe, 100mm uPVC in structure",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "3.0436"
+    },
+    {
+      "itemNo": "8.4.6(ii)b",
+      "description": "Drainage pipe, 200mm uPVC in structure",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "11.3652"
+    },
+    {
+      "itemNo": "8.4.6(ii)c",
+      "description": "75 mm Dia. PVC pipe weep holes (with 0.30m cubical gravel backing wrapped with Geotextile Fabric) for embankment protection",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "5.0064"
+    },
+    {
+      "itemNo": "8.4.6(ii)d",
+      "description": "150 mm Dia. uPVC perforated pipe wrapped in Geotextile",
+      "unit": "lin.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "8.2698"
+    },
+    {
+      "itemNo": "8.4.6(iii)",
+      "description": "Permeable backing including Geotextile Membrane",
+      "unit": "cu.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "8.5092"
+    },
+    {
+      "itemNo": "8.4.6(iv)",
+      "description": "Granular backfill",
+      "unit": "cu.m.",
+      "chapter": "8 - DRAINAGE",
+      "qty": "100",
+      "rate": "7.1498"
+    },
+    {
+      "itemNo": "10.1.6(i)",
+      "description": "Setting up at each 800mm diameter pile at Abutment location",
+      "unit": "nr.",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "78.7080"
+    },
+    {
+      "itemNo": "10.1.6(i)a",
+      "description": "Setting up at each 600mm diameter pile at Pier location",
+      "unit": "nr.",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "78.7080"
+    },
+    {
+      "itemNo": "10.1.6(ii)",
+      "description": "Piling - Cast in place, 800mm diameter for Integral Abutment or Abutment Foundation including reinforcement in piles (Boring piles)",
+      "unit": "lin.m",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "179.6284"
+    },
+    {
+      "itemNo": "10.1.6(ii)a",
+      "description": "Piling - Cast in place, 600mm diameter for Pier Foundation including reinforcement in piles (Boring piles)",
+      "unit": "lin.m",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "149.0720"
+    },
+    {
+      "itemNo": "10.1.6(iii)",
+      "description": "Expendable Piles - Cast in place, 800mm diameter (including reinforcement in piles)",
+      "unit": "lin.m",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "196.7000"
+    },
+    {
+      "itemNo": "10.1.6(iii)a",
+      "description": "Expendable Piles - Cast in place, 600mm diameter (including reinforcement in piles)",
+      "unit": "lin.m",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "163.8280"
+    },
+    {
+      "itemNo": "10.1.6(iii)b",
+      "description": "Permanent Secant piles as per the drawing and at other locations with all necessary details including waler beam and anchors as per the requirements",
+      "unit": "nr.",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "6047.6920"
+    },
+    {
+      "itemNo": "10.2.6(i)",
+      "description": "Static Load Testing of 800mm diameter expendable piles (including all materials)",
+      "unit": "nr.",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "11238.7520"
+    },
+    {
+      "itemNo": "10.2.6(i)a",
+      "description": "Static Load Testing of 600mm diameter expendable piles (including all materials)",
+      "unit": "nr.",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "7834.2180"
+    },
+    {
+      "itemNo": "10.2.6(ii)a",
+      "description": "Static Load Testing of 800mm diameter working piles",
+      "unit": "nr.",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "6909.9100"
+    },
+    {
+      "itemNo": "10.2.6(ii)b",
+      "description": "Static Load Testing of 600mm diameter working piles",
+      "unit": "nr.",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "5079.5080"
+    },
+    {
+      "itemNo": "10.2.6(iii)a",
+      "description": "Non-destructive Integrity Test for 800 mm diameter pile as per the Specifications",
+      "unit": "nr.",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "19.6840"
+    },
+    {
+      "itemNo": "10.2.6(iii)b",
+      "description": "Non-destructive Integrity Test for 600 mm diameter pile as per the Specifications",
+      "unit": "nr.",
+      "chapter": "10 - PILING",
+      "qty": "100",
+      "rate": "19.6840"
+    },
+    {
+      "itemNo": "11.3.6(i)a",
+      "description": "POT Bearing - Fixed Type ((service working loads V= 9166.352 kN & H =1551.784 kN, movement expansion & Contraction = 0 mm) including supply &installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "11085.5080"
+    },
+    {
+      "itemNo": "11.3.6(i)b",
+      "description": "POT Bearing - F movement expansion & Contraction = 0 mm) including supply & installation Type (service working loads V= 7040 kN & H = 492.8 kN,",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "9445.8000"
+    },
+    {
+      "itemNo": "11.3.6(i)c",
+      "description": "POT Bearing - Fixed Type (service working loads V= 3071 kN & H = 664 kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "6166.3840"
+    },
+    {
+      "itemNo": "11.3.6(i)d",
+      "description": "POT Bearing - Fixed Type (service working loads V= 3011.8 kN & H = 651.2 kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7314.1740"
+    },
+    {
+      "itemNo": "11.3.6(i)e",
+      "description": "POT Bearing - Fixed Type (service working loads V= 7000 kN & H = 1600 kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "10593.6040"
+    },
+    {
+      "itemNo": "11.3.6(i)f",
+      "description": "POT Bearing - Fixed Type ((service working loads V= 6,925kN & H =1,400kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "11085.5080"
+    },
+    {
+      "itemNo": "11.3.6(i)g",
+      "description": "POT Bearing - Fixed Type (service working loads V= 3609.375 kN & H = 1200kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "8543.9620"
+    },
+    {
+      "itemNo": "11.3.6(i)h",
+      "description": "POT Bearing - Fixed Type (service working loads V= 6,550kN & H =1,350kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "11085.5080"
+    },
+    {
+      "itemNo": "11.3.6(i)i",
+      "description": "POT Bearing - Fixed Type (service working loads V= 3558.75 kN & H = 877.5kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "8543.9620"
+    },
+    {
+      "itemNo": "11.3.6(i)j",
+      "description": "POT Bearing - Fixed Type (service working loads V= 6,200kN & H =1,300kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "11085.5080"
+    },
+    {
+      "itemNo": "11.3.6(i)k",
+      "description": "POT Bearing - Fixed Type (service working loads V=6,200kN & H =700kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "10221.3860"
+    },
+    {
+      "itemNo": "11.3.6(i)m",
+      "description": "POT Bearing - Fixed Type (service working loads V= 4220 kN & H = 872 kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "8543.9620"
+    },
+    {
+      "itemNo": "11.3.6(i)n",
+      "description": "POT Bearing - Fixed Type (service working loads V=5,800kN & H =800kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "10213.1820"
+    },
+    {
+      "itemNo": "11.3.6(i)o",
+      "description": "POT Bearing - Fixed Type (service working loads V= 2676.55 kN & H = 844.66 kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7314.1740"
+    },
+    {
+      "itemNo": "11.3.6(i)p",
+      "description": "POT Bearing - Fixed Type (service working loads V=5,450kN & H =1,100kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "9690.1140"
+    },
+    {
+      "itemNo": "11.3.6(i)q",
+      "description": "POT Bearing - Fixed Type (service working loads V=5,400kN & H =1,050kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "9690.1140"
+    },
+    {
+      "itemNo": "11.3.6(i)r",
+      "description": "POT Bearing - Fixed Type (service working loads V=5,200kN & H =850kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "8991.5980"
+    },
+    {
+      "itemNo": "11.3.6(i)s",
+      "description": "POT Bearing - Fixed Type (service working loads V=5,100kN & H =1,100kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "8468.5300"
+    },
+    {
+      "itemNo": "11.3.6(i)t",
+      "description": "POT Bearing - Fixed Type (service working loads V=5,100kN & H =800kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7506.2120"
+    },
+    {
+      "itemNo": "11.3.6(i)u",
+      "description": "POT Bearing - Fixed Type (service working loads V= 4400 kN & H = 850 kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "6850.3260"
+    },
+    {
+      "itemNo": "11.3.6(i)v",
+      "description": "POT Bearing - Fixed Type (service working loads V= 1512.93 kN & H = 556.48 kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5210.6180"
+    },
+    {
+      "itemNo": "11.3.6(i)x",
+      "description": "POT Bearing - Fixed Type (service working loads V=4,800kN & H =1,250kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7945.4620"
+    },
+    {
+      "itemNo": "11.3.6(i)y",
+      "description": "POT Bearing - Fixed Type (service working loads V=4,600kN & H =700kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5761.5600"
+    },
+    {
+      "itemNo": "11.3.6(i)z",
+      "description": "POT Bearing - Fixed Type (service working loads V=4,200kN & H =700kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5761.5600"
+    },
+    {
+      "itemNo": "11.3.6(i)aa",
+      "description": "POT Bearing - Fixed Type (service working loads V=3,950kN & H =750kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5761.5600"
+    },
+    {
+      "itemNo": "11.3.6(i)ab",
+      "description": "POT Bearing - Fixed Type (service working loads V=3,900kN & H =460kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "4889.2340"
+    },
+    {
+      "itemNo": "11.3.6(i)ac",
+      "description": "POT Bearing - Fixed Type (service working loads V=2,920kN & H =320kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "4889.2340"
+    },
+    {
+      "itemNo": "11.3.6(i)ad",
+      "description": "POT Bearing - Fixed Type (service working loads V=2,800kN & H =500kN, movement expansion & Contraction = 0 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "4889.2340"
+    },
+    {
+      "itemNo": "11.3.6(i)ae",
+      "description": "POT Bearing - Guided Type (service working loads V= 9003.956 kN & H =1425.476 kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "11085.5080"
+    },
+    {
+      "itemNo": "11.3.6(i)af",
+      "description": "POT Bearing - Guided Type (service working loads V= 7040 kN & H = 422.4 kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "9281.8320"
+    },
+    {
+      "itemNo": "11.3.6(i)ag",
+      "description": "POT Bearing - Guided Type (service working loads V= 7040 kN & H = 387.2 kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "9281.8320"
+    },
+    {
+      "itemNo": "11.3.6(i)ah",
+      "description": "POT Bearing - Guided Type (service working loads V= 3154 kN & H = 664 kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7642.1240"
+    },
+    {
+      "itemNo": "11.3.6(i)ai",
+      "description": "POT Bearing - Guided Type (service working loads V= 3174.75 kN & H = 415 kN, movement contraction = 140mm, expansion =40mm) including supply & Installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7642.1240"
+    },
+    {
+      "itemNo": "11.3.6(i)aj",
+      "description": "POT Bearing - Guided Type (service working loads V= 3580.8125 kN & H =432.4 kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7642.1240"
+    },
+    {
+      "itemNo": "11.3.6(i)ak",
+      "description": "POT Bearing - Guided Type (service working loads V= 1512.93 kN & H = 504.31kN, movement contraction = 60mm, expansion =20 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5182.5480"
+    },
+    {
+      "itemNo": "11.3.6(i)al",
+      "description": "POT Bearing - Guided Type (service working loads V=8,300kN & H =1,000kN, movement contraction = 100mm, expansion =30mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "11260.1440"
+    },
+    {
+      "itemNo": "11.3.6(i)am",
+      "description": "POT Bearing - Guided Type (service working loads V= 3126.7925 kN & H =486.45 kN, movement contraction = 90mm, expansion =20mm ) including supply & Installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7642.1240"
+    },
+    {
+      "itemNo": "11.3.6(i)an",
+      "description": "POT Bearing - Guided Type (service working loads V= 4907.968 kN & H =1082.64 kN, movement contraction = 10mm, expansion =5mm) including supply& installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "8461.9780"
+    },
+    {
+      "itemNo": "11.3.6(i)ao",
+      "description": "POT Bearing - Guided Type (service working loads V=7,025kN & H =675kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "10213.1820"
+    },
+    {
+      "itemNo": "11.3.6(i)ap",
+      "description": "POT Bearing - Guided Type (service working loads V= 3093.2 kN & H = 651.2 kN) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7642.1240"
+    },
+    {
+      "itemNo": "11.3.6(i)aq",
+      "description": "POT Bearing - Guided Type (service working loads V=6,550kN & H =725kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "10213.1820"
+    },
+    {
+      "itemNo": "11.3.6(i)as",
+      "description": "POT Bearing - Guided Type (service working loads V= 4100 kN & H = 1536 kN, movement contraction = 60mm, expansion =10mm) including supply &installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "12887.7560"
+    },
+    {
+      "itemNo": "11.3.6(i)at",
+      "description": "POT Bearing - Guided Type (service working loads V= 3026.25 kN & H =1135.18 kN, movement contraction = 10mm, expansion =5mm) including supply& installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7968.6180"
+    },
+    {
+      "itemNo": "11.3.6(i)au",
+      "description": "POT Bearing - Guided Type (service working loads V=6,375kN & H =800kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "11085.5080"
+    },
+    {
+      "itemNo": "11.3.6(i)av",
+      "description": "POT Bearing - Guided Type (service working loads V= 1843.34 kN & H = 399.97kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5509.0420"
+    },
+    {
+      "itemNo": "11.3.6(i)aw",
+      "description": "POT Bearing - Guided Type (service working loads V= 2968.75 kN & H = 1400kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "6328.9100"
+    },
+    {
+      "itemNo": "11.3.6(i)ax",
+      "description": "POT Bearing - Guided Type (service working loads V=5,850kN & H =1,200kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "11085.5080"
+    },
+    {
+      "itemNo": "11.3.6(i)ay",
+      "description": "POT Bearing - Guided Type (service working loads V=5,475kN & H =1,100kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "11085.5080"
+    },
+    {
+      "itemNo": "11.3.6(i)az",
+      "description": "POT Bearing - Guided Type (service working loads V=5,450kN & H =850kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "8378.5380"
+    },
+    {
+      "itemNo": "11.3.6(i)ba",
+      "description": "POT Bearing - Guided Type (service working loads V=5,450kN & H =700kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "8378.5380"
+    },
+    {
+      "itemNo": "11.3.6(i)bb",
+      "description": "POT Bearing - Guided Type (service working loads V= 3093.2 kN & H = 651.2kN, movement contraction = 80mm, expansion =25mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7968.6180"
+    },
+    {
+      "itemNo": "11.3.6(i)bc",
+      "description": "POT Bearing - Guided Type (service working loads V=5,350kN & H =1,400kN, movement contraction = 80mm, expansion =25mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "11085.5080"
+    },
+    {
+      "itemNo": "11.3.6(i)bd",
+      "description": "POT Bearing - Guided Type (service working loads V=5,300kN & H =1,250kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "10123.1900"
+    },
+    {
+      "itemNo": "11.3.6(i)be",
+      "description": "POT Bearing - Guided Type (service working loads V=5,250kN & H =1,100kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "9250.8640"
+    },
+    {
+      "itemNo": "11.3.6(i)bf",
+      "description": "POT Bearing - Guided Type (service working loads V=5,200kN & H =1,000kN, movement contraction = 100mm, expansion =25mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "9250.8640"
+    },
+    {
+      "itemNo": "11.3.6(i)bg",
+      "description": "POT Bearing - Guided Type (service working loads V=5,200kN & H =850kN, movement contraction = 80mm, expansion =20mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "8378.5380"
+    },
+    {
+      "itemNo": "11.3.6(i)bh",
+      "description": "POT Bearing - Guided Type (service working loads V=5,200kN & H =650kN, movement contraction = 80mm, expansion =20mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7461.2160"
+    },
+    {
+      "itemNo": "11.3.6(i)bi",
+      "description": "POT Bearing - Guided Type (service working loads V= 1843.75 kN & H = 756.25kN, movement contraction = 100mm, expansion =25mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5001.6540"
+    },
+    {
+      "itemNo": "11.3.6(i)bj",
+      "description": "POT Bearing - Guided Type (service working loads V= 1843.75 kN & H = 637.5kN, movement contraction = 50mm, expansion =10 mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5001.6540"
+    },
+    {
+      "itemNo": "11.3.6(i)bk",
+      "description": "POT Bearing - Guided Type (service working loads V=5,100kN & H =750kN, movement contraction = 80mm, expansion =20mm) including supply &installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7461.2160"
+    },
+    {
+      "itemNo": "11.3.6(i)bl",
+      "description": "POT Bearing - Guided Type (service working loads V=4,950kN & H =800kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "6763.5260"
+    },
+    {
+      "itemNo": "11.3.6(i)bm",
+      "description": "POT Bearing - Guided Type (service working loads V=4,900kN & H =1,000kN, movement contraction = 90mm, expansion =20mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "7286.5940"
+    },
+    {
+      "itemNo": "11.3.6(i)bn",
+      "description": "POT Bearing - Guided Type (service working loads V= 2192.35 kN & H = 575.66kN, movement contraction = 80mm, expansion =20mm) including supply &installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5001.6540"
+    },
+    {
+      "itemNo": "11.3.6(i)bo",
+      "description": "POT Bearing - Guided Type (service working loads V= 2098.2 kN & H = 489.58kN, movement contraction = 80mm, expansion =20mm) including supply &installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5001.6540"
+    },
+    {
+      "itemNo": "11.3.6(i)bp",
+      "description": "POT Bearing - Guided Type (service working loads V=4,800kN & H =1,250kN, movement contraction = 140mm, expansion =40mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "6588.8900"
+    },
+    {
+      "itemNo": "11.3.6(i)bq",
+      "description": "POT Bearing - Guided Type (service working loads V=4,600kN & H =700kN, movement contraction = 50mm, expansion =15mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5891.2000"
+    },
+    {
+      "itemNo": "11.3.6(i)br",
+      "description": "POT Bearing - Guided Type (service working loads V=4,550kN & H =1,500kN, movement contraction = 60mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "6938.1480"
+    },
+    {
+      "itemNo": "11.3.6(i)bs",
+      "description": "POT Bearing - Guided Type (service working loads V=4,400kN & H =1,100kN, movement contraction = 70mm, expansion =15mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "6588.8900"
+    },
+    {
+      "itemNo": "11.3.6(i)bu",
+      "description": "POT Bearing - Guided Type (service working loads V=4,200kN & H =700kN), movement contraction = 80mm, expansion =20mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5891.2000"
+    },
+    {
+      "itemNo": "11.3.6(i)bw",
+      "description": "POT Bearing - Guided Type (service working loads V=4,000kN & H =1,250kN, movement contraction = 60mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "6588.8900"
+    },
+    {
+      "itemNo": "11.3.6(i)bx",
+      "description": "POT Bearing - Guided Type (service working loads V=3,950kN & H =750kN, movement contraction = 80mm, expansion =20mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5891.2000"
+    },
+    {
+      "itemNo": "11.3.6(i)by",
+      "description": "POT Bearing - Guided Type (service working loads V=3,900kN & H =700kN, movement contraction = 60mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5891.2000"
+    },
+    {
+      "itemNo": "11.3.6(i)bz",
+      "description": "POT Bearing - Guided Type (service working loads V=3,550kN & H =1,000kN, movement contraction = 60mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5716.5640"
+    },
+    {
+      "itemNo": "11.3.6(i)ca",
+      "description": "POT Bearing - Guided Type (service working loads V=3,100kN & H =420kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5193.4960"
+    },
+    {
+      "itemNo": "11.3.6(i)cb",
+      "description": "POT Bearing - Guided Type (service working loads V=2,800kN & H =500kN, movement contraction = 10mm, expansion =5mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "4844.2380"
+    },
+    {
+      "itemNo": "11.3.6(i)cd",
+      "description": "POT Bearing - Guided Type (service working loads V=2,000kN & H =380kN, movement contraction = 30mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "3926.9160"
+    },
+    {
+      "itemNo": "11.3.6(i)ce",
+      "description": "POT Bearing - Free Type (service working loads V= 3296.7 kN , movement contraction = 140mm, expansion =40mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "6290.4660"
+    },
+    {
+      "itemNo": "11.3.6(i)cf",
+      "description": "POT Bearing - Free Type (service working loads V= 8,900kN, movement contraction = 100mm, expansion =30mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "8029.2800"
+    },
+    {
+      "itemNo": "11.3.6(i)cg",
+      "description": "POT Bearing - Free Type (service working loads V= 6080.828kN, movement contraction = 90mm, expansion =20mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "8279.4320"
+    },
+    {
+      "itemNo": "11.3.6(i)ch",
+      "description": "POT Bearing - Free Type (service working loads V=3070.04 kN, movement contraction = 80mm, expansion =20mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "6290.4660"
+    },
+    {
+      "itemNo": "11.3.6(i)ci",
+      "description": "POT Bearing - Free Type (service working loads V= 1947.68 kN , movement contraction = 50mm, expansion =15mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "3926.9160"
+    },
+    {
+      "itemNo": "11.3.6(i)cj",
+      "description": "POT Bearing - Free Type (service working loads V= 6,400kN , movement contraction = 140mm, expansion =40mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "6065.8220"
+    },
+    {
+      "itemNo": "11.3.6(i)ck",
+      "description": "POT Bearing - Free Type (service working loads V= 5,975kN, movement contraction = 80mm, expansion =20mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5367.3060"
+    },
+    {
+      "itemNo": "11.3.6(i)cl",
+      "description": "POT Bearing - Free Type (service working loads V= 5,650kN, movement contraction = 50mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5367.3060"
+    },
+    {
+      "itemNo": "11.3.6(i)cm",
+      "description": "POT Bearing - Free Type (service working loads V= 5,400kN, movement contraction = 100mm, expansion =25mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5367.3060"
+    },
+    {
+      "itemNo": "11.3.6(i)cn",
+      "description": "POT Bearing - Free Type (service working loads V= 3400 kN , movement contraction = 60mm, expansion =15mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "3926.9160"
+    },
+    {
+      "itemNo": "11.3.6(i)co",
+      "description": "POT Bearing - Free Type (service working loads V= 1495.54 kN , movement contraction = 50mm, expansion =15mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "3727.5980"
+    },
+    {
+      "itemNo": "11.3.6(i)cp",
+      "description": "POT Bearing - Free Type (service working loads V= 5,150kN, movement contraction = 80mm, expansion =20mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5367.3060"
+    },
+    {
+      "itemNo": "11.3.6(i)cq",
+      "description": "POT Bearing - Free Type (service working loads V= 5,100kN, movement contraction = 80mm, expansion =20mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "5367.3060"
+    },
+    {
+      "itemNo": "11.3.6(i)cs",
+      "description": "POT Bearing - Free Type (service working loads V= 4,850kN, movement contraction = 90mm, expansion =15mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "4817.2460"
+    },
+    {
+      "itemNo": "11.3.6(i)ct",
+      "description": "POT Bearing - Free Type (service working loads V= 4,600kN, movement contraction = 60mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "4817.2460"
+    },
+    {
+      "itemNo": "11.3.6(i)cu",
+      "description": "POT Bearing - Free Type (service working loads V= 4,400kN, movement contraction = 60mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "3926.9160"
+    },
+    {
+      "itemNo": "11.3.6(i)cv",
+      "description": "POT Bearing - Free Type (service working loads V= 4,300kN, movement contraction = 60mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "3926.9160"
+    },
+    {
+      "itemNo": "11.3.6(i)cw",
+      "description": "POT Bearing - Free Type (service working loads V= 1788.85 kN , movement contraction = 50mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "2467.8360"
+    },
+    {
+      "itemNo": "11.3.6(i)cx",
+      "description": "POT Bearing - Free Type (service working loads V= 1750 kN , movement contraction = 60mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "2467.8360"
+    },
+    {
+      "itemNo": "11.3.6(i)cz",
+      "description": "POT Bearing - Free Type (service working loads V=2,600kN, movement contraction = 60mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "3041.7380"
+    },
+    {
+      "itemNo": "11.3.6(i)da",
+      "description": "POT Bearing - Free Type (service working loads V=2,000kN, movement contraction = 30mm, expansion =10mm) including supply & installation",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "2692.4800"
+    },
+    {
+      "itemNo": "11.3.6(i)db",
+      "description": "Inspection of existing bridges bearings and expansion joints and submit report to the Engineer regarding the condition",
+      "unit": "nr.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "12504.0020"
+    },
+    {
+      "itemNo": "11.5.6(vii)a",
+      "description": "Provide Strip Seal Type Expansion Joint similar to existing Expansion Joint on the bridge (Max. Opening = 30mm, Max. Closing = 13mm)",
+      "unit": "lin.m",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "445.7600"
+    },
+    {
+      "itemNo": "11.5.6(vii)b",
+      "description": "Provide Strip Seal Type Expansion Joint similar to existing Expansion Joint on the bridge (Max. Opening = 40mm, Max. Closing = 17mm)",
+      "unit": "lin.m",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "185.3320"
+    },
+    {
+      "itemNo": "11.5.6(vii)d",
+      "description": "Provide Strip Seal Type Expansion Joint similar to existing Expansion Joint on the bridge (Max. Opening = 56mm, Max. Closing = 25mm)",
+      "unit": "lin.m",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "319.4940"
+    },
+    {
+      "itemNo": "11.5.6(vii)e",
+      "description": "Provide Strip Seal Type Expansion Joint similar to existing Expansion Joint on the bridge (Max. Opening = 57mm, Max. Closing = 25mm)",
+      "unit": "lin.m.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "319.4940"
+    },
+    {
+      "itemNo": "11.5.6(vii)f",
+      "description": "Provide Strip Seal MODULAR Type Expansion Joint similar to existing Expansion Joint on the bridge (Max. Opening = 137mm, Max. Closing = 60mm)",
+      "unit": "lin.m.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "1829.8980"
+    },
+    {
+      "itemNo": "11.5.6(vii)g",
+      "description": "Provide Strip Seal MODULAR Type Expansion Joint similar to existing Expansion Joint on the bridge (Max. Opening = 138mm, Max. Closing = 61mm)",
+      "unit": "lin.m.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "614.6420"
+    },
+    {
+      "itemNo": "11.5.6(vii)h",
+      "description": "Provide Strip Seal MODULAR Type Expansion Joint similar to existing Expansion Joint on the bridge (Max. Opening = 139mm, Max. Closing = 61mm)",
+      "unit": "lin.m.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "614.6420"
+    },
+    {
+      "itemNo": "11.5.6(vii)i",
+      "description": "Provide Strip Seal MODULAR Expansion Joint similar to existing Expansion Joint on the bridge (Max. Opening = 141mm, Max. Closing = 62mm)",
+      "unit": "lin.m.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "614.6420"
+    },
+    {
+      "itemNo": "11.7.6(i)a",
+      "description": "Single face Concrete Barrier for Bridge Parapet as shown on Dwg.",
+      "unit": "lin.m.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "99.8620"
+    },
+    {
+      "itemNo": "11.7.6(i)b",
+      "description": "Double face Concrete Barrier for Bridge Parapet as shown on Dwg.",
+      "unit": "lin.m.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "110.9920"
+    },
+    {
+      "itemNo": "11.7.6(ii)a",
+      "description": "Single face Concrete Barrier with steel metal rail (Galvanized with powder coated) including all necessary items to complete the works for Bridge Parapet as shown on Dwg.",
+      "unit": "lin.m.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "172.1818"
+    },
+    {
+      "itemNo": "11.7.6(ii)b",
+      "description": "Double face Concrete Barrier with steel metal rail (Galvanized with powder coated) including all necessary items to complete the works for Bridge Parapet as shown on Dwg.",
+      "unit": "lin.m.",
+      "chapter": "11 - BRDIGE ACCESSORIES",
+      "qty": "100",
+      "rate": "194.4040"
+    },
+    {
+      "itemNo": "9.1.6(i)",
+      "description": "Loose Stone Riprap (Class B) of varying thickness for culverts, chutes and slope protection as shown on Dwg.",
+      "unit": "cu.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "21.1610"
+    },
+    {
+      "itemNo": "9.1.6(ii)a",
+      "description": "Mortared Stone Riprap (Class A, Varying Thickness) for Slope Protection, culverts and chutes including Stubs as shown on dwg.",
+      "unit": "cu.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "29.8242"
+    },
+    {
+      "itemNo": "9.1.6(ii)b",
+      "description": "Mortared Stone Riprap (Class A, Varying Thickness) for Intercepting Ditch as shown on dwg.",
+      "unit": "cu.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "40.2612"
+    },
+    {
+      "itemNo": "9.1.6(iv)",
+      "description": "Geotextile Fabric Filter for Gabion and Slope protection",
+      "unit": "cu.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "0.9268"
+    },
+    {
+      "itemNo": "9.2.6(i)a",
+      "description": "Gabions of 0.3m thickness for floodway locations including galvanized steel angle 50mm x 50mm x 6mm gabion anchors at 2m c/c both ways drive to firm ground as shown on dwg.",
+      "unit": "cu.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "42.4550"
+    },
+    {
+      "itemNo": "9.2.6(i)b",
+      "description": "Gabion lining of 0.5m thickness for floodway locations including galvanized steel angle 50mm x 50mm x 6mm gabion anchors at 2m c/c both ways drive to firm ground as shown on dwg.",
+      "unit": "cu.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "56.3752"
+    },
+    {
+      "itemNo": "9.2.6(i)c",
+      "description": "Gabion lining of 1m thickness for wadi bed, slope protection, culvert inlet, outlet protection and floodway locations including galvanized steel angle 50mm x 50mm x 6mm gabion anchors at 2m c/c both ways drive to firm ground as shown on dwg.",
+      "unit": "cu.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "53.5416"
+    },
+    {
+      "itemNo": "9.3.6(i)",
+      "description": "Wire Mesh Netting for slope protection",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "23.7468"
+    },
+    {
+      "itemNo": "9.4.6(iii)",
+      "description": "Shotcrete (100mm thick with wire mesh 6mm dia. at 200mm c/c both ways), including supply, installation and fixing of steel nails on exposed cut surface Painting",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "22.1004"
+    },
+    {
+      "itemNo": "9.4.6(vii)",
+      "description": "Painting",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "11.4940"
+    },
+    {
+      "itemNo": "9.8.6(ii)",
+      "description": "Precast Concrete Slab Embankment slope protection (1200x1200x100 mm)",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "11.8426"
+    },
+    {
+      "itemNo": "9.9.6(ii)a",
+      "description": "Grouted Stone Ditch lining (200mm thick)",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "7.1918"
+    },
+    {
+      "itemNo": "9.9.6(ii)b",
+      "description": "Grouted Stone Ditch lining (300mm thick)",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "9.6768"
+    },
+    {
+      "itemNo": "9.9.6(iv)",
+      "description": "Concrete Ditch Lining (100mm Thick) with wire mesh (10mm dia @200mm c/c both ways)",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "7.4382"
+    },
+    {
+      "itemNo": "9.9.6(v)",
+      "description": "Concrete lining (100mm thick) for intercepting berm Drains (Including with mesh reinforcement 10mm dia with spacing of 150mm c/c both ways)",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "11.1482"
+    },
+    {
+      "itemNo": "9.9.6(vi)",
+      "description": "75 mm Dia. PVC pipe weep holes (with 0.30m cubical gravel backing wrapped with Geotextile Fabric) for Shotcrete",
+      "unit": "lin.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "2.9582"
+    },
+    {
+      "itemNo": "9.10.6(iv)",
+      "description": "Geogrid above the friction slab(1.0 m wide) at MSE wall locations",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "3.7408"
+    },
+    {
+      "itemNo": "9.10.6(iii)",
+      "description": "Geotextile membrane for gabions and slope protection",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "0.8974"
+    },
+    {
+      "itemNo": "9.12.7(i)a",
+      "description": "Mechanically Stabilized Earth Retaining Walls (MSERWs) 10 m high including painting.",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "100.3954"
+    },
+    {
+      "itemNo": "9.12.7(i)b",
+      "description": "Mechanically Stabilized Earth Retaining Walls (MSERWs) 20 m high including painting.",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "112.6496"
+    },
+    {
+      "itemNo": "9.12.7(i)c",
+      "description": "Mechanically Stabilized Earth Retaining Walls (MSERWs) 30 m high including painting.",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "75.2962"
+    },
+    {
+      "itemNo": "9.12.7(i)d",
+      "description": "Mechanically Stabilized Earth Retaining Walls (MSERWs) 60 m high including painting.",
+      "unit": "sq.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "112.0616"
+    },
+    {
+      "itemNo": "9.12.7(ii)",
+      "description": "Standard Coping for MSERWs",
+      "unit": "lin.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "100.2820"
+    },
+    {
+      "itemNo": "9.12.7(iii)a",
+      "description": "Concrete Barrier Parapet on MSERWs including painting",
+      "unit": "lin.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "196.8120"
+    },
+    {
+      "itemNo": "9.12.7(iii)b",
+      "description": "Heavy Duty Concrete Barrier Parapet on MSERWs including painting",
+      "unit": "lin.m",
+      "chapter": "9 - SLOPE PROTECTION AND STABILIZATION",
+      "qty": "100",
+      "rate": "162.4154"
+    },
+    {
+      "itemNo": "12.1.7(ii)",
+      "description": "Paving, concrete interlocking blocks 60mm thick for side walks and median",
+      "unit": "sq.m",
+      "chapter": "12 - SIDEWALKS, PAVED AREAS AND CURBS",
+      "qty": "100",
+      "rate": "8.4588"
+    },
+    {
+      "itemNo": "12.1.7(v)a",
+      "description": "Precast Non-Mountable Concrete Curb Type ''A''",
+      "unit": "lin.m",
+      "chapter": "12 - SIDEWALKS, PAVED AREAS AND CURBS",
+      "qty": "100",
+      "rate": "12.5832"
+    },
+    {
+      "itemNo": "12.1.7(v)b",
+      "description": "Precast Mountable curb Type ''B''",
+      "unit": "lin.m",
+      "chapter": "12 - SIDEWALKS, PAVED AREAS AND CURBS",
+      "qty": "100",
+      "rate": "15.6660"
+    },
+    {
+      "itemNo": "12.1.7(v)c",
+      "description": "Precast flush curb Type ''D''",
+      "unit": "lin.m",
+      "chapter": "12 - SIDEWALKS, PAVED AREAS AND CURBS",
+      "qty": "100",
+      "rate": "13.7760"
+    },
+    {
+      "itemNo": "12.1.7(v)d",
+      "description": "Precast concrete edge curb Type ''E''",
+      "unit": "lin.m",
+      "chapter": "12 - SIDEWALKS, PAVED AREAS AND CURBS",
+      "qty": "100",
+      "rate": "12.1478"
+    },
+    {
+      "itemNo": "13.1.7(i)a",
+      "description": "W-Beam Guardrail (Strong post, blocked out) standard section including Block, reflector",
+      "unit": "lin.m",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "14.4802"
+    },
+    {
+      "itemNo": "13.1.7(i)c",
+      "description": "Modification to existing W-Beam Guardrail in MEW median to include one additional W150 x 13.5 Steel post",
+      "unit": "lin.m.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "9.5004"
+    },
+    {
+      "itemNo": "13.1.7(ii)",
+      "description": "Guard Rail-Concrete Barrier transition section including connection",
+      "unit": "nr.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "713.3700"
+    },
+    {
+      "itemNo": "13.1.7(iii)a",
+      "description": "End anchorage for approach including post, reflectors, accessories and foundations",
+      "unit": "nr.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "436.1280"
+    },
+    {
+      "itemNo": "13.1.7(iii)b",
+      "description": "W-Beam Guardrail Terminal section for Departure end (Type 2) including all",
+      "unit": "nr.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "461.0620"
+    },
+    {
+      "itemNo": "13.1.7(iv)",
+      "description": "W-Beam Guardrail posts (Strong post, W150 x 13.5 Steel post)",
+      "unit": "nr.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "32.1622"
+    },
+    {
+      "itemNo": "13.1.7(v)",
+      "description": "Thrie Beam Guardrail (Strong post, blocked out) standard section including block",
+      "unit": "lin.m.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "29.4350"
+    },
+    {
+      "itemNo": "13.1.7(viii)",
+      "description": "Thrie Beam Guardrail posts (Strong post,W150 x 13.5 Steel post)",
+      "unit": "nr.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "52.0100"
+    },
+    {
+      "itemNo": "13.1.7(ix)",
+      "description": "Concrete barrier, Single face type - B including foundation and reflectors as shown on Dwg.",
+      "unit": "lin.m.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "135.8308"
+    },
+    {
+      "itemNo": "13.1.7(ix)a",
+      "description": "Concrete barrier, Double face type - C including foundation and reflectors as shown on Dwg.",
+      "unit": "lin.m.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "153.8978"
+    },
+    {
+      "itemNo": "13.1.7(ix)b",
+      "description": "Heavy Duty Concrete barrier, Double face type - D including foundation and reflectors as shown on Dwg.",
+      "unit": "lin.m.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "226.4598"
+    },
+    {
+      "itemNo": "13.1.7(ix)c",
+      "description": "Heavy Duty Concrete barrier, Single face type - E including foundation and reflectors as shown on Dwg.",
+      "unit": "lin.m.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "269.5056"
+    },
+    {
+      "itemNo": "13.1.7(ix)d",
+      "description": "Noise Barrier Wall as per the Drawing",
+      "unit": "lin.m.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "897.6870"
+    },
+    {
+      "itemNo": "13.1.7(xi)",
+      "description": "Concrete barrier, transition section including foundation and reflectors as shown on Dwg.",
+      "unit": "lin.m.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "163.2624"
+    },
+    {
+      "itemNo": "13.1.7(xii)",
+      "description": "Impact attenuator, Quad Beam type, with expandable modules/cartridges, including new foundation, slab with reflective studs and connection to the concrete Barrier Including anchor bolt",
+      "unit": "nr.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "14157.6960"
+    },
+    {
+      "itemNo": "13.1.7(xiii)",
+      "description": "Re-installation of W-Beam Guardrail (using the material removed as per item no: 2.2.5(xv))",
+      "unit": "lin.m.",
+      "chapter": "13 - SAFETY BARRIERS AND FENCES",
+      "qty": "100",
+      "rate": "18.1006"
+    },
+    {
+      "itemNo": "14.1.7(i)a",
+      "description": "Highway sign, Triangular (600mm high)",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "28.5460"
+    },
+    {
+      "itemNo": "14.1.7(i)b",
+      "description": "Highway sign, Triangular (750mm high)",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "36.7500"
+    },
+    {
+      "itemNo": "14.1.7(i)c",
+      "description": "Highway sign, Triangular (900mm high)",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "52.4860"
+    },
+    {
+      "itemNo": "14.1.7(i)d",
+      "description": "Highway sign, Triangular (1200mm high)",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "76.3560"
+    },
+    {
+      "itemNo": "14.1.7(i)e",
+      "description": "Highway sign, Triangular (1500mm high)",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "124.0120"
+    },
+    {
+      "itemNo": "14.1.7(ii)a",
+      "description": "Highway sign, Circular (Diameter 600mm)",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "31.6120"
+    },
+    {
+      "itemNo": "14.1.7(ii)b",
+      "description": "Highway sign, Circular (Diameter 750mm)",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "52.2620"
+    },
+    {
+      "itemNo": "14.1.7(ii)c",
+      "description": "Highway sign, Circular (Diameter 900mm)",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "77.0840"
+    },
+    {
+      "itemNo": "14.1.7(ii)d",
+      "description": "Highway sign, Circular (Diameter 1200mm)",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "127.9460"
+    },
+    {
+      "itemNo": "14.1.7(iii)a",
+      "description": "Chevron Signs, rectangular [300 mm x 300 mm]",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "82.7540"
+    },
+    {
+      "itemNo": "14.1.7(iii)b",
+      "description": "Highway Signs, rectangular [750 mm x 1400 mm]",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "82.7540"
+    },
+    {
+      "itemNo": "14.1.7(iii)c",
+      "description": "Highway Signs, rectangular [600 mm x 900 mm]",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "85.2740"
+    },
+    {
+      "itemNo": "14.1.7(iii)d",
+      "description": "Supplementary plate, rectangular [900 mm x 600 mm]",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "82.7540"
+    },
+    {
+      "itemNo": "14.1.7(iii)e",
+      "description": "Supplementary plate, rectangular [1200 mm x 780 mm]",
+      "unit": "sq.m",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "82.7540"
+    },
+    {
+      "itemNo": "14.1.7(iii)f",
+      "description": "Supplementary plate, rectangular [1500 mm x 780 mm]",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "82.7540"
+    },
+    {
+      "itemNo": "14.1.7(iii)g",
+      "description": "Rectangular or Polygonal Sign Face (Area 1-5 sq.m.)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "82.7540"
+    },
+    {
+      "itemNo": "14.1.7(iii)h",
+      "description": "Rectangular Sign Face (Area 5-10 sq.m.)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "82.9220"
+    },
+    {
+      "itemNo": "14.1.7(iii)i",
+      "description": "Rectangular Sign Face (Area 10-15 sq.m.)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "82.8380"
+    },
+    {
+      "itemNo": "14.1.7(iii)j",
+      "description": "Rectangular Sign Face (Area 15-20 sq.m.)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "88.7040"
+    },
+    {
+      "itemNo": "14.1.7(iii)k",
+      "description": "Rectangular Sign Face (Area 20-35 sq.m.)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "88.5220"
+    },
+    {
+      "itemNo": "14.1.7(iii)l",
+      "description": "Rectangular Sign Face (Area 35-50 sq.m.)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "88.5374"
+    },
+    {
+      "itemNo": "14.1.7(iii)m",
+      "description": "Rectangular Sign Face (Area 50-65 sq.m.)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "92.6800"
+    },
+    {
+      "itemNo": "14.1.7(iii)n",
+      "description": "Rectangular Sign Face (Area 65-90 sq.m.)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "101.9354"
+    },
+    {
+      "itemNo": "14.1.7(iii)o",
+      "description": "Rectangular Sign Face (Area 90-120 sq.m.)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "109.3498"
+    },
+    {
+      "itemNo": "14.1.7(iv)a",
+      "description": "Octagonal Road signs (Height 750mm)",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "56.3500"
+    },
+    {
+      "itemNo": "14.1.7(iv)b",
+      "description": "Octagonal Road signs (Height 900mm)",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "66.9620"
+    },
+    {
+      "itemNo": "14.1.7(v)a",
+      "description": "Sign post support assembly G.I. pipe 100mm Dia. Including foundation and painting",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "145.9080"
+    },
+    {
+      "itemNo": "14.1.7(v)b",
+      "description": "Multi-post Sign Support Assembly, Type PI posts, complete including foundation and painting",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "343.7980"
+    },
+    {
+      "itemNo": "14.1.7(v)c",
+      "description": "Multi-post Sign Support Assembly, Type PII posts, complete including foundation and painting",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "544.4180"
+    },
+    {
+      "itemNo": "14.1.7(v)d",
+      "description": "Multi-post Sign Support Assembly, Type PIII posts, complete including foundation and painting",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "723.8700"
+    },
+    {
+      "itemNo": "14.1.7(v)e",
+      "description": "Multi-post Sign Support Assembly, Type PIV posts, complete including foundation and painting",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "1091.8740"
+    },
+    {
+      "itemNo": "14.1.7(v)f",
+      "description": "Multi-post Sign Support Assembly, Type PV posts, complete including foundation and painting",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "1778.2380"
+    },
+    {
+      "itemNo": "14.1.7(v)g",
+      "description": "Multi-post Sign Support Assembly, Type PVI posts, complete including foundation and painting",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "2072.8400"
+    },
+    {
+      "itemNo": "14.1.7(vi)",
+      "description": "Breakaway multi-post sign post support assembly for Exit Signs including foundations and painting as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "772.5900"
+    },
+    {
+      "itemNo": "14.1.7(vii)a",
+      "description": "Overhead Gantry Sign Support with foundation including Bracing, Catwalk Assembly, Type G1 as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "27868.3300"
+    },
+    {
+      "itemNo": "14.1.7(vii)b",
+      "description": "Overhead Gantry Sign Support with foundation including Bracing, Catwalk Assembly, Type G2 as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "33723.0740"
+    },
+    {
+      "itemNo": "14.1.7(vii)c",
+      "description": "Overhead Gantry Sign Support with foundation including Bracing, Catwalk Assembly, Type G3 as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "36903.0760"
+    },
+    {
+      "itemNo": "14.1.7(vii)d",
+      "description": "Overhead Gantry Sign Support with foundation including Bracing, Catwalk Assembly, Type G4 as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "45151.0500"
+    },
+    {
+      "itemNo": "14.1.7(vii)e",
+      "description": "Overhead Gantry Sign Support with foundation including Bracing, Catwalk Assembly, Type G5 as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "56351.8060"
+    },
+    {
+      "itemNo": "14.1.7(vii)f",
+      "description": "Overhead Gantry Sign Support with foundation including Bracing, Catwalk Assembly, Type G6 as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "43670.1160"
+    },
+    {
+      "itemNo": "14.1.7(vii)g",
+      "description": "Overhead Gantry Sign Support with foundation including Bracing, Catwalk Assembly, Type G7 as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "62233.8640"
+    },
+    {
+      "itemNo": "14.1.7(vii)h",
+      "description": "Overhead Cantilever Sign Support including Bracing foundation, Catwalk Assembly, Type C1 as per shown on dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "26038.2220"
+    },
+    {
+      "itemNo": "14.1.7(vii)i",
+      "description": "Overhead Cantilever Sign Support including Bracing foundation, Catwalk Assembly, Type C2 as per shown on dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "32711.1120"
+    },
+    {
+      "itemNo": "14.1.7(vii)j",
+      "description": "Overhead Cantilever Sign Support including Bracing foundation, Catwalk Assembly, Type C3 as per shown on dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "41823.2500"
+    },
+    {
+      "itemNo": "14.1.7(vii)k",
+      "description": "Overhead Cantilever Sign Support including Bracing foundation, Catwalk Assembly, Type C4 as per shown on dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "41807.5420"
+    },
+    {
+      "itemNo": "14.1.7(vii)l",
+      "description": "Overhead Cantilever Sign Support including Bracing foundation, Catwalk Assembly, Type C5 as per shown on dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "57873.8020"
+    },
+    {
+      "itemNo": "14.1.7(xi)",
+      "description": "Supply and install removable bollards in the median opening and one fixed bollard at each ends as shown on Dwg. for R.O.P. including foundation, chain and lock",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "82.4320"
+    },
+    {
+      "itemNo": "14.1.7(xvi)",
+      "description": "Carefully reinstate existing flag pole as per item 2.2.5(xxvi)c, foundation with all accessories for the proper completion of the work to the proposed locations as directed by the Engineer",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "47.3368"
+    },
+    {
+      "itemNo": "14.1.7(xvii)",
+      "description": "Carefully refix the filling station sign boards by using the existing sign board removed (as per item no. 2.2.5(xvi)a) including foundation and any other accessories required for installation",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "3810.8980"
+    },
+    {
+      "itemNo": "14.1.7(x)a",
+      "description": "Removable debris deflector posts 3.5m high and 150mm dia including foundation and all accessories as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "394.9960"
+    },
+    {
+      "itemNo": "14.1.7(x)b",
+      "description": "Removable debris deflector posts 1.5m high and 150mm dia including foundation and all accessories as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "257.9080"
+    },
+    {
+      "itemNo": "14.1.7(x)c",
+      "description": "Fixed debris deflector posts 3.5m high and 150mm dia including foundation and all accessories as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "394.9960"
+    },
+    {
+      "itemNo": "14.1.7(x)d",
+      "description": "Fixed debris deflector posts 1.5m high and 150mm dia including foundation and all accessories as shown on Dwg.",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "236.2640"
+    },
+    {
+      "itemNo": "14.2.6(i)a",
+      "description": "Traffic Lines, Type L1/1(120) White (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "4.9980"
+    },
+    {
+      "itemNo": "14.2.6(i)b",
+      "description": "Traffic Lines, Type L1/2(120) White (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "4.9952"
+    },
+    {
+      "itemNo": "14.2.6(i)c",
+      "description": "Traffic Lines, Type L1/3(120) White (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "4.9952"
+    },
+    {
+      "itemNo": "14.2.6(i)d",
+      "description": "Traffic Lines, Type L2A(120) White (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "4.9980"
+    },
+    {
+      "itemNo": "14.2.6(i)e",
+      "description": "Traffic Lines, Type L2/1(120) White (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "4.9980"
+    },
+    {
+      "itemNo": "14.2.6(i)f",
+      "description": "Traffic Lines, Type L2/2(120) White (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "4.9980"
+    },
+    {
+      "itemNo": "14.2.6(i)g",
+      "description": "Traffic Lines, Type L4/1(150) Yellow (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "4.9952"
+    },
+    {
+      "itemNo": "14.2.6(i)h",
+      "description": "Traffic Lines, Type L4/2(120) Yellow (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "4.9952"
+    },
+    {
+      "itemNo": "14.2.6(i)i",
+      "description": "Traffic Lines, Type L5/1(150) White (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "4.6046"
+    },
+    {
+      "itemNo": "14.2.6(i)j",
+      "description": "Traffic Lines, Type L5/2(120) White (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "4.6046"
+    },
+    {
+      "itemNo": "14.2.6(i)k",
+      "description": "Traffic Lines, Type L7(400) White (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "7.5040"
+    },
+    {
+      "itemNo": "14.2.6(i)l",
+      "description": "Traffic Lines, Type L8(200) White (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "7.5040"
+    },
+    {
+      "itemNo": "14.2.6(i)m",
+      "description": "Traffic Lines, Type L9(120) White (Mechanical application)",
+      "unit": "sq.m",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "7.5040"
+    },
+    {
+      "itemNo": "14.2.6(i)n",
+      "description": "Traffic Lines, Type L10(100) White (Mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "7.5040"
+    },
+    {
+      "itemNo": "14.2.6(iii)a",
+      "description": "Special Marking, Pedestrian Crossing",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "10.1920"
+    },
+    {
+      "itemNo": "14.2.6(iii)b",
+      "description": "Special Marking, Chevrons Marking S9",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "10.1836"
+    },
+    {
+      "itemNo": "14.2.6(iii)c",
+      "description": "Special Marking, Lane Selection Arrow White (S3/1)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "14.1680"
+    },
+    {
+      "itemNo": "14.2.6(iii)d",
+      "description": "Special Marking, Lane Selection Arrow White (S3/2)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "14.1680"
+    },
+    {
+      "itemNo": "14.2.6(iii)e",
+      "description": "Special Marking, Lane Selection Arrow White (S4/1)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "14.1680"
+    },
+    {
+      "itemNo": "14.2.6(iii)f",
+      "description": "Special Marking, Lane Selection Arrow White (S4/2)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "14.1680"
+    },
+    {
+      "itemNo": "14.2.6(iii)g",
+      "description": "Special Marking, Lane Selection Arrow White (S5/1)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "14.1680"
+    },
+    {
+      "itemNo": "14.2.6(iii)h",
+      "description": "Special Marking, Lane Selection Arrow White (S7/1)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "14.1680"
+    },
+    {
+      "itemNo": "14.2.6(iii)i",
+      "description": "Special Marking, Lane Selection Arrow White (S8/1)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "14.1680"
+    },
+    {
+      "itemNo": "14.2.6(iii)j",
+      "description": "Traffic Lines, Yellow bar marking (300) (mechanical application)",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "7.5012"
+    },
+    {
+      "itemNo": "14.2.6(iv)",
+      "description": "Curb painting",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "4.1860"
+    },
+    {
+      "itemNo": "14.2.6(v)",
+      "description": "Removal of Road markings",
+      "unit": "sq.m.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "24.4944"
+    },
+    {
+      "itemNo": "14.3.6(i)a",
+      "description": "Reflecting Road Studs, Double face (Red, White, Yellow & Green) - Type 3",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "8.3440"
+    },
+    {
+      "itemNo": "14.3.6(i)b",
+      "description": "Reflecting Road Studs, Single face (Red, White, Yellow & Green) - Type 3",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "7.9380"
+    },
+    {
+      "itemNo": "14.3.6(i)c",
+      "description": "Reflecting Road Studs, Double face (Red, White, Yellow & Green) - Type 1",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "12.2780"
+    },
+    {
+      "itemNo": "14.3.6(i)d",
+      "description": "Reflecting Road Studs, Single face (Red, White, Yellow & Green) - Type 1",
+      "unit": "nr.",
+      "chapter": "14 - TRAFFIC SIGNS AND ROAD MARKINGS",
+      "qty": "100",
+      "rate": "10.8892"
+    },
+    {
+      "itemNo": "15.1.20(i)",
+      "description": "Power Supply connection to the feeder pillar",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "1857.4780"
+    },
+    {
+      "itemNo": "15.1.20(ii)",
+      "description": "Spare Parts (5%) as per the approved list",
+      "unit": "LS",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "1",
+      "rate": "49191.3520"
+    },
+    {
+      "itemNo": "15.3.6(i)",
+      "description": "Supply and installation of Electrical Sub-station with 1Nr RMU,1Nr 500 KVA Transformer and 800 A feeder pillar, including building/enclosure, foundation, cable terminations, testing, commissioning and all civil works and other accessories necessary to complete the system functional. The Contractor to submit the calculation for the substation wattage requirement, the location and the substation to be approved by concern authority",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "43288.3920"
+    },
+    {
+      "itemNo": "15.5.6(ii)a",
+      "description": "Supply and installation of 11kV/433V pole mounted transformer sub-station,100KVA with 4 way LV panel including H-pole, transformer mounting structure, cables, earthing, connections and other all other accessories necessary to complete the system functional. The Contractor to submit the calculation for the substation wattage requirement, the location and the substation to be approved by concern authority",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "16036.3840"
+    },
+    {
+      "itemNo": "15.5.6(ii)b",
+      "description": "Supply and installation of 11kV/433V ground mounted transformer sub-station, 100KVA with 4 way LV panel including foundation structure, cables, earthing, connections and all other accessories necessary to complete the system functional. The Contractor to submit the calculation for the substation wattage requirement, the location and the substation to be approved by NAMA",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "78706.1520"
+    },
+    {
+      "itemNo": "15.6.6(i)a",
+      "description": "Supply and install Mini Feeder Pillars, 400 A, 6way",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "1820.0840"
+    },
+    {
+      "itemNo": "15.6.6(i)b",
+      "description": "Supply and install Street Lighting Feeder Pillars, 100 A, 4way",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "1505.2660"
+    },
+    {
+      "itemNo": "15.6.6(i)c",
+      "description": "Supply and install Street Lighting Feeder Pillars, 200 A, 6way",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "1881.0820"
+    },
+    {
+      "itemNo": "15.7.6(i)a",
+      "description": "Nominal Conductor Area 25mm2 + 16mm2 earth cable in uPVC duct",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "9.9288"
+    },
+    {
+      "itemNo": "15.7.6(i)b",
+      "description": "Nominal Conductor Area 95mm2 + 50 mm2 earth cable in uPVC duct",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "39.9490"
+    },
+    {
+      "itemNo": "15.7.6(i)c",
+      "description": "Nominal Conductor Area 120mm2 + 70 mm2 earth cable in uPVC duct",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "42.5572"
+    },
+    {
+      "itemNo": "15.7.6(i)d",
+      "description": "Nominal Conductor Area 240mm2 + 70 mm2 earth cable in uPVC duct",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "91.4466"
+    },
+    {
+      "itemNo": "15.8.6(i)c",
+      "description": "Replace, Supply, install and commission of LED luminaries (six nos with radial arrangement ) of ME2 class for 25 m high mast existing lighting column. The price shall include zhaga socket and node as per MM specification and requirement.",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "885.4580"
+    },
+    {
+      "itemNo": "15.8.6(ii)a",
+      "description": "Supply, install and commission Galvanized single arm steel lighting column polygon 16 m high pole/column with LED luminaries of ME2 class conforming to specifications and drawings including concrete foundation, fused cut out, wiring, connection and all other accessories required for proper completion of the work. The price shall include zhaga socket and node as per MM specification and requirement.",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "1839.4320"
+    },
+    {
+      "itemNo": "15.8.6(ii)aa",
+      "description": "shifting existing light poles including foundation and cables and related works(using the material removed as per item no: 2.2.5(xxvi)a) with Replace, Supply, install and commission of LED luminaries of ME2 class for high mast existing lighting columnn.The price shall include zhaga socket and node as per MM specification and requirement.",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "1083.9752"
+    },
+    {
+      "itemNo": "15.8.6(ii)b",
+      "description": "Supply, install and commission Galvanized double arm steel lighting column polygon 16 m high pole/column with LED luminaries of ME2 class conforming to specifications and drawings including concrete foundation, fused cut out, wiring, connection and all other accessories required for proper completion of the work. The price shall include zhaga socket and node as per MM specification and requirement.",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "2125.9280"
+    },
+    {
+      "itemNo": "15.8.6(ii)a-2",
+      "description": "Supply, install and commission Galvanized steel lighting column single arm14m high with LED luminarie of ME2 class conforming to specifications and drawings including concrete foundation, fused cut out, wiring, connection and all other accessories required. The price shall include zhaga socket and node as per MM specification and requirement.",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "1178.9680"
+    },
+    {
+      "itemNo": "15.8.6(ii)b-2",
+      "description": "Supply, install and commission Galvanized steel lighting column 14m double arm with LED luminaries of ME2 class conforming to specifications and drawings including concrete foundation, fused cut out, wiring, connection and all other accessories required for proper completion of work. The price shall include zhaga socket and node as per MM specification and requirement.",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "1357.2300"
+    },
+    {
+      "itemNo": "15.8.6(iii)",
+      "description": "Pre-shipment testing of Lighting column and accessories",
+      "unit": "LS",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "1",
+      "rate": "29514.8140"
+    },
+    {
+      "itemNo": "15.10.6(i)a",
+      "description": "Provide Under bridge surface mounted lighting including Conduits, power supply & distribution cables, LED luminaire lamp with average Lux of 25 with uniformity as ME2 and glare not more than10 % with IP66 protection , weatherproof Junction Boxes, including supply, installation, testing and putting into service complete and separate panel for each bridge as per MM specification and requirements.",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "560.3906"
+    },
+    {
+      "itemNo": "15.14.6 (i)a",
+      "description": "Cloud based street light management system (CBSLMS) installation and all related communication and control facilities (at designated location(s) of the roadway network) as per MM standard specification and requirements",
+      "unit": "LS",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "1",
+      "rate": "102719.4000"
+    },
+    {
+      "itemNo": "15.14.6 (ii)a",
+      "description": "RCM installation and all related communication and control facilities (at designated control center and up to designated CBSLMS unit of the roadway network)",
+      "unit": "LS",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "1",
+      "rate": "42713.8320"
+    },
+    {
+      "itemNo": "15.15.7(i)",
+      "description": "Supply and install Twin rod earthing installation at street lighting feeder pillars and mini feeder pillar",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "245.9660"
+    },
+    {
+      "itemNo": "15.15.7(ii)",
+      "description": "Supply and install Single rod earthing installation at the end of street lighting circuits",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "127.9040"
+    },
+    {
+      "itemNo": "15.18.6(vi)a",
+      "description": "Supply and install Pre-cast concrete foundation for mini feeder pillars as per Dwg. including Bolts and any other accessories required for installation.",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "230.8040"
+    },
+    {
+      "itemNo": "15.18.6(vi)b",
+      "description": "Supply and install Pre-cast concrete foundation for street lighting feeder pillars as per Dwg. including Bolts and any other accessories required for installation.",
+      "unit": "nr.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "230.8040"
+    },
+    {
+      "itemNo": "15.18.6(vii)a",
+      "description": "Trench for low voltage cable for one cable",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "2.9344"
+    },
+    {
+      "itemNo": "15.18.6(vii)b",
+      "description": "Trench for low voltage cable for two cable",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "3.2886"
+    },
+    {
+      "itemNo": "15.18.6(vii)c",
+      "description": "Trench for low voltage cable for three cable",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "3.6330"
+    },
+    {
+      "itemNo": "15.18.6(xii)a",
+      "description": "1Way 100 mm Upvc duct for street lighting with concrete encasement with all details as shown in the drawing",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "20.6668"
+    },
+    {
+      "itemNo": "15.18.6(xii)b",
+      "description": "2Way 100 mm Upvc duct for street lighting with concrete encasement with all details as shown in the drawing",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "27.2692"
+    },
+    {
+      "itemNo": "15.18.6(xii)c",
+      "description": "2Way 150 mm Upvc duct for 11kv cables for street lighting with concrete encasement with all details as shown in the drawing",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "37.5382"
+    },
+    {
+      "itemNo": "15.18.6(xii)d",
+      "description": "4Way 100 mm Upvc duct for street lighting with concrete encasement with all details as shown in the drawing",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "47.6812"
+    },
+    {
+      "itemNo": "15.18.6(xii)e",
+      "description": "4Way 150 mm Upvc duct for street lighting with concrete encasement with all details as shown in the drawing",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "69.6220"
+    },
+    {
+      "itemNo": "15.18.6(xii)f",
+      "description": "6Way 100 mm Upvc duct for street lighting with concrete encasement with all details as shown in the drawing",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "59.9060"
+    },
+    {
+      "itemNo": "15.18.6(xii)g",
+      "description": "8Way 100 mm Upvc duct for street lighting with concrete encasement with all details as shown in the drawing",
+      "unit": "lin.m.",
+      "chapter": "15 - ROAD LIGHTING AND ELECTRICAL INSTALLATION",
+      "qty": "100",
+      "rate": "72.1280"
+    },
+    {
+      "itemNo": "18.1.6(i)a",
+      "description": "Supply and Install proposed 16way 200mm dia and 16way 50mm dia Upvc duct (8way split & 8way spare) to protect the existing underground 33kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markersetc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "459.1020"
+    },
+    {
+      "itemNo": "18.1.6(i)b",
+      "description": "Supply and Install proposed 12way 200mm dia and 12way 50mm dia Upvc duct (6way split & 6way spare) to protect the existing underground 33kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markersetc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "369.5580"
+    },
+    {
+      "itemNo": "18.1.6(i)c",
+      "description": "Supply and Install proposed 10way 200mm dia and 10way 50mm dia Upvc duct (4way split & 4way spare) to protect the existing underground 33kv electrical cables complete including concrete protection (class 31/20), excavation, backfilling, compaction, end caps, draw ropes and duct markersetc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "312.3260"
+    },
+    {
+      "itemNo": "18.1.6(i)d",
+      "description": "Supply and Install proposed 8way 200mm dia and 8way 50mm dia Upvc duct(4way split & 4way spare) to protect the existing underground 33kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "220.2620"
+    },
+    {
+      "itemNo": "18.1.6(i)e",
+      "description": "Supply and Install proposed 6way 200mm dia and 6way 50mm dia Upvc duct(3way split & 3way spare) to protect the existing underground 33kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "194.5160"
+    },
+    {
+      "itemNo": "18.1.6(i)f",
+      "description": "Supply and Install proposed 20way 200mm dia and 2way 50mm dia Upvc duct (10way split & 10way spare) to protect the existing underground 33kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "555.8140"
+    },
+    {
+      "itemNo": "18.1.6(i)g",
+      "description": "Supply and Install proposed 4way 200mm dia and 4way 50mm dia Upvc duct(2way split & 2way spare) to protect the existing underground 33kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "146.3700"
+    },
+    {
+      "itemNo": "18.1.6(i)h",
+      "description": "Supply and Install proposed 2way 200mm dia and 2way 50mm dia Upvc duct(1way split & 1way spare) to protect the existing underground 33kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "91.3780"
+    },
+    {
+      "itemNo": "18.1.6(i)i",
+      "description": "Supply and Install proposed 6way 150mm dia uPVC duct (3way split & 3wayspare) to protect the existing underground 11kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "111.7340"
+    },
+    {
+      "itemNo": "18.1.6(i)j",
+      "description": "Supply and Install proposed 4way 150mm dia uPVC duct (2way split & 2wayspare) to protect the existing underground 11kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "99.5960"
+    },
+    {
+      "itemNo": "18.1.6(i)k",
+      "description": "Supply and Install proposed 8way 150mm dia uPVC duct (4way split & 4wayspare) to protect the existing underground 11kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "147.2240"
+    },
+    {
+      "itemNo": "18.1.6(i)l",
+      "description": "Supply and Install proposed 10way 150mm dia uPVC duct (5way split & 5wayspare) to protect the existing underground 11kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "215.8240"
+    },
+    {
+      "itemNo": "18.1.6(i)m",
+      "description": "Supply and Install proposed 2way 150mm dia uPVC duct (1way split & 1wayspare) to protect the existing underground 11kv electrical cables complete with concrete protection (class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "56.2520"
+    },
+    {
+      "itemNo": "18.1.6(i)n",
+      "description": "Supply and Install proposed 3way 200mm dia Upvc split duct protect the existing underground 33kv electrical cables complete with concrete protection(class 25/20) including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "87.5980"
+    },
+    {
+      "itemNo": "18.1.6(i)o",
+      "description": "Supply and Install proposed 2way 100mm dia uPVC duct (1way split & 1wayspare) to protect the existing underground LV electrical cables complete including concrete protection (class 31/20), excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. at locations shown on the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "41.5940"
+    },
+    {
+      "itemNo": "18.1.6(i)p",
+      "description": "Supply and install 4way 100mm dia Upvc duct (2way split & 2way spare) to protect existing Omantel / Ooredoo / ROP cables complete with concrete protection (class 25/20) including excavation, backfilling, duct marker and compaction etc. at locations shown on the drawings or as directed by the Engineer as per Oman Broadband, Omantel / Ooredoo / MOD Standards and Specifications",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "64.5260"
+    },
+    {
+      "itemNo": "18.1.6(i)q",
+      "description": "Supply and install 2way 100mm dia Upvc duct (1way split & 1way spare) to protect existing Omantel / Ooredoo/ ROP cables complete with concrete protection(class 25/20) including excavation, backfilling, duct marker and compaction etc. at locations shown on the drawings or as directed by the Engineer as per Omantel/Ooredoo / MOD Standards and Specifications",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "41.5940"
+    },
+    {
+      "itemNo": "18.1.6(ii)a",
+      "description": "Concrete protection slab for existing water lines100 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "82.3340"
+    },
+    {
+      "itemNo": "18.1.6(ii)b",
+      "description": "Concrete protection slab for existing water lines110 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "82.3340"
+    },
+    {
+      "itemNo": "18.1.6(ii)c",
+      "description": "Concrete protection slab for existing water lines150 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "82.3340"
+    },
+    {
+      "itemNo": "18.1.6(ii)d",
+      "description": "Concrete protection slab for existing water lines 200 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "163.9540"
+    },
+    {
+      "itemNo": "18.1.6(ii)e",
+      "description": "Concrete protection slab for existing water lines 225 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "144.2840"
+    },
+    {
+      "itemNo": "18.1.6(ii)f",
+      "description": "Concrete protection slab for existing water lines 300 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "163.9540"
+    },
+    {
+      "itemNo": "18.1.6(ii)h",
+      "description": "Concrete protection slab for existing water lines 400 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "197.3300"
+    },
+    {
+      "itemNo": "18.1.6(ii)j",
+      "description": "Concrete protection slab for existing water lines 600 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "197.3244"
+    },
+    {
+      "itemNo": "18.1.6(ii)k",
+      "description": "Concrete protection slab for existing water lines 1000 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "337.8466"
+    },
+    {
+      "itemNo": "18.1.6(ii)l",
+      "description": "Concrete protection slab for existing water lines 1100 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "337.8480"
+    },
+    {
+      "itemNo": "18.1.6(ii)m",
+      "description": "Concrete protection slab for existing water lines 1200 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "337.8480"
+    },
+    {
+      "itemNo": "18.1.6(ii)n",
+      "description": "Concrete protection slab for existing water lines 1600 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "397.4740"
+    },
+    {
+      "itemNo": "18.1.6(ii)o",
+      "description": "Concrete protection slab for existing sewer lines 400 mm dia (Class40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "197.3300"
+    },
+    {
+      "itemNo": "18.1.6(ii)p",
+      "description": "Concrete protection slab for existing sewer lines 600 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "197.3300"
+    },
+    {
+      "itemNo": "18.1.6(ii)q",
+      "description": "Concrete protection slab for existing sewer lines 800 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "137.9560"
+    },
+    {
+      "itemNo": "18.1.6(ii)r",
+      "description": "Concrete protection slab for existing sewer lines 1000 mm dia (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "173.1940"
+    },
+    {
+      "itemNo": "18.1.6(ii)s",
+      "description": "Concrete protection slab for existing TE line (Class 40/20) as shown on dwg.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "82.3340"
+    },
+    {
+      "itemNo": "18.1.6(ii)s-2",
+      "description": "Utility culvert for protection for MSCP 10'' oil line including excavation, backfilling, concreting (Class 40/20), waterproofing, reinforcement etc. as per drawings but excluding embankment for roadway over the culvert as perORPC (Oman Refineries & Petroleum Chemicals) Specification and requirements",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "1055.4740"
+    },
+    {
+      "itemNo": "18.1.6(ii)t",
+      "description": "Utility culvert for protection for MSCP 18'' oil line including excavation, backfilling, concreting (Class 40/20), waterproofing, reinforcement etc. as per drawings but excluding embankment for roadway over the culvert as perORPC (Oman Refineries & Petroleum Chemicals) Specification and requirements",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "718.9420"
+    },
+    {
+      "itemNo": "18.1.6(ii)u",
+      "description": "Utility culvert for protection for MSCP 24'' oil line including excavation, backfilling, concreting (Class 40/20), waterproofing, reinforcement etc. as per drawings but excluding embankment for roadway over the culvert as perORPC (Oman Refineries & Petroleum Chemicals) Specification and requirements",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "1166.2294"
+    },
+    {
+      "itemNo": "18.1.6(ii)v",
+      "description": "Utility culvert for protection for PDO 38'' oil line including excavation, backfilling, concreting (Class 40/20), waterproofing, reinforcement etc as per drawings but excluding embankment for roadway over the culvert as perORPC (Oman Refineries & Petroleum Chemicals) Specification and",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "1807.6660"
+    },
+    {
+      "itemNo": "18.1.6(ii)w",
+      "description": "Utility culvert for protection for OGC 10'' gas line including excavation, backfilling, concreting (Class 40/20), waterproofing, reinforcement etc. as per drawings but excluding embankment for roadway over the culvert as per OGCSpecification and requirements",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "1055.4740"
+    },
+    {
+      "itemNo": "18.1.6(ii)x",
+      "description": "Utility culvert for protection for OGC 16'' gas line including excavation, backfilling, concreting (Class 40/20), waterproofing, reinforcement etc. as per drawings but excluding embankment for roadway over the culvert as per OGCSpecification and requirements",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "1055.4740"
+    },
+    {
+      "itemNo": "18.1.6(ii)xi",
+      "description": "Utility culvert for protection for OGC 20'' gas line including excavation, backfilling, concreting (Class 40/20), waterproofing, reinforcement etc. as per drawings but excluding embankment for roadway over the culvert as per OGCSpecification and requirements",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "1166.2420"
+    },
+    {
+      "itemNo": "18.1.6(ii)y",
+      "description": "Utility culvert for protection for OGC 24'' gas line including excavation, backfilling, concreting (Class 40/20), waterproofing, reinforcement etc. as per drawings but excluding embankment for roadway over the culvert as per OGCSpecification and requirements",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "1166.2420"
+    },
+    {
+      "itemNo": "18.1.6(ii)z",
+      "description": "Reinstatement of Oil / Gas line right of way / access with access gate barrier sign boards, right of way barricades etc. complete as per the requirements of OGC/ORPC Specifications",
+      "unit": "nr.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "532.7420"
+    },
+    {
+      "itemNo": "18.2.6(i)a",
+      "description": "Carefully disconnect and remove existing LV underground electrical cables(any size) and any other accessories existing and dispose of same to the locations as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "13.2818"
+    },
+    {
+      "itemNo": "18.2.6(i)b",
+      "description": "Carefully disconnect and remove existing 11KV underground electrical cables(any size) and any other accessories existing and dispose of same to the locations as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "15.2754"
+    },
+    {
+      "itemNo": "18.2.6(i)bb",
+      "description": "Carefully disconnect and remove existing 11KV overhead electrical cables(any size) and any other accessories existing and dispose of same to the locations as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "8.4840"
+    },
+    {
+      "itemNo": "18.2.6(i)c",
+      "description": "Carefully disconnect and remove existing 33KV underground electrical cables(any size) and any other accessories existing and dispose of same to the locations as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "15.2880"
+    },
+    {
+      "itemNo": "18.2.6(i)cc",
+      "description": "Carefully disconnect and remove existing 33KV overhead electrical cables(any size) and any other accessories existing and dispose of same to the locations as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "8.7780"
+    },
+    {
+      "itemNo": "18.2.6(i)g",
+      "description": "Locate excavate down to and remove the existing 110mm diameterHDPE/AC/DI pipe including but not limited to valve chambers, Fire hydrants and all other accessories complete and dispose of same to the locations as directed by the Engineer including excavation, backfill, disposal, disconnection, etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "12.1716"
+    },
+    {
+      "itemNo": "18.2.6(i)h",
+      "description": "Locate excavate down to and remove the existing 150mm diameterHDPE/AC/DI pipe including but not limited to valve chambers, Fire hydrants and all other accessories complete and dispose of same to the locations as directed by the Engineer including excavation, backfill, disposal, disconnection, etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "13.5254"
+    },
+    {
+      "itemNo": "18.2.6(i)i",
+      "description": "Locate excavate down to and remove the existing 300mm diameterHDPE/AC/DI pipe including but not limited to valve chambers, Fire hydrants and all other accessories complete and dispose of same to the locations as directed by the Engineer including excavation, backfill, disposal, disconnection, etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "20.2874"
+    },
+    {
+      "itemNo": "18.2.6(i)j",
+      "description": "Locate excavate down to and remove the existing 600mm diameterHDPE/AC/DI pipe including but not limited to valve chambers, Fire hydrants and all other accessories complete and dispose of same to the locations as directed by the Engineer including excavation, backfill, disposal, disconnection, etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "32.2938"
+    },
+    {
+      "itemNo": "18.2.6(i)k",
+      "description": "Locate excavate down to and remove the existing 1000mmdiameterHDPE/AC/DI pipe including but not limited to valve chambers, Fire hydrants and all other accessories complete and dispose of same to the locations as directed by the Engineer including excavation, backfill, disposal, disconnection, etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "44.8518"
+    },
+    {
+      "itemNo": "18.2.6(i)l",
+      "description": "Locate excavate down to and remove the existing 400mm diameter pipe including but not limited to manhole chambers and all other accessories complete and dispose of same to the locations as directed by the Engineer including excavation, backfill, disposal, disconnection, etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "26.9108"
+    },
+    {
+      "itemNo": "18.2.6(i)m",
+      "description": "Locate excavate down to and remove the existing 600mm diameter pipe including but not limited to manhole chambers and all other accessories complete and dispose of same to the locations as directed by the Engineer including excavation, backfill, disposal, disconnection, etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "32.2938"
+    },
+    {
+      "itemNo": "18.2.6(i)n",
+      "description": "Locate excavate down to and remove the existing 800mm diameter pipe including but not limited to manhole chambers and all other accessories complete and dispose of same to the locations as directed by the Engineer including excavation, backfill, disposal, disconnection, etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "36.6954"
+    },
+    {
+      "itemNo": "18.2.6(i)p",
+      "description": "Locate, excavate down to and remove the existing TE line including but not limited to valve chambers, Fire hydrants and all other accessories complete and dispose of same to the locations as directed by the Engineer including excavation, backfill, disposal, disconnection, etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "26.9108"
+    },
+    {
+      "itemNo": "18.2.6(i)o",
+      "description": "Locate excavate down to and remove the existing 1000mm diameter pipe & FOC cable including but not limited to manhole chambers and all other accessories complete and dispose of same to the locations as directed by the Engineer including excavation, backfill, disposal, disconnection, etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "44.8560"
+    },
+    {
+      "itemNo": "18.2.6(i)s",
+      "description": "Locate, excavate down, disconnect and remove existing Omantel FOC cables and ducts (any size) including chambers and dispose of same to the locations as directed by the Engineer including excavation, backfilling, disposal etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "4.6816"
+    },
+    {
+      "itemNo": "18.2.6(i)t",
+      "description": "Locate, excavate down, disconnect and remove existing ROP FOC cables and ducts (any size) including chambers and dispose of same to the locations as directed by the Engineer including excavation, backfilling, disposal etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "4.6816"
+    },
+    {
+      "itemNo": "18.2.6(i)u",
+      "description": "Locate, excavate down, disconnect and remove existing Omantel conduit, cables and FOC (together in one trench, any size) including chambers and dispose of same to the locations as directed by the Engineer including excavation, backfilling, disposal etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "14.1680"
+    },
+    {
+      "itemNo": "18.2.6(i)v",
+      "description": "Locate, excavate down, disconnect and remove existing Omantel Telephone cables and ducts (any size) including chambers and dispose of same to the locations as directed by the Engineer including excavation, backfilling, disposal etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "4.6816"
+    },
+    {
+      "itemNo": "18.2.6(i)w",
+      "description": "Locate, excavate down, disconnect and remove existing FOC cables and ducts (any size) including chambers in the existing median that are affected by road widening and dispose of same to the locations as per the requirement of the concerned authorities including excavation, backfilling, disposal etc.",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "4.6816"
+    },
+    {
+      "itemNo": "18.2.6(iii)x",
+      "description": "Relocation of Fibre optic cable cabinet 05 at Sta 14+500 including Exacavation & backfilling 2.0 meter deep trench With 2x100mm pvc pipe with RCC protection. Supply & Installation of Hand Hole Size-800x800x1000mm ,Supply & Installation of Cabinet base, Remove & re-install Fiber Optic Cable Pulling Excess excavation for cabinet base ,Excess excavation for Install Hand holes Remove existing handhole & reinstall the same ,Remove existing cabinet base & reinstall the same, Shifting and Re-install crossconect cabinet, leveling, wall protection & prepare suitable place for Cabinet installation Supply & install cabinet protection/fence(GI pipe),Remove existing buried network & reinstate the same, Mobilization, De-mobilization & Site cleaning charges",
+      "unit": "nr.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "29514.8140"
+    },
+    {
+      "itemNo": "18.2.6(ii)a",
+      "description": "Carefully disconnect, remove and re-install existing 11KV substation equipment 1000KVA TX+ 1 No. RMU+1 No. OLU and 1600 A Feeder pillar in new location as shown on dwg. and as directed by the Engineer including building/enclosure, foundation, jointing, terminators, excavation & connecting to the existing supply, testing, commissioning, all civil works and other accessories necessary to complete the system functional",
+      "unit": "nr.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "49191.3520"
+    },
+    {
+      "itemNo": "18.2.6(ii)b",
+      "description": "Carefully disconnect, remove and re-install existing feeder pillar at new location as shown on dwg. & as directed by the Engineer including foundation, jointing, excavation & connecting to the existing supply, testing, commissioning, all civil works and other accessories necessary to complete the system functional",
+      "unit": "nr.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "3935.3160"
+    },
+    {
+      "itemNo": "18.2.6(ii)c",
+      "description": "Carefully remove and re-install the existing ROP speed control camera including but not limited to foundation and with all equipment and all necessary items required to make the system functional to the new location as per the requirement of the concerned authorities",
+      "unit": "nr.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "23611.8540"
+    },
+    {
+      "itemNo": "18.2.6(ii)d",
+      "description": "Carefully disconnect, remove and re-install existing Substation No. 04 BIMOMAIS (5TX, 2 x 12MV, 2OLU & 2FP) in new location as shown on dwg. and as directed by the Engineer including building/enclosure, foundation, jointing, terminators, excavation & connecting to the existing supply, testing, commissioning, all civil works and other accessories necessary to complete the system functional",
+      "unit": "nr.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "196765.3660"
+    },
+    {
+      "itemNo": "18.2.6(iii)a",
+      "description": "For Electrical: All LV, 11KV/33KV Electrical Relocation work including materials shall be as per NAMA Group Standards and Specifications. Supply and installation of underground proposed LV Electrical cable complete including excavation, backfilling, cable covering tiles, warning tapes, route markers, joints, connecting to the existing supply including terminal poles, lightning arrestors, cable terminations, tapings (including any requirement for the modification to the existing overhead line to get connected with UG cable, if required), testing, commissioning, carting spoil to tips as directed, all necessary labor, operation, materials and any other accessories including earthing, etc. for the proper completion of the work",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "135.1294"
+    },
+    {
+      "itemNo": "18.2.6(iii)b",
+      "description": "Supply and installation of underground proposed 11KV Electrical cable complete including excavation, backfilling, cable covering tiles, warning tapes, route markers, joints, connecting to the existing supply including H-terminal poles, lightning arrestors, cable terminations, tapings (including any requirement for the modification to the existing overhead line to get connected with UG cable, if required), testing, commissioning, carting spoil to tips as directed, all necessary labor, operation, materials and any other accessories including earthing, etc. for the proper completion of the work",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "108.4678"
+    },
+    {
+      "itemNo": "18.2.6(iii)c",
+      "description": "Supply and installation of overhead 11 KV electrical conductors (3 conductors together) complete including poles, stay wires, insulators, AB switches, lightning arrestors, jumpers, stringing, jointing, excavation & backfilling of poles, connecting to the existing supply, testing, commissioning, carting spoil to tips as directed, all necessary labor, operation, materials, accessories, earthing and any special protection to the poles (Wadi Area).(Quantity measured as Route length).",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "74.2280"
+    },
+    {
+      "itemNo": "18.2.6(iii)d",
+      "description": "Supply and installation of underground proposed 33KV Electrical cable complete including excavation, backfilling, cable covering tiles, warning tapes, route markers, joints, connecting to the existing supply including H-terminal poles, lightning arrestors, cable terminations, AB switches, earthing, tapings(including any requirement for the modification to the existing overhead line to get connected with UG cable), testing, commissioning, carting spoil to tips as directed, all necessary labor, operation, materials and any other accessories including earthing, etc. for the proper completion of the work",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "127.8886"
+    },
+    {
+      "itemNo": "18.2.6(iii)e",
+      "description": "Supply and installation of overhead 33 KV electrical conductors (3 conductors together) complete including poles, stay wires, insulators, AB switches, lightning arrestors, jumpers, stringing, jointing, excavation & backfilling of poles, connecting to the existing supply, testing, commissioning, carting spoil to tips as directed, all necessary labor, operation, materials, accessories, earthing and any special protection to the poles (Wadi Area).(Quantity measured as Route length).",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "98.3920"
+    },
+    {
+      "itemNo": "18.2.6(iii)f",
+      "description": "Supply and install 110mm diameter HDPE Water pipes (PN16) complete with all the specials, fittings, and chambers including but not limited to tees, bends, shut off valves, air valves, washout valves, Fire hydrants, thrust blocks etc and also excavation, backfilling, warning tape, bedding and surrounding, jointing to existing water pipe and jointing material, Flushing, Disinfecting, pressure testing and any other items necessary to complete the work as required by the concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "36.3790"
+    },
+    {
+      "itemNo": "18.2.6(iii)g",
+      "description": "Supply and install 150mm HDPE Water pipes (PN16) complete with all the specials, fittings, and chambers including but not limited to tees, bends, shutoff valves, air valves, washout valves, Fire hydrants, thrust blocks etc and also excavation, backfilling, warning tape, bedding and surrounding, jointing to existing water pipe and jointing material, Flushing, Disinfecting, pressure testing and any other items necessary to complete the work as required by the concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "43.9390"
+    },
+    {
+      "itemNo": "18.2.6(iii)h",
+      "description": "Supply and install 300mm diameter DI Water pipes (PN16) complete with all the specials, fittings, and chambers including but not limited to tees, bends, shut off valves, air valves, washout valves, Fire hydrants, thrust blocks etc and also excavation, backfilling, warning tape, bedding and surrounding, jointing to existing water pipe and jointing material, Flushing, Disinfecting, pressure testing and any other items necessary to complete the work as required by the concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "99.5848"
+    },
+    {
+      "itemNo": "18.2.6(iii)i",
+      "description": "Supply and install 600mm diameter DI Water pipes complete with all the specials, fittings, and chambers including but not limited to tees, bends, shutoff valves, air valves, washout valves, Fire hydrants, thrust blocks etc and also excavation, backfilling, warning tape, bedding and surrounding, jointing to existing water pipe and jointing material, Flushing, Disinfecting, pressure testing and any other items necessary to complete the work as required by the concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "235.7264"
+    },
+    {
+      "itemNo": "18.2.6(iii)j",
+      "description": "Supply and install 1000mm diameter DI Water pipes complete with all the specials, fittings, and chambers including but not limited to tees, bends, shutoff valves, air valves, washout valves, Fire hydrants, thrust blocks etc and also excavation, backfilling, warning tape, bedding and surrounding, jointing to existing water pipe and jointing material, Flushing, Disinfecting, pressure testing and any other items necessary to complete the work as required by the concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "257.3004"
+    },
+    {
+      "itemNo": "18.2.6(iii)k",
+      "description": "Supply and install 400mm diameter HDPE Sewer pipes complete with all the specials, fittings, and chambers/manholes including but not limited to tees, bends, valves, thrust blocks etc and also excavation, backfilling, warning tape, bedding and surrounding, jointing to existing Sewer pipe and jointing material, pressure testing and any other items necessary to complete the work as required by the concerned authorities (NAMA)",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "168.6720"
+    },
+    {
+      "itemNo": "18.2.6(iii)l",
+      "description": "Supply and install 600mm diameter Sewer pipes complete with all the specials, fittings, and chambers/manholes including but not limited to tees, bends, valves, thrust blocks etc and also excavation, backfilling, warning tape, bedding and surrounding, jointing to existing Sewer pipe and jointing material, pressure testing and any other items necessary to complete the work as required by the concerned authorities (NAMA)",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "223.0620"
+    },
+    {
+      "itemNo": "18.2.6(iii)m",
+      "description": "Supply and install 800mm diameter Sewer pipes complete with all the specials, fittings, and chambers/manholes including but not limited to tees, bends, valves, thrust blocks etc and also excavation, backfilling, warning tape, bedding and surrounding, jointing to existing Sewer pipe and jointing material, pressure testing and any other items necessary to complete the work as required by the concerned authorities (NAMA)",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "301.0700"
+    },
+    {
+      "itemNo": "18.2.6(iii)n",
+      "description": "Supply and install 1000mm diameter Sewer pipes complete with all the specials, fittings, and chambers/manholes including but not limited to tees, bends, valves, thrust blocks etc and also excavation, backfilling, warning tape, bedding and surrounding, jointing to existing Sewer pipe and jointing material, pressure testing and any other items necessary to complete the work as required by the concerned authorities (NAMA)",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "400.4280"
+    },
+    {
+      "itemNo": "18.2.6(iii)r",
+      "description": "Supply and install 2Way uPVC duct for FOC cables, including but not limited to excavation, backfilling, warning tape, bedding and surrounding, jointing and jointing material, manholes, handholes, junction boxes and any other items necessary to complete the work as requirement of concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "11.2714"
+    },
+    {
+      "itemNo": "18.2.6(iii)s",
+      "description": "Supply and install 1Way uPVC duct for FOC cables, including but not limited to excavation, backfilling, warning tape, bedding and surrounding, jointing and jointing material, manholes, handholes, junction boxes and any other items necessary to complete the work as requirement of concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "8.7934"
+    },
+    {
+      "itemNo": "18.2.6(iii)t",
+      "description": "Supply, install and laying 36 FOC (for Omantel) cable including jointing, jointing material and any other items necessary to complete and commission the work and approval by concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "3.4384"
+    },
+    {
+      "itemNo": "18.2.6(iii)u",
+      "description": "Supply, install and laying 72 FOC (for Omantel) cable including jointing, jointing material and any other items necessary to complete and commission the work and approval by concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "3.7814"
+    },
+    {
+      "itemNo": "18.2.6(iii)v",
+      "description": "Supply, install and laying 96 FOC (for Omantel) cable including jointing, jointing material and any other items necessary to complete and commission the work and approval by concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "3.9872"
+    },
+    {
+      "itemNo": "18.2.6(iii)w",
+      "description": "Supply, install and laying 36 FOC (for ROP) cable including jointing, jointing material and any other items necessary to complete and commission the work and approval by concerned authorities and approval by concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "6.1040"
+    },
+    {
+      "itemNo": "18.2.6(iii)x-2",
+      "description": "Supply, install and laying 48 FOC (for ROP) cable including jointing, jointing material and any other items necessary to complete and commission the work and approval by concerned authorities and approval by concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "7.2842"
+    },
+    {
+      "itemNo": "18.2.6(iii)y",
+      "description": "Supply and install 2 x (5-way 32/26.5 mm) dia uPVC duct for (FOC cables),including but not limited to excavation, backfilling, warning tape, bedding and surrounding, jointing and jointing material, manholes (type-6), handholes (type- 4), pulling chamber, junction boxes and any other items necessary to complete the work as per the requirement of concerned authorities (Oman Broadband Company)",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "20.1180"
+    },
+    {
+      "itemNo": "18.2.6(iii)z",
+      "description": "Supply, install and laying EEF 100x0.65 telephone cable including jointing, jointing material and any other items necessary to complete and commission the work and approved by concerned authorities",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "21.0868"
+    },
+    {
+      "itemNo": "18.3.6(i)a",
+      "description": "Supply and Install proposed 2way 100mm dia uPVC duct for electrical cables with concrete surround (class 25/20), laid and jointed in trenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "28.2170"
+    },
+    {
+      "itemNo": "18.3.6(i)b",
+      "description": "Supply and Install proposed 2way 150mm dia uPVC duct for electrical cables with concrete surround (class 25/20), laid and jointed in trenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "41.6262"
+    },
+    {
+      "itemNo": "18.3.6(i)c",
+      "description": "Supply and Install proposed 2way 200mm dia uPVC duct for electrical cables with concrete surround (class 25/20), laid and jointed in trenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "58.3240"
+    },
+    {
+      "itemNo": "18.3.6(i)d",
+      "description": "Supply and Install proposed 4way 150mm dia uPVC duct for electrical cables with concrete surround (class 25/20), laid and jointed in trenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "60.3400"
+    },
+    {
+      "itemNo": "18.3.6(i)e",
+      "description": "Supply and Install proposed 2way 200mm and 2way 50mm dia uPVC duct for electrical cables with concrete surround (class 25/20), laid and jointed intrenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "73.4300"
+    },
+    {
+      "itemNo": "18.3.6(i)f",
+      "description": "Supply and Install proposed 4way 200mm and 4way 50mm dia uPVC duct for electrical cables with concrete surround (class 25/20), laid and jointed intrenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "119.4900"
+    },
+    {
+      "itemNo": "18.3.6(i)g",
+      "description": "Supply and Install proposed 8way 200mm and 8way 50mm dia uPVC duct for electrical cables with concrete surround (class 25/20), laid and jointed intrenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "207.1860"
+    },
+    {
+      "itemNo": "18.3.6(i)h",
+      "description": "Supply and install 2way 100mm dia uPVC duct for proposed Omantel /Ooredoo / MOD cables complete with concrete protection (class 25/20)including excavation, backfilling, compaction, end caps and draw ropes etc. at locations shown on drawings or as directed by the Engineer as per Omantel /Ooredoo /MOD Standards and Specifications",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "30.1700"
+    },
+    {
+      "itemNo": "18.3.6(i)i",
+      "description": "Supply and Install proposed 4way 100mm dia uPVC duct for Telephone Line with concrete protection (class 25/20), laid and jointed in trenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "39.0040"
+    },
+    {
+      "itemNo": "18.3.6(i)j",
+      "description": "Supply and install 1way 300mm diameter uPVC duct for future use (for Electrical cables) with concrete surround (class 25/20), laid and jointed intrenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "65.9820"
+    },
+    {
+      "itemNo": "18.3.6(i)k",
+      "description": "Supply and install 1way 300mm diameter RCC Sleeves for future use (for water line) with concrete surround (class 25/20), laid and jointed in trenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings oras directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "93.1560"
+    },
+    {
+      "itemNo": "18.3.6(i)l",
+      "description": "Supply and install 1way 400mm diameter RCC Sleeves for future use (for water line) with concrete surround (class 25/20), laid and jointed in trenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings oras directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "119.2240"
+    },
+    {
+      "itemNo": "18.3.6(i)m",
+      "description": "Supply and install 1way 500mm diameter RCC Sleeves for future use (for water line) with concrete surround (class 25/20), laid and jointed in trenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings oras directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "149.3800"
+    },
+    {
+      "itemNo": "18.3.6(i)n",
+      "description": "Supply and install 1way 1000mm diameter Ductile Iron Steel Sleeves for future use (for water line) with concrete surround (class 25/20), laid and jointed intrenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown on drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "321.4540"
+    },
+    {
+      "itemNo": "18.3.6(i)o",
+      "description": "Supply and Install proposed 9way 200mm and 2way 100mm dia uPVC duct for132kv electrical cables with concrete protection (class 25/20), laid and jointed in trenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown in the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "177.9260"
+    },
+    {
+      "itemNo": "18.3.6(i)p",
+      "description": "Supply and Install proposed 2way 200mm and 2way 100mm dia uPVC duct for132kv electrical cables with concrete protection (class 25/20), laid and jointed in trenches beneath carriageway including excavation, backfilling, compaction, end caps, draw ropes and duct markers etc. complete at locations shown in the drawings or as directed by the Engineer",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "171.7520"
+    },
+    {
+      "itemNo": "18.4.11(i)",
+      "description": "Micro tunnelling",
+      "unit": "lin.m.",
+      "chapter": "18 - UTILITIES",
+      "qty": "100",
+      "rate": "1911.2380"
+    },
+    {
+      "itemNo": "A",
+      "description": "Sub soil investigation by specialist contractor",
+      "unit": "PS",
+      "chapter": "PROVISIONAL SUM",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "B",
+      "description": "Relocation of Unforeseen Utility",
+      "unit": "PS",
+      "chapter": "PROVISIONAL SUM",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "C",
+      "description": "Additional Requirements for variable messaging system. Traffic Monitoring System (TMS) include sign boards and related works to be provided before Interchanges as per the given Specification and Requirements",
+      "unit": "PS",
+      "chapter": "PROVISIONAL SUM",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "A-2",
+      "description": "Design and Construction of Left Turn 2 Lane Directional Flyover",
+      "unit": "LS",
+      "chapter": "DESIGN AND CONSTRUCTION SCOPE OF WORK",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "B-2",
+      "description": "Design and Construction of Flyover connecting existing IC",
+      "unit": "LS",
+      "chapter": "DESIGN AND CONSTRUCTION SCOPE OF WORK",
+      "qty": "1",
+      "rate": null
+    },
+    {
+      "itemNo": "C-2",
+      "description": "Deign and Construction of Access Road (2 lanes)",
+      "unit": "LS",
+      "chapter": "DESIGN AND CONSTRUCTION SCOPE OF WORK",
+      "qty": "1",
+      "rate": null
+    }
+  ],
+  "splits": [
+    {
+      "itemNo": "2.3.6(i)",
+      "mode": "WEIGHTED_OPERATIONS",
+      "operations": [
+        {
+          "code": "2.3.6(i)1a",
+          "name": "Unclassified excavation - Screening",
+          "weight": "40",
+          "measure": false
+        },
+        {
+          "code": "2.3.6(i)1b",
+          "name": "Unclassified excavation - Transportation & Embankment compaction",
+          "weight": "60",
+          "measure": true
+        }
+      ]
+    },
+    {
+      "itemNo": "2.4.6(i)",
+      "mode": "WEIGHTED_OPERATIONS",
+      "operations": [
+        {
+          "code": "2.4.6(i)1a",
+          "name": "Borrow excavation- Extraction & Screening",
+          "weight": "40",
+          "measure": false
+        },
+        {
+          "code": "2.4.6(i)1b",
+          "name": "Borrow excavation- Transportation & compaction",
+          "weight": "60",
+          "measure": true
+        }
+      ]
+    },
+    {
+      "itemNo": "2.6.6(i)",
+      "mode": "WEIGHTED_OPERATIONS",
+      "operations": [
+        {
+          "code": "2.6.6(i)1",
+          "name": "Sub grade preparation in cut -Extraction & Screening",
+          "weight": "40",
+          "measure": false
+        },
+        {
+          "code": "2.6.6(i)2",
+          "name": "Sub-grade preparation in cut - Scarifying, Laying and Compaction",
+          "weight": "60",
+          "measure": true
+        }
+      ]
+    },
+    {
+      "itemNo": "3.2.6(ii)",
+      "mode": "WEIGHTED_OPERATIONS",
+      "operations": [
+        {
+          "code": "3.2.6(ii)1a",
+          "name": "Granular Sub-Base Course (CBR > 60% Class B) - Screening",
+          "weight": "40",
+          "measure": false
+        },
+        {
+          "code": "3.2.6(ii)1b",
+          "name": "Granular Sub-Base Course (CBR > 60% Class B) - Transportation & Compaction",
+          "weight": "60",
+          "measure": true
+        }
+      ]
+    },
+    {
+      "itemNo": "5.1.7(i)e",
+      "mode": "WEIGHTED_OPERATIONS",
+      "operations": [
+        {
+          "code": "5.1.7(i)e1",
+          "name": "Reinforced Concrete, Class 45/20 MS7 in Bridge abutment wall, abutment cap and Wing walls for Wadi Bridges - Scaffolding and Formwork",
+          "weight": "40",
+          "measure": false
+        },
+        {
+          "code": "5.1.7(i)e2",
+          "name": "Reinforced Concrete, Class 45/20 MS7 in Bridge abutment wall, abutment cap and Wing walls for Wadi Bridges- Concreting",
+          "weight": "50",
+          "measure": true
+        },
+        {
+          "code": "5.1.7(i)e3",
+          "name": "Reinforced Concrete, Class 45/20 MS7 in Bridge abutment wall, abutment cap and Wing walls for Wadi Bridges - Painting",
+          "weight": "10",
+          "measure": false
+        }
+      ]
+    },
+    {
+      "itemNo": "5.2.6(ii)a",
+      "mode": "WEIGHTED_OPERATIONS",
+      "operations": [
+        {
+          "code": "5.2.6(ii)a1a",
+          "name": "High tensile steel bar reinforcement, Grade 500, Type 2 of any diameter for bridges - Cutting & bending",
+          "weight": "40",
+          "measure": false
+        },
+        {
+          "code": "5.2.6(ii)a1b",
+          "name": "High tensile steel bar reinforcement, Grade 500, Type 2 of any diameter for bridges - Fixing",
+          "weight": "60",
+          "measure": true
+        }
+      ]
+    },
+    {
+      "itemNo": "9.1.6(i)",
+      "mode": "WEIGHTED_OPERATIONS",
+      "operations": [
+        {
+          "code": "9.1.6(i)1",
+          "name": "Loose Stone Riprap (Class B) of varying thickness for culverts, chutes and slope protection as shown on Dwg.- Boulders collection",
+          "weight": "40",
+          "measure": false
+        },
+        {
+          "code": "9.1.6(i)2",
+          "name": "Loose Stone Riprap (Class B) of varying thickness for culverts, chutes and slope protection as shown on Dwg.- Laying",
+          "weight": "60",
+          "measure": true
+        }
+      ]
+    },
+    {
+      "itemNo": "9.1.6(ii)a",
+      "mode": "WEIGHTED_OPERATIONS",
+      "operations": [
+        {
+          "code": "9.1.6(ii)a1",
+          "name": "Mortared Stone Riprap (Class A, Varying Thickness) for Slope Protection, culverts and chutes including Stubs as shown on dwg.- Boulders collection",
+          "weight": "40",
+          "measure": false
+        },
+        {
+          "code": "9.1.6(ii)a2",
+          "name": "Mortared Stone Riprap (Class A, Varying Thickness) for Slope Protection, culverts and chutes including Stubs as shown on dwg-Laying",
+          "weight": "60",
+          "measure": true
+        }
+      ]
+    },
+    {
+      "itemNo": "13.1.7(ix)",
+      "mode": "WEIGHTED_OPERATIONS",
+      "operations": [
+        {
+          "code": "13.1.7(ix)1a",
+          "name": "Concrete barrier, Single face type - B including foundation and reflectors as shown on Dwg.-Casting",
+          "weight": "60",
+          "measure": false
+        },
+        {
+          "code": "13.1.7(ix)1b",
+          "name": "Concrete barrier, Single face type - B including foundation and reflectors as shown on Dwg.-Erection",
+          "weight": "40",
+          "measure": true
+        }
+      ]
+    }
+  ]
+}

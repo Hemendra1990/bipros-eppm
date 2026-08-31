@@ -1,5 +1,6 @@
 package com.bipros.activity.application.service;
 
+import com.bipros.activity.application.percent.BoqProgressGuard;
 import com.bipros.activity.application.percent.PercentCompleteCalculator;
 import com.bipros.activity.application.percent.PercentCompleteCalculator.Result;
 import com.bipros.activity.domain.model.Activity;
@@ -8,6 +9,7 @@ import com.bipros.activity.domain.model.PercentCompleteType;
 import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.repository.ActivityStepRepository;
+import com.bipros.activity.domain.repository.ActivitySupervisorRepository;
 import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
 import com.bipros.project.domain.repository.ProjectRepository;
@@ -43,12 +45,14 @@ import static org.mockito.Mockito.when;
 class ActivityServiceApplyActualsTest {
 
   @Mock private ActivityRepository activityRepository;
+  @Mock private ActivitySupervisorRepository activitySupervisorRepository;
   @Mock private ActivityRelationshipRepository relationshipRepository;
   @Mock private AuditService auditService;
   @Mock private ProjectAccessGuard projectAccess;
   @Mock private ProjectRepository projectRepository;
   @Mock private PercentCompleteCalculator percentCompleteCalculator;
   @Mock private ActivityStepRepository stepRepository;
+  @Mock private BoqProgressGuard boqProgressGuard;
 
   private ActivityService service;
   private UUID projectId;
@@ -56,13 +60,19 @@ class ActivityServiceApplyActualsTest {
 
   @BeforeEach
   void setUp() {
-    service = new ActivityService(activityRepository, relationshipRepository, auditService,
-        projectAccess, projectRepository, percentCompleteCalculator, stepRepository);
+    service = new ActivityService(activityRepository, activitySupervisorRepository,
+        relationshipRepository, auditService, projectAccess, projectRepository,
+        percentCompleteCalculator,
+        new com.bipros.activity.application.percent.ParentRollupCalculator(), stepRepository,
+        org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
+        boqProgressGuard,
+        com.bipros.common.security.ScopeKeys::all);
     projectId = UUID.randomUUID();
     dataDate = LocalDate.of(2026, 5, 5);
 
     lenient().when(activityRepository.save(any(Activity.class)))
         .thenAnswer(inv -> inv.getArgument(0));
+    lenient().when(boqProgressGuard.isBoqDriven(any())).thenReturn(false);
   }
 
   private Activity newActivity(LocalDate plannedStart, LocalDate plannedFinish,
@@ -174,6 +184,24 @@ class ActivityServiceApplyActualsTest {
     assertThat(a.getActualFinishDate()).isEqualTo(forced);
     assertThat(a.getPercentComplete()).isEqualTo(100.0);
     assertThat(a.getStatus()).isEqualTo(ActivityStatus.COMPLETED);
+  }
+
+  @Test
+  @DisplayName("BOQ-driven activity → percentComplete not changed and calculator never invoked")
+  void boqDrivenActivityPercentNotClobbered() {
+    Activity boqActivity = newActivity(LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 20),
+        20.0, PercentCompleteType.DURATION);
+    boqActivity.setPercentComplete(40.0); // stale value set by BOQ listener
+    UUID boqId = boqActivity.getId();
+    when(activityRepository.findByProjectId(projectId)).thenReturn(List.of(boqActivity));
+    when(boqProgressGuard.isBoqDriven(boqId)).thenReturn(true);
+
+    service.applyActuals(projectId, dataDate);
+
+    // percentComplete must remain 40.0 — BOQ listener owns it
+    assertThat(boqActivity.getPercentComplete()).isEqualTo(40.0);
+    // calculator must never be invoked for a BOQ-driven activity
+    verify(percentCompleteCalculator, never()).calculate(any(), any(), any(), any());
   }
 
   @Test

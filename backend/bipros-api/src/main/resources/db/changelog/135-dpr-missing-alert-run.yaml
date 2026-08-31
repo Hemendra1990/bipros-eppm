@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 135-create-dpr-missing-alert-run
+      author: claude
+      comment: Idempotence log for the daily missing-DPR alert (AI Agent sheet DPR row bullet 3) — one row per (project, checked date)
+      changes:
+        - createTable:
+            schemaName: ai
+            tableName: dpr_missing_alert_run
+            columns:
+              - column: {name: id, type: UUID, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: project_id, type: UUID, constraints: {nullable: false}}
+              - column: {name: alert_date, type: DATE, constraints: {nullable: false}}
+              - column: {name: missing_count, type: INT, constraints: {nullable: false}}
+              - column: {name: emails_sent, type: INT, constraints: {nullable: false}}
+              - column: {name: skipped_non_working, type: BOOLEAN, constraints: {nullable: false}}
+              - column: {name: generated_at, type: TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: created_at, type: TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: updated_at, type: TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: created_by, type: VARCHAR(255)}
+              - column: {name: updated_by, type: VARCHAR(255)}
+              - column: {name: version, type: BIGINT}
+        - addUniqueConstraint:
+            schemaName: ai
+            tableName: dpr_missing_alert_run
+            constraintName: uq_dpr_missing_alert_run
+            columnNames: project_id, alert_date
+      rollback:
+        - dropTable: {schemaName: ai, tableName: dpr_missing_alert_run}

@@ -6,14 +6,52 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { projectApi } from "@/lib/api/projectApi";
+import { settingsApi } from "@/lib/api/settingsApi";
+import { resolveCurrencyMeta } from "@/lib/currency/format";
 import { obsApi } from "@/lib/api/obsApi";
 import { projectCategoryApi } from "@/lib/api/projectCategoryApi";
 import { calendarApi } from "@/lib/api/calendarApi";
 import { getErrorMessage } from "@/lib/utils/error";
-import { getPriorityInfo } from "@/lib/utils/format";
+import { PRIORITY_CHOICES } from "@/lib/utils/format";
 import { projectNotifications, notificationHelpers } from "@/lib/notificationHelpers";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
 import type { CreateProjectRequest } from "@/lib/types";
+
+// EPS and OBS are identical tree shapes (code / name / children). One helper
+// flattens either tree depth-first (preserving display order) and renders
+// indented dropdown options, so the New Project selectors offer every node — not
+// just roots. P6 files a project under any EPS/OBS node at any level; `depth`
+// drives the indentation.
+type TreeNode<T> = { id: string; code: string; name: string; children?: T[] };
+
+function flattenTree<T extends TreeNode<T>>(
+  nodes: T[],
+  depth = 0,
+): { node: T; depth: number }[] {
+  return nodes.flatMap((node) => [
+    { node, depth },
+    ...flattenTree(node.children ?? [], depth + 1),
+  ]);
+}
+
+function buildNodeSelect<T extends TreeNode<T>>(
+  nodes: T[],
+  selectedId: string | null | undefined,
+): { options: { value: string; label: string }[]; selectedLabel: string | undefined } {
+  const flat = flattenTree(nodes);
+  // Indent with NBSP so it doesn't collapse in the rendered <li>; search still
+  // substring-matches code/name after the indent.
+  const options = flat.map(({ node, depth }) => ({
+    value: node.id,
+    label:
+      depth === 0
+        ? `${node.code} - ${node.name}`
+        : `${"\u00A0\u00A0\u00A0\u00A0".repeat(depth)}↳ ${node.code} - ${node.name}`,
+  }));
+  // Keep the closed-button label clean (no indent/connector) for child nodes.
+  const sel = flat.find((f) => f.node.id === selectedId)?.node;
+  return { options, selectedLabel: sel ? `${sel.code} - ${sel.name}` : undefined };
+}
 
 export default function NewProjectPage() {
   const router = useRouter();
@@ -24,7 +62,11 @@ export default function NewProjectPage() {
     epsNodeId: "",
     plannedStartDate: "",
     plannedFinishDate: "",
-    priority: 5,
+    priority: 50,
+    // Default to INR for back-compat with existing seed data; users on non-INR
+    // projects (e.g. Oman OMR) MUST change this so EVM/cost cards label money
+    // correctly and AI data-honesty gates don't mislabel an OMR audit as INR.
+    budgetCurrency: "INR",
     calendarId: "",
   });
 
@@ -52,10 +94,37 @@ export default function NewProjectPage() {
     queryFn: () => calendarApi.listCalendars(),
   });
 
+  // Currency choices come from Admin → Settings → Currencies (the single source
+  // of truth), not a hardcoded list. retry:false so a 403 degrades fast to the
+  // INR fallback below rather than blocking the form.
+  const { data: currenciesData, isLoading: isLoadingCurrencies } = useQuery({
+    queryKey: ["currencies"],
+    queryFn: () => settingsApi.listCurrencies(),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
   const epsNodes = epsData?.data ?? [];
   const obsNodes = obsData?.data ?? [];
+  const { options: epsOptions, selectedLabel: selectedEpsLabel } = buildNodeSelect(
+    epsNodes,
+    formData.epsNodeId,
+  );
+  const { options: obsOptions, selectedLabel: selectedObsLabel } = buildNodeSelect(
+    obsNodes,
+    formData.obsNodeId,
+  );
   const categories = categoriesData?.data ?? [];
   const allCalendars = calendarsData?.data ?? [];
+  const configuredCurrencies = currenciesData?.data ?? [];
+  // Defensive fallback keeps the form usable if currencies can't be read.
+  const currencyOptions = configuredCurrencies.length
+    ? configuredCurrencies.map((c) => ({ code: c.code, label: `${c.code} - ${c.name}` }))
+    : [{ code: "INR", label: "INR - Indian Rupee" }];
+  const selectedCurrencySymbol = resolveCurrencyMeta(
+    formData.budgetCurrency,
+    configuredCurrencies,
+  ).symbol;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -171,10 +240,8 @@ export default function NewProjectPage() {
                 value={formData.epsNodeId}
                 onChange={(val) => { if (error) setError(""); if (fieldErrors.epsNodeId) setFieldErrors((prev) => { const next = { ...prev }; delete next.epsNodeId; return next; }); setFormData((prev) => ({ ...prev, epsNodeId: val })); }}
                 placeholder="Search EPS nodes..."
-                options={epsNodes.map((node) => ({
-                  value: node.id,
-                  label: `${node.code} - ${node.name}`,
-                }))}
+                options={epsOptions}
+                selectedLabel={selectedEpsLabel}
                 disabled={isLoadingEps}
               />
               {fieldErrors.epsNodeId && <p className="mt-1 text-xs text-danger">{fieldErrors.epsNodeId}</p>}
@@ -186,16 +253,14 @@ export default function NewProjectPage() {
                 value={formData.obsNodeId || ""}
                 onChange={(val) => { if (error) setError(""); setFormData((prev) => ({ ...prev, obsNodeId: val })); }}
                 placeholder="Search OBS nodes..."
-                options={obsNodes.map((node) => ({
-                  value: node.id,
-                  label: `${node.code} - ${node.name}`,
-                }))}
+                options={obsOptions}
+                selectedLabel={selectedObsLabel}
                 disabled={isLoadingObs}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-text-secondary">Priority</label>
               <select
@@ -204,12 +269,32 @@ export default function NewProjectPage() {
                 onChange={handleChange}
                 className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               >
-                {[5, 20, 35, 50, 65, 80, 95].map((p) => (
-                  <option key={p} value={p}>
-                    {p} - {getPriorityInfo(p).label}
+                {PRIORITY_CHOICES.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">Currency *</label>
+              <select
+                name="budgetCurrency"
+                value={formData.budgetCurrency ?? "INR"}
+                onChange={handleChange}
+                disabled={isLoadingCurrencies}
+                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+              >
+                {isLoadingCurrencies && <option value="">Loading…</option>}
+                {currencyOptions.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-text-muted">
+                Budget currency for EVM, cost cards, and AI reports. Manage the list under Admin → Settings → Currencies.
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">Calendar</label>
@@ -402,7 +487,7 @@ export default function NewProjectPage() {
             </div>
             <div className="mt-6 grid grid-cols-3 gap-6">
               <div>
-                <label className="block text-sm font-medium text-text-secondary">Contract Value (₹)</label>
+                <label className="block text-sm font-medium text-text-secondary">Contract Value ({selectedCurrencySymbol})</label>
                 <input
                   type="number"
                   step="0.01"
@@ -420,7 +505,7 @@ export default function NewProjectPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-text-secondary">Revised Value (₹)</label>
+                <label className="block text-sm font-medium text-text-secondary">Revised Value ({selectedCurrencySymbol})</label>
                 <input
                   type="number"
                   step="0.01"

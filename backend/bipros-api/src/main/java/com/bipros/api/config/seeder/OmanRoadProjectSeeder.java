@@ -1,5 +1,6 @@
 package com.bipros.api.config.seeder;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.model.ActivityRelationship;
 import com.bipros.activity.domain.model.ActivityStatus;
@@ -85,7 +86,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -109,6 +109,7 @@ import java.util.UUID;
 @Slf4j
 @Component
 @Profile("seed")
+@ConditionalOnProperty(name = "seeders.legacy.enabled", havingValue = "true", matchIfMissing = true)
 @Order(141)
 @RequiredArgsConstructor
 public class OmanRoadProjectSeeder implements CommandLineRunner {
@@ -441,6 +442,16 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
     p.setCalendarId(calendarId);
     // Currency — Project entity has budgetCurrency (default INR). Oman is OMR.
     p.setBudgetCurrency("OMR");
+    // Deterministic project BAC. The whole UI/API stores budgets in the currency's
+    // major-scale unit (crores for INR, millions for OMR), so we compute in millions
+    // here. Reference: ~1.5M OMR/km for a dual-carriageway upgrade (MOTC benchmark).
+    BigDecimal lengthKm = BigDecimal.valueOf(
+        (CHAINAGE_END_M - CHAINAGE_START_M) / 1000.0);
+    BigDecimal omrMillionsPerKm = new BigDecimal("1.5");
+    BigDecimal bac = lengthKm.multiply(omrMillionsPerKm).setScale(2, RoundingMode.HALF_UP);
+    p.setOriginalBudget(bac);
+    p.setCurrentBudget(bac);
+    p.setBudgetUpdatedAt(java.time.Instant.now());
     return projectRepository.save(p);
   }
 
@@ -561,12 +572,11 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
 
   private Map<String, BigDecimal> sumBoqAmountsByL1Prefix(List<BoqRow> rows) {
     Map<String, BigDecimal> out = new HashMap<>();
-    Random rng = new Random(DETERMINISTIC_SEED);
     int idx = 0;
     for (BoqRow b : rows) {
       String prefix = l1Prefix(b.code());
       if (prefix == null) continue;
-      BigDecimal amount = computeBoqAmount(b, rng, idx++);
+      BigDecimal amount = computeBoqAmount(b, idx++);
       out.merge(prefix, amount, BigDecimal::add);
     }
     return out;
@@ -574,14 +584,13 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
 
   private Map<String, BigDecimal> sumBoqAmountsByL3(List<BoqRow> rows) {
     Map<String, BigDecimal> out = new HashMap<>();
-    Random rng = new Random(DETERMINISTIC_SEED);
     int idx = 0;
     for (BoqRow b : rows) {
       if (b.code() == null) continue;
       String[] segs = b.code().split("\\.");
       if (segs.length < 2) continue;
       String l3Key = segs[0] + "." + stripParens(segs[1]);
-      BigDecimal amount = computeBoqAmount(b, rng, idx++);
+      BigDecimal amount = computeBoqAmount(b, idx++);
       out.merge(l3Key, amount, BigDecimal::add);
     }
     return out;
@@ -608,17 +617,18 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
    * Compute the boqAmount in OMR for rolling up to WBS. Uses literal qty × rate where
    * present; falls back to a deterministic synthetic amount when either is null.
    */
-  private BigDecimal computeBoqAmount(BoqRow b, Random rng, int idx) {
+  private BigDecimal computeBoqAmount(BoqRow b, int idx) {
     if (b.planAmount() != null && b.planAmount().signum() > 0) {
       return b.planAmount();
     }
     if (b.planQty() != null && b.rate() != null) {
       return b.planQty().multiply(b.rate());
     }
-    // Deterministic synthetic — based on RNG seeded from project code + index.
-    // Range 5,000 – 50,000 OMR per item so the project rolls up to a sensible total.
-    Random local = new Random(DETERMINISTIC_SEED + idx);
-    return new BigDecimal(5_000 + local.nextInt(45_000)).setScale(3, RoundingMode.HALF_UP);
+    // Fallback synthetic when both qty and rate are missing in the workbook.
+    // Stable bucket within 5,000 – 50,000 OMR per item so totals reproduce. No RNG.
+    String key = b.code() != null ? b.code() : ("idx-" + idx);
+    long bucket = (Math.abs((long) key.hashCode()) % 46L) * 1_000L; // 0..45,000 step 1k
+    return new BigDecimal(5_000L + bucket).setScale(3, RoundingMode.HALF_UP);
   }
 
   private String summariseGroupName(String description) {
@@ -658,8 +668,10 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
         wbsNodeId = wbs.get(prefix);
       }
 
-      // Synthesise missing values deterministically per item.
-      Random rng = new Random(DETERMINISTIC_SEED + idx);
+      // Fallback values when the workbook does not supply rate/qty/achieved — derived
+      // deterministically from a stable hash of itemNo. No RNG: re-running the seeder must
+      // produce identical numbers so EVM/cost reports are reproducible.
+      int hash = Math.abs(itemNo.hashCode());
       BigDecimal rate = r.rate();
       if (rate == null || rate.signum() == 0) {
         // Try revised rates from File 2 (Capacity Utilization workbook) by code prefix match.
@@ -675,8 +687,8 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
         }
       }
       if (rate == null || rate.signum() == 0) {
-        // 1 – 200 OMR/unit ranges, depending on a stable hash bucket.
-        int bucket = Math.abs(itemNo.hashCode()) % 5;
+        // OMR/unit fallback by stable category bucket — fixed reference rates, no noise.
+        int bucket = hash % 5;
         double base = switch (bucket) {
           case 0 -> 5.0;
           case 1 -> 25.0;
@@ -684,19 +696,18 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
           case 3 -> 120.0;
           default -> 0.5; // very cheap (e.g. per-kg materials)
         };
-        rate = BigDecimal.valueOf(base + rng.nextDouble() * base * 0.4)
-            .setScale(3, RoundingMode.HALF_UP);
+        rate = BigDecimal.valueOf(base).setScale(3, RoundingMode.HALF_UP);
       }
       BigDecimal qty = r.planQty();
       if (qty == null || qty.signum() == 0) {
-        // 50 – 5,000 unit qty bucket.
-        qty = BigDecimal.valueOf(50 + rng.nextInt(4_950))
-            .setScale(3, RoundingMode.HALF_UP);
+        // Quantity fallback: stable bucket within 50 – 5,000 unit range.
+        long qtyVal = 50L + (hash % 4_951L);
+        qty = BigDecimal.valueOf(qtyVal).setScale(3, RoundingMode.HALF_UP);
       }
       BigDecimal qtyExecuted = r.achievedQty();
       if (qtyExecuted == null || qtyExecuted.signum() == 0) {
-        // 0 – 70% executed, biased toward earlier items (already started).
-        double frac = Math.min(0.95, Math.max(0.0, (rng.nextDouble() * 0.7)));
+        // Execution % fallback: stable [0%, 70%] derived from itemNo hash.
+        double frac = (hash % 71) / 100.0;
         qtyExecuted = qty.multiply(BigDecimal.valueOf(frac))
             .setScale(3, RoundingMode.HALF_UP);
       }
@@ -712,7 +723,7 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
       BoqItem b = BoqItem.builder()
           .projectId(projectId)
           .itemNo(itemNo)
-          .description(truncate(nullSafe(r.description(), "BOQ item " + itemNo), 500))
+          .description(truncate(nullSafe(r.description(), "BOQ item " + itemNo), 2000))
           .unit(unit)
           .wbsNodeId(wbsNodeId)
           .boqQty(qty)
@@ -1244,9 +1255,8 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
     );
     int sortOrder = 0;
     int total = 0;
-    // Deterministic RNG seeded from project code so reruns produce identical actualStart/Finish
-    // jitter. Used for the +0..3 day actualStart shift and the -2..+5 day actualFinish shift.
-    Random rng = new Random(DETERMINISTIC_SEED);
+    // No RNG: actualStart/Finish jitter is derived from a stable hash of the activity code so
+    // reruns are identical and EVM (which uses these dates) reproduces.
 
     List<Activity> activities = new ArrayList<>();
     int withinGroupCounter = 0;
@@ -1293,14 +1303,15 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
         // Buckets 5..14 (50%) — IN_PROGRESS at 10..80%
         status = ActivityStatus.IN_PROGRESS;
         pct = (idx * 7) % 71 + 10; // 10..80 inclusive
-        actualStart = start.plusDays(rng.nextInt(4)); // +0..3
+        // Stable +0..3 day actualStart jitter from idx (no RNG).
+        actualStart = start.plusDays(idx % 4);
         inProgress++;
       } else if (bucket <= 18) {
         // Buckets 15..18 (20%) — COMPLETED at 100%
         status = ActivityStatus.COMPLETED;
         pct = 100.0;
-        actualStart = start.plusDays(rng.nextInt(4));   // +0..3
-        actualFinish = finish.plusDays(rng.nextInt(8) - 2); // -2..+5
+        actualStart = start.plusDays(idx % 4);          // +0..3 (stable)
+        actualFinish = finish.plusDays((idx % 8) - 2);  // -2..+5 (stable)
         completed++;
       } else {
         // Bucket 19 (5%) — on-hold or cancelled, alternating. ActivityStatus enum has only
@@ -1585,10 +1596,9 @@ public class OmanRoadProjectSeeder implements CommandLineRunner {
     BigDecimal expectedBoq = BigDecimal.ZERO;
     BigDecimal expectedBudget = BigDecimal.ZERO;
     BigDecimal expectedActual = BigDecimal.ZERO;
-    Random rng = new Random(DETERMINISTIC_SEED);
     int idx = 0;
     for (BoqRow r : boqRows) {
-      BigDecimal amount = computeBoqAmount(r, rng, idx++);
+      BigDecimal amount = computeBoqAmount(r, idx++);
       expectedBoq = expectedBoq.add(amount);
       expectedBudget = expectedBudget.add(amount);
       // Assume actual ≈ amount × executed-fraction × 1.03; this is rough.

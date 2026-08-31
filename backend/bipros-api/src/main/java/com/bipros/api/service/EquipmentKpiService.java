@@ -1,14 +1,22 @@
 package com.bipros.api.service;
 
-import com.bipros.project.domain.model.DailyActivityResourceOutput;
-import com.bipros.project.domain.repository.DailyActivityResourceOutputRepository;
-import com.bipros.resource.domain.model.EquipmentLog;
+import com.bipros.project.domain.model.DailyProgressReport;
+import com.bipros.project.domain.model.DprApprovalStatus;
+import com.bipros.project.domain.model.DprEquipment;
+import com.bipros.project.domain.model.EquipmentOwnership;
+import com.bipros.project.domain.repository.DailyProgressReportRepository;
+import com.bipros.project.domain.repository.DprEquipmentRepository;
 import com.bipros.resource.domain.model.Resource;
 import com.bipros.resource.domain.model.ResourceEquipmentDetails;
 import com.bipros.resource.domain.model.ResourceOwnership;
-import com.bipros.resource.domain.repository.EquipmentLogRepository;
+import com.bipros.resource.domain.model.ResourceRole;
+import com.bipros.resource.domain.model.role.EquipmentRoleVariant;
+import com.bipros.resource.domain.model.ResourceAssignment;
+import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceEquipmentDetailsRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
+import com.bipros.resource.domain.repository.ResourceRoleRepository;
+import com.bipros.resource.domain.repository.role.EquipmentRoleVariantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,6 +28,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,15 +36,12 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Aggregator KPI service for equipment metrics. Lives in {@code bipros-api} for the same
- * cross-module reason as {@link ManpowerKpiService}.
- *
- * <p>Per pre-answer #6, owned-vs-rented cost uses {@code Resource.costPerUnit} for both
- * ownership types — the dashboard tooltip surfaces the apples-to-apples caveat.
- *
- * <p>OEE composite (Availability × Performance × Quality) is deliberately NOT exposed: the
- * Quality factor needs the QC module which is deferred. Availability and Performance are
- * exposed separately so they can be charted without implying a fake OEE.
+ * Aggregator KPI service for equipment metrics. Reads exclusively from DPR + child rows
+ * (daily_progress_reports, dpr_equipment) — both Daily Outputs (DAR) and the standalone
+ * resource.equipment_logs ledger are deprecated and no longer consulted. Op/idle/breakdown
+ * hours and fuel come from {@code dpr_equipment}; per-machine output qty is derived from the
+ * parent DPR's {@code qty_executed} via a proportional split on equipment hours within the
+ * same DPR.
  */
 @Service
 @RequiredArgsConstructor
@@ -46,12 +52,15 @@ public class EquipmentKpiService {
   private static final double DEFAULT_IDLE_THRESHOLD_HOURS = 2d;
   private static final int DEFAULT_SERVICE_LOOKAHEAD_DAYS = 7;
 
-  private final EquipmentLogRepository equipmentLogRepository;
   private final ResourceRepository resourceRepository;
   private final ResourceEquipmentDetailsRepository equipmentDetailsRepository;
-  private final DailyActivityResourceOutputRepository darRepository;
+  private final DailyProgressReportRepository dprRepository;
+  private final DprEquipmentRepository dprEquipmentRepository;
+  private final EquipmentRoleVariantRepository equipmentRoleVariantRepository;
+  private final ResourceRoleRepository resourceRoleRepository;
+  private final ResourceAssignmentRepository resourceAssignmentRepository;
 
-  // ---------- Response shapes ----------
+  // ---------- Response shapes (unchanged) ----------
 
   public record EquipmentKpiResponse(
       UUID projectId,
@@ -62,9 +71,20 @@ public class EquipmentKpiService {
       List<FuelPerOutputRow> fuelPerOutput,
       List<AvailabilityPerformanceRow> availabilityPerformance,
       List<OwnedRentedSlice> ownedVsRented,
-      List<ServiceDueRow> serviceDue
+      List<ServiceDueRow> serviceDue,
+      double mechanicalAvailabilityPct,
+      double equipmentProductivityIndexPct,
+      double idleMachineCostTotal,
+      int actualNos,
+      int plannedNos,
+      double nosUtilizationPct
   ) {}
 
+  /**
+   * Per-machine row. {@code idleCost} (KPI 7.1) = idle_hours × Resource.cost_per_unit. The same
+   * rate is used for OWNED and HIRED equipment until ownership-specific rate columns land
+   * (locked Phase 2A fallback, 2026-05-08).
+   */
   public record UtilizationRow(
       UUID resourceId,
       String resourceCode,
@@ -72,7 +92,9 @@ public class EquipmentKpiService {
       double operatingHours,
       double idleHours,
       double breakdownHours,
-      double utilizationPct
+      double utilizationPct,
+      double mechanicalAvailabilityPct,
+      double idleCost
   ) {}
 
   public record IdleAlertRow(
@@ -92,12 +114,17 @@ public class EquipmentKpiService {
       double fuelPerOutput
   ) {}
 
+  /**
+   * Per-machine row carrying availability + EPI + KPI 6.2 Machine Output Rate (qty/hr).
+   * {@code outputRatePerHour} = attributed_qty ÷ Σ working_hours for the machine in the window.
+   */
   public record AvailabilityPerformanceRow(
       UUID resourceId,
       String resourceCode,
       String resourceName,
       double availability,
-      double performance
+      double performance,
+      double outputRatePerHour
   ) {}
 
   public record OwnedRentedSlice(
@@ -114,77 +141,285 @@ public class EquipmentKpiService {
       long daysUntilService
   ) {}
 
+  /** Helper bag for one DPR-equipment row enriched with the parent DPR's date/qty share. */
+  private record EnrichedDprEquipment(
+      DprEquipment row,
+      LocalDate logDate,
+      double attributedQty
+  ) {}
+
+  /**
+   * Synthetic machine identity for KPI rollups. {@code key} is the legacy {@code resource_id}
+   * when present, otherwise the role-only {@code equipment_role_variant_id}. {@code costPerUnit}
+   * is the per-(hour|day) rate used for idle-cost math (Resource.costPerUnit for legacy,
+   * EquipmentRoleVariant.rate for role-only).
+   */
+  private record MachineDisplay(UUID key, String code, String name, double costPerUnit, double standardOutputPerDay) {}
+
+  /** Returns the key used to identify a machine across DPR rows. */
+  private static UUID pickMachineKey(DprEquipment row) {
+    if (row.getResourceId() != null) return row.getResourceId();
+    return row.getEquipmentRoleVariantId();
+  }
+
   // ---------- Public API ----------
 
   @Transactional(readOnly = true)
   public EquipmentKpiResponse compute(UUID projectId, LocalDate from, LocalDate to) {
-    List<EquipmentLog> logs = equipmentLogRepository.findByProjectIdAndLogDateBetween(projectId, from, to);
-    Set<UUID> resourceIds = logs.stream().map(EquipmentLog::getResourceId).collect(Collectors.toSet());
+    List<DailyProgressReport> dprs = (from != null && to != null)
+        ? dprRepository.findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(
+            projectId, DprApprovalStatus.APPROVED, from, to)
+        : dprRepository.findByProjectIdAndApprovalStatusOrderByReportDateAscIdAsc(
+            projectId, DprApprovalStatus.APPROVED);
+    if (dprs.isEmpty()) {
+      return emptyResponse(projectId, from, to);
+    }
+    Set<UUID> dprIds = dprs.stream().map(DailyProgressReport::getId).collect(Collectors.toSet());
+    List<DprEquipment> equipmentRows = dprEquipmentRepository.findByDprIdIn(dprIds);
+    Map<UUID, List<DprEquipment>> equipmentByDpr = equipmentRows.stream()
+        .collect(Collectors.groupingBy(DprEquipment::getDprId));
+
+    // Enrich each dpr_equipment row with the parent DPR's date and an attributed qty
+    // (parent qty × this row's hours ÷ Σ row hours for the same DPR).
+    Map<UUID, DailyProgressReport> dprsById = dprs.stream()
+        .collect(Collectors.toMap(DailyProgressReport::getId, d -> d, (a, b) -> a));
+    List<EnrichedDprEquipment> enriched = enrichEquipmentRows(equipmentByDpr, dprsById);
+
+    Set<UUID> resourceIds = equipmentRows.stream()
+        .map(DprEquipment::getResourceId)
+        .filter(java.util.Objects::nonNull)
+        .collect(Collectors.toSet());
     Map<UUID, Resource> resourcesById = resourceRepository.findAllById(resourceIds).stream()
         .collect(Collectors.toMap(Resource::getId, r -> r, (a, b) -> a));
     Map<UUID, ResourceEquipmentDetails> detailsById =
         equipmentDetailsRepository.findAllById(resourceIds).stream()
             .collect(Collectors.toMap(ResourceEquipmentDetails::getResourceId, d -> d, (a, b) -> a));
 
-    List<UtilizationRow> utilization = computeUtilization(logs, resourcesById);
-    List<IdleAlertRow> idleAlerts = computeIdleAlerts(logs, resourcesById);
-    List<FuelPerOutputRow> fuelPerOutput = computeFuelPerOutput(projectId, logs, resourcesById, from, to);
-    List<AvailabilityPerformanceRow> availPerf = computeAvailabilityPerformance(
-        projectId, logs, resourcesById, detailsById, from, to);
-    List<OwnedRentedSlice> ownedVsRented = computeOwnedVsRented(logs, resourcesById, detailsById);
+    // Build a display map keyed by "machine identity" — for legacy rows this is resource_id; for
+    // role-only rows it's the equipment_role_variant_id. Drives the per-machine KPI rows.
+    Map<UUID, MachineDisplay> machinesByKey = resolveMachineDisplay(equipmentRows, resourcesById);
+
+    List<UtilizationRow> utilization = computeUtilization(enriched, machinesByKey);
+    List<FuelPerOutputRow> fuelPerOutput = computeFuelPerOutput(enriched, machinesByKey);
+    List<AvailabilityPerformanceRow> availPerf =
+        computeAvailabilityPerformance(enriched, machinesByKey, detailsById);
+    List<OwnedRentedSlice> ownedVsRented =
+        computeOwnedVsRented(enriched, resourcesById, detailsById);
     List<ServiceDueRow> serviceDue = computeServiceDue(projectId, resourcesById, detailsById);
 
+    double epiPct = computeEpiHeadline(availPerf);
+
+    // Nos-based equipment utilisation: avg daily deployed nos ÷ planned headcount (assignments).
+    long equipmentActiveDays = dprs.stream()
+        .filter(d -> equipmentByDpr.containsKey(d.getId()))
+        .map(DailyProgressReport::getReportDate)
+        .filter(java.util.Objects::nonNull)
+        .distinct().count();
+    List<ResourceAssignment> assignments = resourceAssignmentRepository.findByProjectId(projectId);
+    int totalNos = equipmentRows.stream().mapToInt(r -> r.getNos() != null ? r.getNos() : 0).sum();
+    int plannedNos = assignments.stream()
+        .filter(ra -> isEquipmentAssignment(ra, resourcesById))
+        .mapToInt(ra -> ra.getHeadcount() != null ? ra.getHeadcount() : 0).sum();
+    var equipUtil = com.bipros.api.service.kpi.DeploymentUtilisation.of(totalNos, equipmentActiveDays, plannedNos);
+    int actualNos = equipUtil.avgDailyNos();
+    double nosUtilPct = equipUtil.cappedPct();
+
+    // Idle / breakdown / mechanical-availability KPIs were removed when those DPR fields were
+    // dropped from the supervisor UI. Return zero so back-compat clients still parse the shape.
     return new EquipmentKpiResponse(
-        projectId, from, to, utilization, idleAlerts, fuelPerOutput,
-        availPerf, ownedVsRented, serviceDue);
+        projectId, from, to, utilization, List.of(), fuelPerOutput,
+        availPerf, ownedVsRented, serviceDue,
+        0d,                          // mechanicalAvailabilityPct — n/a in nos × rate model
+        round4(epiPct),
+        0d,                          // idleMachineCostTotal — n/a in nos × rate model
+        actualNos,
+        plannedNos,
+        round4(nosUtilPct));
   }
 
-  // ---------- Utilisation ----------
+  /** True iff the assignment is equipment — role-only path OR legacy EQUIPMENT resource path. */
+  private boolean isEquipmentAssignment(ResourceAssignment ra, Map<UUID, Resource> resourcesById) {
+    if (ra.getEquipmentRoleVariantId() != null) return true;
+    if (ra.getResourceId() == null) return false;
+    Resource r = resourcesById.get(ra.getResourceId());
+    if (r == null) {
+      r = resourceRepository.findById(ra.getResourceId()).orElse(null);
+      if (r != null) resourcesById.put(r.getId(), r);
+    }
+    return r != null && r.getResourceType() != null
+        && EQUIPMENT_TYPE_CODE.equalsIgnoreCase(r.getResourceType().getCode());
+  }
 
-  private List<UtilizationRow> computeUtilization(List<EquipmentLog> logs, Map<UUID, Resource> resourcesById) {
+  // ---------- Enrichment ----------
+
+  /**
+   * Distribute each DPR's parent qty_executed across its equipment rows by working-hours share.
+   * If the DPR has no working hours captured, every row gets 0 attributed qty (KPI tiles show
+   * "—" for that machine).
+   */
+  private List<EnrichedDprEquipment> enrichEquipmentRows(
+      Map<UUID, List<DprEquipment>> equipmentByDpr,
+      Map<UUID, DailyProgressReport> dprsById) {
+    List<EnrichedDprEquipment> out = new ArrayList<>();
+    for (Map.Entry<UUID, List<DprEquipment>> e : equipmentByDpr.entrySet()) {
+      DailyProgressReport dpr = dprsById.get(e.getKey());
+      if (dpr == null) continue;
+      double parentQty = dpr.getQtyExecuted() != null ? dpr.getQtyExecuted().doubleValue() : 0d;
+      double totalHours = e.getValue().stream()
+          .mapToDouble(r -> r.getWorkingHours() != null ? r.getWorkingHours().doubleValue() : 0d)
+          .sum();
+      for (DprEquipment row : e.getValue()) {
+        double rowHours = row.getWorkingHours() != null ? row.getWorkingHours().doubleValue() : 0d;
+        double attributedQty = totalHours > 0 ? parentQty * (rowHours / totalHours) : 0d;
+        out.add(new EnrichedDprEquipment(row, dpr.getReportDate(), attributedQty));
+      }
+    }
+    return out;
+  }
+
+  // ---------- Machine display resolution ----------
+
+  /**
+   * One MachineDisplay per machine identity seen in the DPR rows. Legacy rows surface as the
+   * Resource (code/name/cost_per_unit); role-only rows surface as the EquipmentRoleVariant
+   * (rate as cost_per_unit, "{role.name} – {make}/{model}" as display name).
+   */
+  private Map<UUID, MachineDisplay> resolveMachineDisplay(
+      List<DprEquipment> equipmentRows,
+      Map<UUID, Resource> resourcesById) {
+    Map<UUID, MachineDisplay> out = new HashMap<>();
+    Set<UUID> variantIds = new HashSet<>();
+    for (DprEquipment row : equipmentRows) {
+      UUID key = pickMachineKey(row);
+      if (key == null) continue;
+      if (out.containsKey(key)) continue;
+      if (row.getResourceId() != null) {
+        Resource r = resourcesById.get(row.getResourceId());
+        double cpu = (r != null && r.getCostPerUnit() != null) ? r.getCostPerUnit().doubleValue() : 0d;
+        out.put(key, new MachineDisplay(
+            key,
+            r != null ? r.getCode() : "?",
+            r != null ? r.getName() : (row.getEquipmentType() != null ? row.getEquipmentType() : "Unknown"),
+            cpu,
+            0d));    // legacy resource standardOutput lives on ResourceEquipmentDetails, looked up at perf time
+      } else if (row.getEquipmentRoleVariantId() != null) {
+        variantIds.add(row.getEquipmentRoleVariantId());
+      }
+    }
+    if (!variantIds.isEmpty()) {
+      Map<UUID, EquipmentRoleVariant> variantsById =
+          equipmentRoleVariantRepository.findAllById(variantIds).stream()
+              .collect(Collectors.toMap(v -> v.getId(), v -> v, (a, b) -> a));
+      Set<UUID> roleIds = variantsById.values().stream()
+          .map(EquipmentRoleVariant::getRoleId)
+          .filter(java.util.Objects::nonNull)
+          .collect(Collectors.toSet());
+      Map<UUID, ResourceRole> rolesById =
+          resourceRoleRepository.findAllById(roleIds).stream()
+              .collect(Collectors.toMap(ResourceRole::getId, r -> r, (a, b) -> a));
+      for (DprEquipment row : equipmentRows) {
+        if (row.getResourceId() != null) continue;
+        UUID variantId = row.getEquipmentRoleVariantId();
+        if (variantId == null || out.containsKey(variantId)) continue;
+        EquipmentRoleVariant v = variantsById.get(variantId);
+        if (v == null) {
+          String fallback = row.getEquipmentType() != null ? row.getEquipmentType() : "Unknown";
+          out.put(variantId, new MachineDisplay(variantId, fallback, fallback, 0d, 0d));
+          continue;
+        }
+        ResourceRole role = rolesById.get(v.getRoleId());
+        String roleName = role != null && role.getName() != null ? role.getName() : (row.getEquipmentType() != null ? row.getEquipmentType() : "Equipment");
+        String name = roleName + " – " + v.getMake() + "/" + v.getModel();
+        out.put(variantId, new MachineDisplay(
+            variantId,
+            v.getMake() + "/" + v.getModel(),
+            name,
+            v.getRate() != null ? v.getRate().doubleValue() : 0d,
+            v.getStandardOutputPerDay() != null ? v.getStandardOutputPerDay().doubleValue() : 0d));
+      }
+    }
+    return out;
+  }
+
+  // ---------- Utilisation + KPI 4.1 (Mechanical Availability per machine) ----------
+
+  private List<UtilizationRow> computeUtilization(
+      List<EnrichedDprEquipment> enriched,
+      Map<UUID, MachineDisplay> machinesByKey) {
     Map<UUID, double[]> agg = new HashMap<>(); // [op, idle, breakdown]
-    for (EquipmentLog l : logs) {
-      double[] acc = agg.computeIfAbsent(l.getResourceId(), k -> new double[3]);
-      if (l.getOperatingHours() != null) acc[0] += l.getOperatingHours();
-      if (l.getIdleHours() != null) acc[1] += l.getIdleHours();
-      if (l.getBreakdownHours() != null) acc[2] += l.getBreakdownHours();
+    for (EnrichedDprEquipment e : enriched) {
+      DprEquipment l = e.row();
+      UUID key = pickMachineKey(l);
+      if (key == null) continue;
+      double[] acc = agg.computeIfAbsent(key, k -> new double[3]);
+      if (l.getWorkingHours() != null) acc[0] += l.getWorkingHours().doubleValue();
+      if (l.getIdleHours() != null) acc[1] += l.getIdleHours().doubleValue();
+      if (l.getBreakdownHours() != null) acc[2] += l.getBreakdownHours().doubleValue();
     }
     List<UtilizationRow> rows = new ArrayList<>(agg.size());
     for (Map.Entry<UUID, double[]> e : agg.entrySet()) {
-      Resource r = resourcesById.get(e.getKey());
+      MachineDisplay m = machinesByKey.get(e.getKey());
       double[] v = e.getValue();
       double total = v[0] + v[1] + v[2];
       double pct = total > 0 ? v[0] / total : 0d;
+      double maPct = total > 0 ? (v[0] + v[1]) / total : 0d;
+      double cpu = m != null ? m.costPerUnit() : 0d;
+      double idleCost = v[1] * cpu;
       rows.add(new UtilizationRow(
           e.getKey(),
-          r != null ? r.getCode() : "?",
-          r != null ? r.getName() : "Unknown",
-          round2(v[0]), round2(v[1]), round2(v[2]), round4(pct)));
+          m != null ? m.code() : "?",
+          m != null ? m.name() : "Unknown",
+          round2(v[0]), round2(v[1]), round2(v[2]),
+          round4(pct), round4(maPct),
+          round2(idleCost)));
     }
     rows.sort(Comparator.comparingDouble(UtilizationRow::utilizationPct).reversed());
     return rows;
   }
 
+  private double computeMechanicalAvailabilityHeadline(List<UtilizationRow> rows) {
+    List<UtilizationRow> usable = rows.stream()
+        .filter(r -> r.operatingHours() + r.idleHours() + r.breakdownHours() > 0d)
+        .toList();
+    if (usable.isEmpty()) return 0d;
+    return usable.stream().mapToDouble(UtilizationRow::mechanicalAvailabilityPct).average().orElse(0d);
+  }
+
+  private double computeEpiHeadline(List<AvailabilityPerformanceRow> rows) {
+    List<AvailabilityPerformanceRow> usable = rows.stream()
+        .filter(r -> r.performance() > 0d)
+        .toList();
+    if (usable.isEmpty()) return 0d;
+    return usable.stream().mapToDouble(AvailabilityPerformanceRow::performance).average().orElse(0d);
+  }
+
   // ---------- Idle-time alerts ----------
 
-  private List<IdleAlertRow> computeIdleAlerts(List<EquipmentLog> logs, Map<UUID, Resource> resourcesById) {
-    LocalDate latestDate = logs.stream()
-        .map(EquipmentLog::getLogDate)
+  private List<IdleAlertRow> computeIdleAlerts(
+      List<EnrichedDprEquipment> enriched,
+      Map<UUID, MachineDisplay> machinesByKey) {
+    LocalDate latestDate = enriched.stream()
+        .map(EnrichedDprEquipment::logDate)
+        .filter(java.util.Objects::nonNull)
         .max(Comparator.naturalOrder())
         .orElse(null);
     if (latestDate == null) return List.of();
-    return logs.stream()
-        .filter(l -> latestDate.equals(l.getLogDate()))
-        .filter(l -> l.getIdleHours() != null && l.getIdleHours() > DEFAULT_IDLE_THRESHOLD_HOURS)
-        .sorted(Comparator.comparingDouble(EquipmentLog::getIdleHours).reversed())
-        .map(l -> {
-          Resource r = resourcesById.get(l.getResourceId());
+    return enriched.stream()
+        .filter(e -> latestDate.equals(e.logDate()))
+        .filter(e -> e.row().getIdleHours() != null
+            && e.row().getIdleHours().doubleValue() > DEFAULT_IDLE_THRESHOLD_HOURS)
+        .filter(e -> pickMachineKey(e.row()) != null)
+        .sorted(Comparator.comparingDouble(
+            (EnrichedDprEquipment x) -> x.row().getIdleHours().doubleValue()).reversed())
+        .map(e -> {
+          UUID key = pickMachineKey(e.row());
+          MachineDisplay m = machinesByKey.get(key);
           return new IdleAlertRow(
-              l.getResourceId(),
-              r != null ? r.getCode() : "?",
-              r != null ? r.getName() : "Unknown",
-              l.getLogDate(),
-              round2(l.getIdleHours()));
+              key,
+              m != null ? m.code() : "?",
+              m != null ? m.name() : "Unknown",
+              e.logDate(),
+              round2(e.row().getIdleHours().doubleValue()));
         })
         .toList();
   }
@@ -192,95 +427,83 @@ public class EquipmentKpiService {
   // ---------- Fuel per output ----------
 
   private List<FuelPerOutputRow> computeFuelPerOutput(
-      UUID projectId,
-      List<EquipmentLog> logs,
-      Map<UUID, Resource> resourcesById,
-      LocalDate from,
-      LocalDate to) {
-    Map<UUID, Double> fuelByResource = new HashMap<>();
-    for (EquipmentLog l : logs) {
-      if (l.getFuelConsumed() == null) continue;
-      fuelByResource.merge(l.getResourceId(), l.getFuelConsumed(), Double::sum);
+      List<EnrichedDprEquipment> enriched,
+      Map<UUID, MachineDisplay> machinesByKey) {
+    Map<UUID, double[]> agg = new HashMap<>(); // [fuel, qty]
+    for (EnrichedDprEquipment e : enriched) {
+      DprEquipment l = e.row();
+      UUID key = pickMachineKey(l);
+      if (key == null) continue;
+      if (l.getFuelLitres() == null || l.getFuelLitres().signum() <= 0) continue;
+      double[] acc = agg.computeIfAbsent(key, k -> new double[2]);
+      acc[0] += l.getFuelLitres().doubleValue();
+      acc[1] += e.attributedQty();
     }
-    if (fuelByResource.isEmpty()) return List.of();
-
-    // Equipment qty executed comes from DailyActivityResourceOutput where the resource
-    // is an equipment resource. Sum across activities for the same period.
-    List<DailyActivityResourceOutput> dar = darRepository
-        .findByProjectIdAndOutputDateBetweenOrderByOutputDateDescIdAsc(projectId, from, to);
-    Map<UUID, Double> qtyByResource = new HashMap<>();
-    for (DailyActivityResourceOutput d : dar) {
-      if (d.getResourceId() == null || !fuelByResource.containsKey(d.getResourceId())) continue;
-      if (d.getQtyExecuted() != null) {
-        qtyByResource.merge(d.getResourceId(), d.getQtyExecuted().doubleValue(), Double::sum);
-      }
-    }
-
-    List<FuelPerOutputRow> rows = new ArrayList<>(fuelByResource.size());
-    for (Map.Entry<UUID, Double> e : fuelByResource.entrySet()) {
-      Resource r = resourcesById.get(e.getKey());
-      double fuel = e.getValue();
-      double qty = qtyByResource.getOrDefault(e.getKey(), 0d);
+    List<FuelPerOutputRow> rows = new ArrayList<>(agg.size());
+    for (Map.Entry<UUID, double[]> e : agg.entrySet()) {
+      MachineDisplay m = machinesByKey.get(e.getKey());
+      double fuel = e.getValue()[0];
+      double qty = e.getValue()[1];
       double fpo = qty > 0 ? fuel / qty : 0d;
       rows.add(new FuelPerOutputRow(
           e.getKey(),
-          r != null ? r.getCode() : "?",
-          r != null ? r.getName() : "Unknown",
+          m != null ? m.code() : "?",
+          m != null ? m.name() : "Unknown",
           round2(fuel), round3(qty), round4(fpo)));
     }
     rows.sort(Comparator.comparingDouble(FuelPerOutputRow::fuelPerOutput).reversed());
     return rows;
   }
 
-  // ---------- Availability + Performance ----------
+  // ---------- Availability + Performance (KPI 6.1 EPI input) ----------
 
   private List<AvailabilityPerformanceRow> computeAvailabilityPerformance(
-      UUID projectId,
-      List<EquipmentLog> logs,
-      Map<UUID, Resource> resourcesById,
-      Map<UUID, ResourceEquipmentDetails> detailsById,
-      LocalDate from,
-      LocalDate to) {
-    Map<UUID, double[]> agg = new HashMap<>(); // [op, idle, breakdown]
-    Map<UUID, Long> daysSeen = new HashMap<>();
-    for (EquipmentLog l : logs) {
-      double[] acc = agg.computeIfAbsent(l.getResourceId(), k -> new double[3]);
-      if (l.getOperatingHours() != null) acc[0] += l.getOperatingHours();
-      if (l.getIdleHours() != null) acc[1] += l.getIdleHours();
-      if (l.getBreakdownHours() != null) acc[2] += l.getBreakdownHours();
-      daysSeen.merge(l.getResourceId(), 1L, Long::sum);
-    }
-
-    Map<UUID, Double> qtyByResource = new HashMap<>();
-    List<DailyActivityResourceOutput> dar = darRepository
-        .findByProjectIdAndOutputDateBetweenOrderByOutputDateDescIdAsc(projectId, from, to);
-    for (DailyActivityResourceOutput d : dar) {
-      if (d.getResourceId() == null) continue;
-      if (d.getQtyExecuted() != null) {
-        qtyByResource.merge(d.getResourceId(), d.getQtyExecuted().doubleValue(), Double::sum);
+      List<EnrichedDprEquipment> enriched,
+      Map<UUID, MachineDisplay> machinesByKey,
+      Map<UUID, ResourceEquipmentDetails> detailsById) {
+    Map<UUID, double[]> agg = new HashMap<>(); // [op, idle, breakdown, qty]
+    Map<UUID, Set<LocalDate>> daysSeen = new HashMap<>();
+    for (EnrichedDprEquipment e : enriched) {
+      DprEquipment l = e.row();
+      UUID key = pickMachineKey(l);
+      if (key == null) continue;
+      double[] acc = agg.computeIfAbsent(key, k -> new double[4]);
+      if (l.getWorkingHours() != null) acc[0] += l.getWorkingHours().doubleValue();
+      if (l.getIdleHours() != null) acc[1] += l.getIdleHours().doubleValue();
+      if (l.getBreakdownHours() != null) acc[2] += l.getBreakdownHours().doubleValue();
+      acc[3] += e.attributedQty();
+      if (e.logDate() != null) {
+        daysSeen.computeIfAbsent(key, k -> new java.util.HashSet<>()).add(e.logDate());
       }
     }
 
     List<AvailabilityPerformanceRow> rows = new ArrayList<>(agg.size());
     for (Map.Entry<UUID, double[]> e : agg.entrySet()) {
-      Resource r = resourcesById.get(e.getKey());
-      ResourceEquipmentDetails d = detailsById.get(e.getKey());
+      MachineDisplay m = machinesByKey.get(e.getKey());
+      ResourceEquipmentDetails d = detailsById.get(e.getKey());  // null for role-only
       double[] v = e.getValue();
       double total = v[0] + v[1] + v[2];
       double availability = total > 0 ? (v[0] + v[1]) / total : 0d;
 
-      double standardPerDay = d != null && d.getStandardOutputPerDay() != null
-          ? d.getStandardOutputPerDay().doubleValue() : 0d;
-      double daysCount = daysSeen.getOrDefault(e.getKey(), 0L).doubleValue();
-      double actualPerDay = daysCount > 0 ? qtyByResource.getOrDefault(e.getKey(), 0d) / daysCount : 0d;
+      // Prefer the role-only EquipmentRoleVariant.standardOutputPerDay (carried on MachineDisplay);
+      // fall back to legacy ResourceEquipmentDetails.standardOutputPerDay when the role-only path
+      // didn't supply one.
+      double standardPerDay = m != null && m.standardOutputPerDay() > 0
+          ? m.standardOutputPerDay()
+          : (d != null && d.getStandardOutputPerDay() != null
+              ? d.getStandardOutputPerDay().doubleValue() : 0d);
+      double daysCount = daysSeen.getOrDefault(e.getKey(), Set.of()).size();
+      double actualPerDay = daysCount > 0 ? v[3] / daysCount : 0d;
       double performance = standardPerDay > 0 ? actualPerDay / standardPerDay : 0d;
+      double outputRatePerHour = v[0] > 0d ? v[3] / v[0] : 0d;
 
       rows.add(new AvailabilityPerformanceRow(
           e.getKey(),
-          r != null ? r.getCode() : "?",
-          r != null ? r.getName() : "Unknown",
+          m != null ? m.code() : "?",
+          m != null ? m.name() : "Unknown",
           round4(availability),
-          round4(performance)));
+          round4(performance),
+          round4(outputRatePerHour)));
     }
     rows.sort(Comparator.comparing(AvailabilityPerformanceRow::resourceCode));
     return rows;
@@ -289,18 +512,32 @@ public class EquipmentKpiService {
   // ---------- Owned vs rented ----------
 
   private List<OwnedRentedSlice> computeOwnedVsRented(
-      List<EquipmentLog> logs,
+      List<EnrichedDprEquipment> enriched,
       Map<UUID, Resource> resourcesById,
       Map<UUID, ResourceEquipmentDetails> detailsById) {
     Map<String, double[]> bucket = new HashMap<>(); // [hours, cost]
-    for (EquipmentLog l : logs) {
-      double hours = l.getOperatingHours() != null ? l.getOperatingHours() : 0d;
-      ResourceEquipmentDetails d = detailsById.get(l.getResourceId());
-      ResourceOwnership ownership = d != null ? d.getOwnershipType() : null;
-      Resource r = resourcesById.get(l.getResourceId());
-      BigDecimal cpu = r != null ? r.getCostPerUnit() : null;
-      double cost = (cpu != null ? cpu.doubleValue() : 0d) * hours;
-      String key = ownership != null ? ownership.name() : "UNKNOWN";
+    for (EnrichedDprEquipment e : enriched) {
+      DprEquipment l = e.row();
+      double hours = l.getWorkingHours() != null ? l.getWorkingHours().doubleValue() : 0d;
+      double cost;
+      if (l.getLineCost() != null && l.getLineCost().signum() > 0) {
+        cost = l.getLineCost().doubleValue();
+      } else {
+        Resource r = l.getResourceId() != null ? resourcesById.get(l.getResourceId()) : null;
+        BigDecimal cpu = r != null ? r.getCostPerUnit() : null;
+        cost = (cpu != null ? cpu.doubleValue() : 0d) * hours;
+      }
+      // Ownership resolution: prefer the DPR row's own enum (set by supervisor or seeded). Fall
+      // back to ResourceEquipmentDetails.ownershipType for legacy rows that didn't capture it on
+      // the DPR. Role-only rows that pre-date the supervisor capture-step bucket as UNKNOWN.
+      String key;
+      if (l.getOwnership() != null) {
+        key = l.getOwnership().name();
+      } else {
+        ResourceEquipmentDetails d = l.getResourceId() != null ? detailsById.get(l.getResourceId()) : null;
+        ResourceOwnership ownership = d != null ? d.getOwnershipType() : null;
+        key = ownership != null ? ownership.name() : "UNKNOWN";
+      }
       double[] acc = bucket.computeIfAbsent(key, k -> new double[2]);
       acc[0] += hours;
       acc[1] += cost;
@@ -338,9 +575,18 @@ public class EquipmentKpiService {
           days));
     }
     rows.sort(Comparator.comparingLong(ServiceDueRow::daysUntilService));
-    // Defensive: callers may not iterate the project explicitly — projectId is logged for trace.
     log.debug("Equipment service-due rows for project {}: {}", projectId, rows.size());
     return rows;
+  }
+
+  // ---------- Empty response ----------
+
+  private EquipmentKpiResponse emptyResponse(UUID projectId, LocalDate from, LocalDate to) {
+    return new EquipmentKpiResponse(
+        projectId, from, to,
+        List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+        0d, 0d, 0d,
+        0, 0, 0d);
   }
 
   // ---------- Misc ----------

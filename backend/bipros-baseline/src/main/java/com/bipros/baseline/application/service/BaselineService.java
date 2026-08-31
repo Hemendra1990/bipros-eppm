@@ -1,6 +1,7 @@
 package com.bipros.baseline.application.service;
 
 import com.bipros.activity.domain.model.Activity;
+import com.bipros.activity.domain.model.ActivityEditStatus;
 import com.bipros.activity.domain.model.ActivityRelationship;
 import com.bipros.activity.domain.model.RelationshipType;
 import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
@@ -24,18 +25,25 @@ import com.bipros.baseline.infrastructure.repository.BaselineRelationshipReposit
 import com.bipros.baseline.infrastructure.repository.BaselineRepository;
 import com.bipros.baseline.infrastructure.repository.BaselineResourceAssignmentRepository;
 import com.bipros.baseline.infrastructure.repository.BaselineWbsRepository;
+import com.bipros.common.event.BaselineCapturedEvent;
+import com.bipros.common.event.BaselineDeactivatedEvent;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.util.AuditService;
 import com.bipros.cost.application.service.ActivityCostCalculator;
 import com.bipros.cost.domain.entity.ActivityExpense;
 import com.bipros.cost.domain.repository.ActivityExpenseRepository;
+import com.bipros.project.application.service.DprActualCostLookup;
 import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
+import com.bipros.resource.domain.model.ActivitySubContractorAssignment;
 import com.bipros.resource.domain.model.ResourceAssignment;
+import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
 import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +58,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BaselineService {
 
   private final BaselineRepository baselineRepository;
@@ -66,6 +75,9 @@ public class BaselineService {
   private final ProjectRepository projectRepository;
   private final WbsNodeRepository wbsNodeRepository;
   private final AuditService auditService;
+  private final ApplicationEventPublisher eventPublisher;
+  private final DprActualCostLookup dprActualCostLookup;
+  private final ActivitySubContractorAssignmentRepository activitySubContractorAssignmentRepository;
 
   @Transactional
   public BaselineResponse createBaseline(UUID projectId, CreateBaselineRequest request) {
@@ -79,9 +91,13 @@ public class BaselineService {
             "DUPLICATE_CODE",
             "A baseline named '" + request.name() + "' already exists for this project and type");
       }
-      baseline.setIsActive(false);
-      baselineRepository.save(baseline);
     }
+    // NOTE: capturing a baseline no longer flips isActive on existing baselines. The single
+    // "active" baseline is whichever occupies the project's PRIMARY slot, and isActive tracks
+    // that slot (see assignBaselineToSlot / syncActiveFlagToPrimary). Deactivating here would
+    // make isActive drift from Project.primaryBaselineId, so Monte Carlo / AI tools / analytics
+    // (all of which resolve "the active baseline" via isActive) would silently run against a
+    // different baseline than the rest of the app considers primary.
 
     // Phase 4.3: when sourceProjectId is supplied, snapshot from THAT project's data instead of
     // the target's. The resulting baseline is still attached to the target — variance/comparison
@@ -91,6 +107,15 @@ public class BaselineService {
 
     // Load all activities for the snapshot source
     List<Activity> activities = activityRepository.findByProjectId(snapshotSourceId);
+    // Reject empty snapshots up front. An empty baseline used to be created successfully, then
+    // auto-activated, and would permanently block every Monte Carlo run with BASELINE_EMPTY at
+    // simulation time — with no hint the baseline itself was the problem.
+    if (activities.isEmpty()) {
+      throw new com.bipros.common.exception.BusinessRuleException(
+          "EMPTY_BASELINE",
+          "Cannot capture a baseline: the project has no activities to snapshot. "
+              + "Add activities to the schedule before creating a baseline.");
+    }
 
     // Load cost data
     List<ActivityExpense> allExpenses = activityExpenseRepository.findByProjectId(snapshotSourceId);
@@ -102,6 +127,10 @@ public class BaselineService {
     Map<UUID, List<ResourceAssignment>> assignmentsByActivity = allAssignments.stream()
         .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
 
+    Map<UUID, List<ActivitySubContractorAssignment>> scByActivity =
+        activitySubContractorAssignmentRepository.findByProjectId(snapshotSourceId).stream()
+            .collect(Collectors.groupingBy(ActivitySubContractorAssignment::getActivityId));
+
     // Compute project-level metrics BEFORE the first save so totalActivities/totalCost/
     // project dates land in the initial INSERT — otherwise the response DTO may be serialised
     // from a stale entity reference and render as 0/null (BUG-038).
@@ -112,7 +141,7 @@ public class BaselineService {
 
     for (Activity activity : activities) {
       BigDecimal plannedCost = ActivityCostCalculator.calculatePlannedCost(
-          activity.getId(), expensesByActivity, assignmentsByActivity);
+          activity.getId(), expensesByActivity, assignmentsByActivity, scByActivity);
       BigDecimal actualCost = ActivityCostCalculator.calculateActualCost(
           activity.getId(), expensesByActivity, assignmentsByActivity);
 
@@ -145,13 +174,21 @@ public class BaselineService {
       }
     }
 
+    // A newly captured baseline becomes the project's active PRIMARY reference only when none
+    // exists yet (first baseline). Subsequent captures are inert snapshots until the planner
+    // explicitly switches the PRIMARY slot. isActive must equal "is the PRIMARY baseline" so the
+    // legacy isActive readers (Monte Carlo, AI tools, analytics) stay in lockstep with the slot.
+    boolean becomesPrimary = projectRepository.findById(projectId)
+        .map(p -> p.getPrimaryBaselineId() == null)
+        .orElse(true);
+
     Baseline baseline = new Baseline();
     baseline.setProjectId(projectId);
     baseline.setName(request.name());
     baseline.setDescription(request.description());
     baseline.setBaselineType(request.baselineType());
     baseline.setBaselineDate(LocalDate.now());
-    baseline.setIsActive(true);
+    baseline.setIsActive(becomesPrimary);
     baseline.setTotalActivities(activities.size());
     baseline.setTotalCost(totalCost);
     baseline.setProjectStartDate(projectStart);
@@ -256,6 +293,11 @@ public class BaselineService {
     });
 
     auditService.logCreate("Baseline", saved.getId(), BaselineResponse.from(saved));
+
+    eventPublisher.publishEvent(
+        new BaselineCapturedEvent(saved.getProjectId(), saved.getId(), saved.getName())
+    );
+
     return BaselineResponse.from(saved);
   }
 
@@ -308,8 +350,34 @@ public class BaselineService {
       project.setActiveBaselineId(baselineId);
     }
     projectRepository.save(project);
+    if (slot == BaselineSlot.PRIMARY) {
+      // Mirror the PRIMARY choice onto Baseline.isActive so Monte Carlo, the AI baseline tools,
+      // and the analytics ETL — which all resolve "the active baseline" via isActive — follow the
+      // same baseline the planner just made primary.
+      syncActiveFlagToPrimary(projectId, baselineId);
+    }
     auditService.logUpdate("Project", projectId, slotFieldName(slot), previous, baselineId);
     return BaselineResponse.from(baseline);
+  }
+
+  /**
+   * Enforce the single-active invariant: exactly the project's PRIMARY baseline carries
+   * {@code isActive=true}. Monte Carlo ({@code resolveActiveBaseline}), the AI baseline tools, and
+   * the analytics ETL all resolve "the active baseline" via {@link Baseline#getIsActive()}. Without
+   * keeping that flag in lockstep with {@link Project#getPrimaryBaselineId()}, switching the
+   * PRIMARY slot would leave those consumers running against a different (stale) baseline.
+   */
+  private void syncActiveFlagToPrimary(UUID projectId, UUID primaryBaselineId) {
+    for (Baseline b : baselineRepository.findByProjectId(projectId)) {
+      boolean shouldBeActive = b.getId().equals(primaryBaselineId);
+      boolean isActive = Boolean.TRUE.equals(b.getIsActive());
+      if (isActive == shouldBeActive) continue;
+      b.setIsActive(shouldBeActive);
+      baselineRepository.save(b);
+      if (isActive && !shouldBeActive) {
+        eventPublisher.publishEvent(new BaselineDeactivatedEvent(projectId, b.getId()));
+      }
+    }
   }
 
   /** Phase 3: detach whichever baseline currently occupies the given slot. */
@@ -324,6 +392,17 @@ public class BaselineService {
       project.setActiveBaselineId(null);
     }
     projectRepository.save(project);
+    if (slot == BaselineSlot.PRIMARY) {
+      // No PRIMARY baseline means no active baseline — keep isActive in lockstep so Monte Carlo
+      // fails fast with BASELINE_REQUIRED rather than silently using a now-unreferenced snapshot.
+      baselineRepository.findById(previous).ifPresent(b -> {
+        if (Boolean.TRUE.equals(b.getIsActive())) {
+          b.setIsActive(false);
+          baselineRepository.save(b);
+          eventPublisher.publishEvent(new BaselineDeactivatedEvent(projectId, b.getId()));
+        }
+      });
+    }
     auditService.logUpdate("Project", projectId, slotFieldName(slot), previous, null);
   }
 
@@ -395,9 +474,14 @@ public class BaselineService {
 
     List<Activity> liveActivities = activityRepository.findByProjectId(projectId);
     int restored = 0;
+    int skippedLocked = 0;
     for (Activity activity : liveActivities) {
       BaselineActivity snap = snapshotByActivityId.get(activity.getId());
       if (snap == null) continue; // activity didn't exist when the snapshot was taken — skip
+      if (activity.getEditStatus() == ActivityEditStatus.LOCKED) {
+        skippedLocked++;
+        continue;
+      }
       // Planned dates come from earlyStart/earlyFinish (createBaseline copies them from
       // plannedStart/plannedFinish, so they are the right round-trip target).
       activity.setPlannedStartDate(snap.getEarlyStart());
@@ -418,6 +502,9 @@ public class BaselineService {
       // restore should preserve actuals so the planner doesn't lose progress data.
       activityRepository.save(activity);
       restored++;
+    }
+    if (skippedLocked > 0) {
+      log.info("Skipped {} LOCKED activities", skippedLocked);
     }
 
     // Restore relationships: delete every existing relationship for the project, then re-create
@@ -490,6 +577,9 @@ public class BaselineService {
     Map<UUID, List<ResourceAssignment>> assignmentsByActivity = resourceAssignmentRepository
         .findByProjectId(projectId).stream()
         .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+    Map<UUID, List<ActivitySubContractorAssignment>> scByActivity =
+        activitySubContractorAssignmentRepository.findByProjectId(projectId).stream()
+            .collect(Collectors.groupingBy(ActivitySubContractorAssignment::getActivityId));
 
     int updated = 0;
     int inserted = 0;
@@ -515,7 +605,7 @@ public class BaselineService {
       }
       if (request.resourceCosts() || request.expenseCosts()) {
         BigDecimal planned = ActivityCostCalculator.calculatePlannedCost(
-            a.getId(), expensesByActivity, assignmentsByActivity);
+            a.getId(), expensesByActivity, assignmentsByActivity, scByActivity);
         BigDecimal actual = ActivityCostCalculator.calculateActualCost(
             a.getId(), expensesByActivity, assignmentsByActivity);
         ba.setPlannedCost(planned);
@@ -613,6 +703,18 @@ public class BaselineService {
     baselineResourceAssignmentRepository.deleteByBaselineId(baselineId);
     baselineExpenseRepository.deleteByBaselineId(baselineId);
     baselineRepository.delete(baseline);
+
+    // Clear any project slot that pointed at the deleted baseline, otherwise primaryBaselineId /
+    // activeBaselineId dangle and downstream resolution (Monte Carlo, variance, EVM) breaks.
+    projectRepository.findById(baseline.getProjectId()).ifPresent(p -> {
+      boolean dirty = false;
+      if (baselineId.equals(p.getPrimaryBaselineId())) { p.setPrimaryBaselineId(null); dirty = true; }
+      if (baselineId.equals(p.getActiveBaselineId())) { p.setActiveBaselineId(null); dirty = true; }
+      if (baselineId.equals(p.getSecondaryBaselineId())) { p.setSecondaryBaselineId(null); dirty = true; }
+      if (baselineId.equals(p.getTertiaryBaselineId())) { p.setTertiaryBaselineId(null); dirty = true; }
+      if (dirty) projectRepository.save(p);
+    });
+
     auditService.logDelete("Baseline", baselineId);
   }
 
@@ -639,12 +741,10 @@ public class BaselineService {
         .filter(e -> e.getActivityId() != null)
         .collect(Collectors.groupingBy(ActivityExpense::getActivityId));
 
-    List<ResourceAssignment> allAssignments = resourceAssignmentRepository.findByProjectId(projectId);
-    Map<UUID, List<ResourceAssignment>> assignmentsByActivity = allAssignments.stream()
-        .collect(Collectors.groupingBy(ResourceAssignment::getActivityId));
+    Map<UUID, BigDecimal> dprByActivity = dprActualCostLookup.sumByActivity(projectId);
 
     return baselineActivities.stream()
-        .map(ba -> calculateVariance(ba, activityMap, expensesByActivity, assignmentsByActivity))
+        .map(ba -> calculateVariance(ba, activityMap, expensesByActivity, dprByActivity))
         .toList();
   }
 
@@ -652,7 +752,7 @@ public class BaselineService {
       BaselineActivity baselineActivity,
       Map<UUID, Activity> currentActivityMap,
       Map<UUID, List<ActivityExpense>> expensesByActivity,
-      Map<UUID, List<ResourceAssignment>> assignmentsByActivity) {
+      Map<UUID, BigDecimal> dprByActivity) {
 
     Activity currentActivity = currentActivityMap.get(baselineActivity.getActivityId());
     String activityName = currentActivity != null ? currentActivity.getName() : "Deleted Activity";
@@ -664,15 +764,15 @@ public class BaselineService {
 
     if (currentActivity != null) {
       // Schedule variance (positive = delayed)
-      if (baselineActivity.getEarlyStart() != null && currentActivity.getPlannedStartDate() != null) {
+      if (baselineActivity.getEarlyStart() != null && currentActivity.currentStartDate() != null) {
         startVarianceDays = ChronoUnit.DAYS.between(
             baselineActivity.getEarlyStart(),
-            currentActivity.getPlannedStartDate());
+            currentActivity.currentStartDate());
       }
-      if (baselineActivity.getEarlyFinish() != null && currentActivity.getPlannedFinishDate() != null) {
+      if (baselineActivity.getEarlyFinish() != null && currentActivity.currentFinishDate() != null) {
         finishVarianceDays = ChronoUnit.DAYS.between(
             baselineActivity.getEarlyFinish(),
-            currentActivity.getPlannedFinishDate());
+            currentActivity.currentFinishDate());
       }
 
       // Duration variance
@@ -681,12 +781,16 @@ public class BaselineService {
       }
 
       // Cost variance = current actual cost - baseline planned cost
-      BigDecimal currentActualCost = ActivityCostCalculator.calculateActualCost(
-          currentActivity.getId(), expensesByActivity, assignmentsByActivity);
+      BigDecimal currentActualCost = ActivityCostCalculator
+          .calculateExpenseActualCost(currentActivity.getId(), expensesByActivity)
+          .add(dprByActivity.getOrDefault(currentActivity.getId(), BigDecimal.ZERO));
       BigDecimal baselinePlannedCost = baselineActivity.getPlannedCost() != null
           ? baselineActivity.getPlannedCost() : BigDecimal.ZERO;
       costVariance = currentActualCost.subtract(baselinePlannedCost);
     }
+
+    boolean comparable = baselineActivity.getEarlyFinish() != null
+        && currentActivity != null && currentActivity.currentFinishDate() != null;
 
     return new BaselineVarianceResponse(
         baselineActivity.getActivityId(),
@@ -694,7 +798,8 @@ public class BaselineService {
         startVarianceDays,
         finishVarianceDays,
         durationVariance,
-        costVariance);
+        costVariance,
+        comparable);
   }
 
   public List<ScheduleComparisonResponse> getScheduleComparison(UUID projectId, UUID baselineId) {
@@ -727,10 +832,10 @@ public class BaselineService {
             "Deleted Activity",
             null,
             ba.getEarlyStart(),
-            0L,
+            null,
             null,
             ba.getEarlyFinish(),
-            0L,
+            null,
             ScheduleComparisonResponse.ComparisonStatus.DELETED));
       }
     }
@@ -740,13 +845,16 @@ public class BaselineService {
 
   private ScheduleComparisonResponse compareActivity(Activity current, BaselineActivity baseline) {
     ScheduleComparisonResponse.ComparisonStatus status;
-    LocalDate currentStart = current.getPlannedStartDate();
+    LocalDate currentStart = current.currentStartDate();
     LocalDate baselineStart = baseline != null ? baseline.getEarlyStart() : null;
-    LocalDate currentFinish = current.getPlannedFinishDate();
+    LocalDate currentFinish = current.currentFinishDate();
     LocalDate baselineFinish = baseline != null ? baseline.getEarlyFinish() : null;
 
     if (baseline == null) {
       status = ScheduleComparisonResponse.ComparisonStatus.ADDED;
+    } else if (currentStart == null && currentFinish == null
+        && baselineStart == null && baselineFinish == null) {
+      status = ScheduleComparisonResponse.ComparisonStatus.NOT_COMPARABLE;
     } else if (areDatesEqual(currentStart, baselineStart) && areDatesEqual(currentFinish, baselineFinish)) {
       status = ScheduleComparisonResponse.ComparisonStatus.UNCHANGED;
     } else {
@@ -774,7 +882,7 @@ public class BaselineService {
   }
 
   private Long calculateDaysDifference(LocalDate from, LocalDate to) {
-    if (from == null || to == null) return 0L;
+    if (from == null || to == null) return null;
     return ChronoUnit.DAYS.between(from, to);
   }
 }

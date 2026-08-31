@@ -1,5 +1,8 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+import { SimpleTable } from "@/components/common/SimpleTable";
+
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -286,6 +289,95 @@ export default function FormulasPage() {
   const copyExpression = async (expr: string) => {
     await navigator.clipboard.writeText(expr);
   };
+
+  const columns = useMemo<ColumnDef<FormulaDto>[]>(() => [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => (
+        <span className="font-mono text-[12px] font-medium text-gold-deep">
+          {row.original.code}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => (
+        <span className="font-semibold text-charcoal">{row.original.name}</span>
+      ),
+    },
+    {
+      accessorKey: "category",
+      header: "Category",
+      cell: ({ row }) => (
+        <span className="inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-ivory text-slate">
+          {row.original.category}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "defaultExpression",
+      header: "Expression",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2 max-w-[360px]">
+          <code className="truncate font-mono text-[11px] text-slate bg-parchment px-1.5 py-0.5 rounded">
+            {row.original.defaultExpression}
+          </code>
+          <button
+            onClick={() => copyExpression(row.original.defaultExpression)}
+            className="shrink-0 rounded p-1 text-ash hover:text-gold-deep hover:bg-parchment transition-colors"
+            title="Copy expression"
+          >
+            <Copy size={12} />
+          </button>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "outputType",
+      header: "Output",
+      cell: ({ row }) => (
+        <span
+          className={cn(
+            "inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+            outputTypeBadge(row.original.outputType)
+          )}
+        >
+          {row.original.outputType}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => openTest(row.original)}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-emerald"
+            title="Test formula"
+          >
+            <Play size={14} strokeWidth={1.5} />
+          </button>
+          <button
+            onClick={() => openOverride(row.original)}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
+            title="Project overrides"
+          >
+            <Calculator size={14} strokeWidth={1.5} />
+          </button>
+          <button
+            onClick={() => openEdit(row.original)}
+            className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
+            title="Edit"
+          >
+            <Pencil size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      ),
+    },
+  ], []);
 
   return (
     <div>
@@ -625,43 +717,44 @@ export default function FormulasPage() {
           {overrides.length === 0 ? (
             <p className="text-sm text-slate">No overrides for this formula yet.</p>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-hairline">
-              <table className="w-full border-collapse text-sm">
-                <thead className="border-b border-hairline bg-ivory">
-                  <tr>
-                    {["Project", "Expression", "Reason", ""].map((h) => (
-                      <th
-                        key={h}
-                        className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {overrides.map((o) => (
-                    <tr key={o.id} className="border-b border-hairline last:border-b-0 hover:bg-ivory">
-                      <td className="px-4 py-2.5 text-charcoal font-medium">
-                        {projects.find((p) => p.id === o.projectId)?.name || o.projectId}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-[11px] text-slate max-w-[300px] truncate">
-                        {o.overrideExpression}
-                      </td>
-                      <td className="px-4 py-2.5 text-slate">{o.overrideReason || "—"}</td>
-                      <td className="px-4 py-2.5">
-                        <button
-                          onClick={() => deleteOverride(o.id)}
-                          className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy"
-                        >
-                          <Trash2 size={14} strokeWidth={1.5} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <SimpleTable
+              columns={[
+                {
+                  accessorKey: "projectId",
+                  header: "Project",
+                  cell: ({ row }) => (
+                    <span className="text-charcoal font-medium">
+                      {projects.find((p) => p.id === row.original.projectId)?.name || row.original.projectId}
+                    </span>
+                  ),
+                },
+                {
+                  accessorKey: "overrideExpression",
+                  header: "Expression",
+                  cell: ({ row }) => (
+                    <span className="font-mono text-[11px] text-slate max-w-[300px] truncate">{row.original.overrideExpression}</span>
+                  ),
+                },
+                {
+                  accessorKey: "overrideReason",
+                  header: "Reason",
+                  cell: ({ row }) => <span className="text-slate">{row.original.overrideReason || "—"}</span>,
+                },
+                {
+                  id: "actions",
+                  header: "",
+                  cell: ({ row }) => (
+                    <button
+                      onClick={() => deleteOverride(row.original.id)}
+                      className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-burgundy"
+                    >
+                      <Trash2 size={14} strokeWidth={1.5} />
+                    </button>
+                  ),
+                },
+              ]}
+              data={overrides}
+            />
           )}
         </div>
       )}
@@ -699,89 +792,9 @@ export default function FormulasPage() {
         </div>
       )}
 
+
       {!isLoading && filtered.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-hairline bg-paper">
-          <table className="w-full border-collapse text-sm">
-            <thead className="border-b border-hairline bg-ivory">
-              <tr>
-                {["Code", "Name", "Category", "Expression", "Output", ""].map((h, idx) => (
-                  <th
-                    key={`${h}-${idx}`}
-                    className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
-                <tr key={row.id} className="border-b border-hairline last:border-b-0 hover:bg-ivory">
-                  <td className="px-4 py-3.5">
-                    <span className="font-mono text-[12px] font-medium text-gold-deep">
-                      {row.code}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5 font-semibold text-charcoal">{row.name}</td>
-                  <td className="px-4 py-3.5">
-                    <span className="inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-ivory text-slate">
-                      {row.category}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-2 max-w-[360px]">
-                      <code className="truncate font-mono text-[11px] text-slate bg-parchment px-1.5 py-0.5 rounded">
-                        {row.defaultExpression}
-                      </code>
-                      <button
-                        onClick={() => copyExpression(row.defaultExpression)}
-                        className="shrink-0 rounded p-1 text-ash hover:text-gold-deep hover:bg-parchment transition-colors"
-                        title="Copy expression"
-                      >
-                        <Copy size={12} />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span
-                      className={cn(
-                        "inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-                        outputTypeBadge(row.outputType)
-                      )}
-                    >
-                      {row.outputType}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => openTest(row)}
-                        className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-emerald"
-                        title="Test formula"
-                      >
-                        <Play size={14} strokeWidth={1.5} />
-                      </button>
-                      <button
-                        onClick={() => openOverride(row)}
-                        className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
-                        title="Project overrides"
-                      >
-                        <Calculator size={14} strokeWidth={1.5} />
-                      </button>
-                      <button
-                        onClick={() => openEdit(row)}
-                        className="rounded-md p-1.5 text-slate transition-colors hover:bg-parchment hover:text-gold-deep"
-                        title="Edit"
-                      >
-                        <Pencil size={14} strokeWidth={1.5} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable columns={columns} data={filtered} sortable resizable searchable={false} />
       )}
     </div>
   );

@@ -11,6 +11,8 @@ interface NetworkDiagramProps {
     successorActivityId: string;
     relationshipType: string;
   }>;
+  onActivityClick?: (id: string) => void;
+  onActivityContextMenu?: (id: string, x: number, y: number) => void;
 }
 
 interface ActivityNode {
@@ -26,7 +28,7 @@ interface ViewState {
   scale: number;
 }
 
-export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagramProps) {
+export function NetworkDiagram({ activities, relationships = [], onActivityClick, onActivityContextMenu }: NetworkDiagramProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<ViewState>({ x: 0, y: 0, scale: 1 });
   const [view, setView] = useState<ViewState>({ x: 0, y: 0, scale: 1 });
@@ -311,7 +313,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
               const x2 = succNode.x - 10;
               const y2 = succNode.y + 60;
 
-              const isCritical = predNode.activity.totalFloat === 0 && succNode.activity.totalFloat === 0;
+              const isCritical = predNode.activity.isCritical === true && succNode.activity.isCritical === true;
 
               return (
                 <g key={`rel-${index}`}>
@@ -342,7 +344,7 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
 
           {/* Activity boxes — draggable */}
           {draggableNodes.map((node) => {
-            const isCritical = node.activity.totalFloat === 0;
+            const isCritical = node.activity.isCritical === true;
             const boxWidth = 240;
             const boxHeight = 100;
             const isBeingDragged = draggingNodeId === node.activity.id;
@@ -367,6 +369,11 @@ export function NetworkDiagram({ activities, relationships = [] }: NetworkDiagra
                     filter: isBeingDragged
                       ? "drop-shadow(0 4px 8px rgba(0,0,0,0.3))"
                       : "none",
+                  }}
+                  onClick={() => onActivityClick?.(node.activity.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onActivityContextMenu?.(node.activity.id, e.clientX, e.clientY);
                   }}
                 />
 

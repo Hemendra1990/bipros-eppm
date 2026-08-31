@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { labourApi, type LabourReturnResponse, type CreateLabourReturnRequest, type DeploymentSummary } from "@/lib/api/labourApi";
 import { TabTip } from "@/components/common/TabTip";
 import { getErrorMessage } from "@/lib/utils/error";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useAuthStore } from "@/lib/state/store";
 
 // Spring's native Page<T> serialises with these fields at the root of the
 // response body (no `pagination` sub-object). LabourReturnController returns
@@ -46,6 +49,8 @@ const skillCategoryLabel = {
 };
 
 export default function LabourReturnsPage() {
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canWrite = hasPermission("DPR.UPDATE") || hasPermission("RESOURCE.UPDATE");
   const params = useParams();
   const projectId = params.projectId as string;
 
@@ -116,6 +121,35 @@ export default function LabourReturnsPage() {
     }
   };
 
+  const columns = useMemo<ColumnDef<LabourReturnResponse>[]>(() => [
+    { accessorKey: "returnDate", header: "Date" },
+    { accessorKey: "contractorName", header: "Contractor" },
+    {
+      accessorKey: "skillCategory",
+      header: "Skill Category",
+      cell: ({ row }) => (
+        <span className="px-2 py-1 bg-accent/10 text-accent ring-1 ring-accent/20 rounded text-sm">
+          {skillCategoryLabel[row.original.skillCategory]}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "headCount",
+      header: "Headcount",
+      cell: ({ row }) => <span className="font-semibold">{row.original.headCount}</span>,
+    },
+    {
+      accessorKey: "manDays",
+      header: "Man-Days",
+      cell: ({ row }) => row.original.manDays.toFixed(1),
+    },
+    {
+      accessorKey: "siteLocation",
+      header: "Site Location",
+      cell: ({ row }) => row.original.siteLocation || "-",
+    },
+  ], []);
+
   if (isLoading && returns.length === 0) {
     return <div className="p-6 text-text-muted">Loading labour returns...</div>;
   }
@@ -165,12 +199,14 @@ export default function LabourReturnsPage() {
           </div>
         )}
 
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="mb-6 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
-        >
-          {showForm ? "Cancel" : "Add Labour Return"}
-        </button>
+        {canWrite && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="mb-6 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
+          >
+            {showForm ? "Cancel" : "Add Labour Return"}
+          </button>
+        )}
 
         {error && <div className="text-danger mb-4">{error}</div>}
 
@@ -270,36 +306,14 @@ export default function LabourReturnsPage() {
         )}
 
         {/* Returns Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Contractor</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Skill Category</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Headcount</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Man-Days</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Site Location</th>
-              </tr>
-            </thead>
-            <tbody>
-              {returns.map((ret) => (
-                <tr key={ret.id} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2">{ret.returnDate}</td>
-                  <td className="border border-border px-4 py-2">{ret.contractorName}</td>
-                  <td className="border border-border px-4 py-2">
-                    <span className="px-2 py-1 bg-accent/10 text-accent ring-1 ring-accent/20 rounded text-sm">
-                      {skillCategoryLabel[ret.skillCategory]}
-                    </span>
-                  </td>
-                  <td className="border border-border px-4 py-2 text-right font-semibold">{ret.headCount}</td>
-                  <td className="border border-border px-4 py-2 text-right">{ret.manDays.toFixed(1)}</td>
-                  <td className="border border-border px-4 py-2">{ret.siteLocation || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={returns}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No labour returns for this project."
+        />
 
         {/* Pagination */}
         {totalElements > 20 && (

@@ -20,6 +20,8 @@ export interface CompressionAnalysisResponse {
   compressedDuration: number;
   durationSaved: number;
   additionalCost?: number;
+  originalFinishDate?: string;
+  compressedFinishDate?: string;
   recommendations: CompressionRecommendation[];
   createdAt: string;
   updatedAt: string;

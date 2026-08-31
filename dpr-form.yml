@@ -1,0 +1,155 @@
+- dialog "Add DPR" [ref=f14e879]:
+  - generic [ref=f14e880]:
+    - heading "Add DPR" [level=2] [ref=f14e881]
+    - button "Close" [ref=f14e882]
+  - generic [ref=f14e887]:
+    - generic [ref=f14e888]:
+      - generic [ref=f14e889]: Day shift
+      - button "Voice fill" [ref=f14e892]
+    - generic [ref=f14e896]:
+      - generic [ref=f14e897]:
+        - generic [ref=f14e898]: Supervisor
+        - button "Search supervisor…" [ref=f14e900] [cursor=pointer]
+      - generic [ref=f14e904]:
+        - generic [ref=f14e905]: Activity name
+        - button "Search activity…" [ref=f14e907] [cursor=pointer]
+    - generic [ref=f14e911]:
+      - generic [ref=f14e912]:
+        - generic [ref=f14e913]: Date
+        - textbox [ref=f14e914]: 2026-08-04
+      - generic [ref=f14e915]:
+        - generic [ref=f14e916]: Shift
+        - combobox [ref=f14e917]:
+          - option "—"
+          - option "Day" [selected]
+          - option "Night"
+      - generic [ref=f14e918]:
+        - generic [ref=f14e919]: Contractor
+        - textbox "Lead contractor" [ref=f14e920]
+      - generic [ref=f14e921]:
+        - generic [ref=f14e922]: Weather
+        - combobox [ref=f14e923]:
+          - option "—" [selected]
+          - option "Clear"
+          - option "Cloudy"
+          - option "Rain"
+          - option "Thunderstorm"
+          - option "Foggy"
+          - option "Sandstorm"
+      - generic [ref=f14e924]:
+        - generic [ref=f14e925]: Start time
+        - textbox [ref=f14e926]
+      - generic [ref=f14e927]:
+        - generic [ref=f14e928]: End time
+        - textbox [ref=f14e929]
+    - generic [ref=f14e930]:
+      - generic [ref=f14e931]: Activity details
+      - generic [ref=f14e935]:
+        - generic [ref=f14e936]:
+          - generic [ref=f14e937]: Side
+          - combobox [ref=f14e938]:
+            - option "—" [selected]
+            - option "LHS"
+            - option "RHS"
+            - option "Center"
+        - generic [ref=f14e939]:
+          - generic [ref=f14e940]: Landmark
+          - textbox "Near Main Road junction" [ref=f14e941]
+        - generic [ref=f14e942]:
+          - generic [ref=f14e943]: BOQ item
+          - button "Optional — link to BOQ" [ref=f14e945] [cursor=pointer]
+        - generic [ref=f14e949]:
+          - generic [ref=f14e950]: Chainage from
+          - textbox "145+000" [ref=f14e951]
+        - generic [ref=f14e952]:
+          - generic [ref=f14e953]: Chainage to
+          - textbox "145+200" [ref=f14e954]
+        - generic [ref=f14e955]:
+          - generic [ref=f14e956]: Unit
+          - combobox [ref=f14e957]:
+            - option "Cum" [selected]
+            - option "Brass"
+            - option "L"
+            - option "Sqm"
+            - option "Sqft"
+            - option "Rm"
+            - option "Lm"
+            - option "lin.m."
+            - option "R/mtr"
+            - option "m"
+            - option "mm"
+            - option "ft"
+            - option "in"
+            - option "kg"
+            - option "MT"
+            - option "Tonne"
+            - option "Quintal"
+            - option "Bag"
+            - option "Each"
+            - option "Nr"
+            - option "Nos"
+            - option "Day"
+            - option "Hour"
+        - generic [ref=f14e958]:
+          - generic [ref=f14e959]: Workdone Quantity*
+          - spinbutton [ref=f14e960]: "0"
+        - generic [ref=f14e961]:
+          - generic [ref=f14e962]: Remarks
+          - textbox [ref=f14e963]
+    - generic [ref=f14e964]:
+      - generic [ref=f14e965]:
+        - button "Manpower (0)" [ref=f14e966]
+        - button "Equipment (0)" [ref=f14e972]
+        - button "Material (0)" [ref=f14e976]
+        - button "Sub-Contractor (0)" [ref=f14e981]
+        - button "Issues (0)" [ref=f14e987]
+      - generic [ref=f14e990]:
+        - generic [ref=f14e991]: Pick an activity above to choose manpower.
+        - generic [ref=f14e992]:
+          - generic [ref=f14e993]:
+            - generic [ref=f14e994]: Manpower
+            - button "Add manpower" [ref=f14e995]
+          - generic [ref=f14e997]: Pick an activity first.
+    - button [ref=f14e1000]
+    - generic [ref=f14e1007]:
+      - generic [ref=f14e1008]:
+        - generic [ref=f14e1009]: Photos
+        - button "Add photos" [ref=f14e1014] [cursor=pointer]
+      - generic [ref=f14e1018]: Pick images now — they'll upload after you save the DPR.
+    - generic [ref=f14e1020]:
+      - generic [ref=f14e1021]:
+        - generic [ref=f14e1022]: Voice notes
+        - generic [ref=f14e1024]:
+          - button "Record" [ref=f14e1025] [cursor=pointer]
+          - button "Attach audio" [ref=f14e1029] [cursor=pointer]
+      - paragraph [ref=f14e1032]: Attach spoken notes to this report. Unlike Voice fill, these recordings are saved and can be played back later.
+      - generic [ref=f14e1033]: Record or attach a note now — it'll upload after you save the DPR.
+    - generic [ref=f14e1035]:
+      - generic [ref=f14e1037]:
+        - generic [ref=f14e1038]:
+          - generic [ref=f14e1039]: Manpower
+          - generic [ref=f14e1040]: 0 ppl
+          - generic [ref=f14e1041]: 0 OMR
+        - generic [ref=f14e1042]:
+          - generic [ref=f14e1043]: Equipment
+          - generic [ref=f14e1044]: 0 units
+          - generic [ref=f14e1045]: 0 OMR
+        - generic [ref=f14e1046]:
+          - generic [ref=f14e1047]: Fuel
+          - generic [ref=f14e1048]: 0 OMR
+        - generic [ref=f14e1049]:
+          - generic [ref=f14e1050]: Materials
+          - generic [ref=f14e1051]: 0 units
+        - generic [ref=f14e1052]:
+          - generic [ref=f14e1053]: Sub-Contractor
+          - generic [ref=f14e1054]: 0 entries
+        - generic [ref=f14e1055]:
+          - generic [ref=f14e1056]: Productivity
+          - generic [ref=f14e1057]: —
+        - generic [ref=f14e1058]:
+          - generic [ref=f14e1059]: Day cost
+          - generic [ref=f14e1060]: —
+          - generic [ref=f14e1061]: set rates to compute
+      - generic [ref=f14e1062]:
+        - button "Cancel" [ref=f14e1063]
+        - button "Submit DPR" [ref=f14e1064]

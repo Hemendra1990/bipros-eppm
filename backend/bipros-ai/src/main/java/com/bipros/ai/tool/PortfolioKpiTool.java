@@ -149,4 +149,15 @@ public class PortfolioKpiTool extends ProjectScopedTool {
             return fallback;
         }
     }
+
+    @Override
+    public java.util.Set<String> allowedRoles() {
+        return java.util.Set.of(
+                "PROJECT_MANAGER",
+                "PORTFOLIO_MANAGER",
+                "RISK_MANAGER",
+                "COST_CONTROLLER",
+                "EXECUTIVE_VIEWER"
+        );
+    }
 }

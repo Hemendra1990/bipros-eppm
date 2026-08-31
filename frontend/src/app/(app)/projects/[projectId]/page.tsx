@@ -3,42 +3,49 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";
 import { getErrorMessage } from "@/lib/utils/error";
-import { formatDate, getPriorityInfo } from "@/lib/utils/format";
+import { formatDate, getPriorityInfo, formatBudget, budgetUnit } from "@/lib/utils/format";
+import { chainageLabel, parseChainage } from "@/lib/format/chainage";
 import { projectApi } from "@/lib/api/projectApi";
+import { settingsApi } from "@/lib/api/settingsApi";
+import { resolveCurrencyMeta } from "@/lib/currency/format";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import { projectCategoryApi } from "@/lib/api/projectCategoryApi";
 import { calendarApi } from "@/lib/api/calendarApi";
 import { activityApi } from "@/lib/api/activityApi";
-import { baselineApi, type BaselineActivityResponse, type BaselineDetailResponse } from "@/lib/api/baselineApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { EmptyState } from "@/components/common/EmptyState";
-import { GanttChart } from "@/components/schedule/GanttChart";
 import { ResourcesTab } from "@/components/resource/ResourcesTab";
 import { CostsTab } from "@/components/cost/CostsTab";
 import { EvmTab } from "@/components/evm/EvmTab";
 import { PeriodPerformanceTab } from "@/components/cost/PeriodPerformanceTab";
 import { CostAccountRollupTab } from "@/components/cost/CostAccountRollupTab";
-import { NetworkDiagram } from "@/components/schedule/NetworkDiagram";
-import { ListTodo, Plus, Play, Pencil, Trash2, Eye, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree, Sparkles, AlertTriangle } from "lucide-react";
+import { Plus, Play, Pencil, Trash2, FileText, ChevronRight, ArrowRight, ChevronDown, Folder, FolderOpen, File, RefreshCw, List, FolderTree, Sparkles, AlertTriangle } from "lucide-react";
 import { UdfSection } from "@/components/udf/UdfSection";
 import { costApi } from "@/lib/api/costApi";
 import { dashboardApi, type KpiSnapshot, type KpiDefinition } from "@/lib/api/dashboardApi";
 import { projectResourceApi } from "@/lib/api/projectResourceApi";
+import { budgetApi } from "@/lib/api/budgetApi";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api/client";
 import { wbsTemplateApi } from "@/lib/api/wbsTemplateApi";
+import { WorkPackagesListView } from "@/components/wbs/WorkPackagesListView";
 import { TabTip } from "@/components/common/TabTip";
 import { WbsAiGenerateDialog } from "@/components/wbs/WbsAiGenerateDialog";
-import { VarianceDashboard } from "@/components/baseline/VarianceDashboard";
-import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
+import { useAuthStore } from "@/lib/state/store";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody } from "@/components/ui/dialog";
+import { ProjectDocumentsPanel } from "@/components/document/ProjectDocumentsPanel";
+import { ProjectSetupProgress } from "@/components/project/ProjectSetupProgress";
+import { ProjectTeamCard } from "@/components/project/ProjectTeamCard";
+import { LocationCard } from "@/components/project/LocationCard";
+import { MaterialAvailabilityCard } from "@/components/materials/MaterialAvailabilityCard";
+import { ProjectDashboardTab } from "@/components/dashboards/project/ProjectDashboardTab";
+import { BaselinesPanel } from "@/components/baseline/BaselinesPanel";
 import type { ContractType } from "@/lib/types";
-import { ScheduleComparisonTable } from "@/components/baseline/ScheduleComparisonTable";
-import { ScheduleVarianceSection } from "@/components/reports/ScheduleVarianceSection";
-import { CostVarianceSection } from "@/components/reports/CostVarianceSection";
-import type { ProjectResponse, ActivityResponse, WbsNodeResponse, BaselineResponse, BaselineVarianceRow, ApiResponse } from "@/lib/types";
+import type { ProjectResponse, ActivityResponse, WbsNodeResponse, ApiResponse } from "@/lib/types";
 import type { WbsTemplateResponse } from "@/lib/types";
 import type { AxiosResponse } from "axios";
 import { useScheduleStaleStore } from "@/lib/state/scheduleStaleStore";
@@ -92,7 +99,7 @@ export default function ProjectDetailPage() {
   const { data: activitiesData, isLoading: isLoadingActivities, refetch: refetchActivities } = useQuery({
     queryKey: ["activities", projectId],
     queryFn: () => activityApi.listActivities(projectId, 0, 100),
-    enabled: ["activities", "gantt", "network"].includes(tab),
+    enabled: tab === "activities",
   });
 
   const { data: wbsData, isLoading: isLoadingWbs } = useQuery({
@@ -110,39 +117,14 @@ export default function ProjectDetailPage() {
   const { data: relationshipsData, isLoading: isLoadingRelationships } = useQuery({
     queryKey: ["relationships", projectId],
     queryFn: () => activityApi.getRelationships(projectId),
-    enabled: ["activities", "network", "gantt"].includes(tab),
-  });
-
-  const { data: baselinesData, isLoading: isLoadingBaselines, refetch: refetchBaselines } = useQuery({
-    queryKey: ["baselines", projectId],
-    queryFn: () => baselineApi.listBaselines(projectId),
-    enabled: ["baselines", "gantt"].includes(tab),
-  });
-
-  // Phase 3: prefer the project's PRIMARY slot (project.primaryBaselineId) over scanning the
-  // baselines list for type === "PRIMARY". The slot is the source of truth — the type column
-  // is just a label set at creation. Fall back to the legacy activeBaselineId mirror for
-  // backwards compat with projects whose slot was never explicitly set.
-  const primaryBaselineId =
-    projectData?.data?.primaryBaselineId ?? projectData?.data?.activeBaselineId ?? null;
-  const primaryBaseline =
-    baselinesData?.data?.find((b) => b.id === primaryBaselineId)
-    ?? baselinesData?.data?.find((b) => b.baselineType === "PRIMARY");
-
-  const { data: baselineDetailData, isLoading: isLoadingBaselineActivities } = useQuery({
-    queryKey: ["baseline-detail", projectId, primaryBaseline?.id],
-    queryFn: () =>
-      primaryBaseline
-        ? baselineApi.getBaseline(projectId, primaryBaseline.id)
-        : Promise.resolve({ data: null, error: null, meta: { timestamp: "", version: "" } } as unknown as ApiResponse<BaselineDetailResponse>),
-    enabled: tab === "gantt" && !!primaryBaseline,
+    enabled: false,
   });
 
   const scheduleMutation = useMutation({
     mutationFn: () => activityApi.triggerSchedule(projectId, "RETAINED_LOGIC"),
     onSuccess: () => {
       refetchActivities();
-      queryClient.invalidateQueries({ queryKey: ["criticalPath", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["critical-path", projectId] });
       markScheduleFresh(projectId);
       setScheduleError("");
       toast.success("Schedule calculated successfully");
@@ -166,153 +148,90 @@ export default function ProjectDetailPage() {
     },
   });
 
-  const createBaselineMutation = useMutation({
-    mutationFn: (data: { name: string; baselineType: string }) =>
-      baselineApi.createBaseline(projectId, data as { name: string; baselineType: "PROJECT" | "PRIMARY" | "SECONDARY" | "TERTIARY"; description?: string }),
-    onSuccess: () => {
-      refetchBaselines();
-      toast.success("Baseline created successfully");
-    },
-    onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to create baseline"));
-    },
-  });
-
-  const setActiveBaselineMutation = useMutation({
-    mutationFn: (baselineId: string) => baselineApi.setActiveBaseline(projectId, baselineId),
-    onSuccess: () => {
-      refetchBaselines();
-      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      toast.success("Baseline set as active");
-    },
-    onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to activate baseline"));
-    },
-  });
-
-  const deleteBaselineMutation = useMutation({
-    mutationFn: (baselineId: string) => baselineApi.deleteBaseline(projectId, baselineId),
-    onSuccess: () => {
-      refetchBaselines();
-      toast.success("Baseline deleted");
-    },
-    onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to delete baseline"));
-    },
-  });
-
-  // Phase 4.1: Restore Baseline. Destructive — overwrites planned dates / durations /
-  // relationships on the live project from the snapshot. Actuals are preserved.
-  const restoreBaselineMutation = useMutation({
-    mutationFn: (baselineId: string) => baselineApi.restoreBaseline(projectId, baselineId),
-    onSuccess: () => {
-      refetchBaselines();
-      queryClient.invalidateQueries({ queryKey: ["activities", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["relationships", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["critical-path", projectId] });
-      toast.success("Project restored from baseline");
-    },
-    onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to restore baseline"));
-    },
-  });
-
-  // Phase 4.2: Selective Update Baseline. The button below runs with empty filters which
-  // refreshes every activity + relationship — equivalent to P6's "Update" with all defaults.
-  // The endpoint supports narrower scopes via UpdateBaselineRequest; a richer filter dialog
-  // can be wired in a follow-up round.
-  const updateBaselineMutation = useMutation({
-    mutationFn: (baselineId: string) => baselineApi.updateBaseline(projectId, baselineId, {}),
-    onSuccess: () => {
-      refetchBaselines();
-      queryClient.invalidateQueries({ queryKey: ["baseline-detail", projectId] });
-      toast.success("Baseline updated from current schedule");
-    },
-    onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to update baseline"));
-    },
-  });
-
   const project = projectData?.data;
   const activities = activitiesData?.data?.content ?? [];
   const wbsTree = wbsData?.data ?? [];
   const criticalPathIds = new Set((criticalPathData?.data ?? []).map((a: ActivityResponse) => a.id));
 
   const activityColumns: ColumnDef<ActivityResponse>[] = [
-    { key: "code", label: "Code", sortable: true },
-    { key: "name", label: "Name", sortable: true },
-    { key: "originalDuration", label: "Duration (days)", sortable: true },
+    { accessorKey: "code", header: "Code", enableSorting: true },
+    { accessorKey: "name", header: "Name", enableSorting: true },
+    { accessorKey: "originalDuration", header: "Duration (days)", enableSorting: true },
     {
-      key: "percentComplete",
-      label: "% Complete",
-      sortable: true,
-      render: (value) => `${String(value)}%`,
+      accessorKey: "percentComplete",
+      header: "% Complete",
+      enableSorting: true,
+      cell: (info) => `${String(info.getValue())}%`,
     },
     {
-      key: "status",
-      label: "Status",
-      render: (value) => <StatusBadge status={String(value)} />,
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => <StatusBadge status={String(info.getValue())} />,
     },
-    { key: "totalFloat", label: "Float (days)", sortable: true },
+    { accessorKey: "totalFloat", header: "Float (days)", enableSorting: true },
     {
-      key: "plannedStartDate",
-      label: "Planned Start",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
-    },
-    {
-      key: "plannedFinishDate",
-      label: "Planned Finish",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
+      accessorKey: "plannedStartDate",
+      header: "Planned Start",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
     },
     {
-      key: "earlyStartDate",
-      label: "ES",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
+      accessorKey: "plannedFinishDate",
+      header: "Planned Finish",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
     },
     {
-      key: "earlyFinishDate",
-      label: "EF",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
+      accessorKey: "earlyStartDate",
+      header: "ES",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
     },
     {
-      key: "lateStartDate",
-      label: "LS",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
+      accessorKey: "earlyFinishDate",
+      header: "EF",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
     },
     {
-      key: "lateFinishDate",
-      label: "LF",
-      sortable: true,
-      render: (value) => formatDate(value as string | null),
+      accessorKey: "lateStartDate",
+      header: "LS",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
     },
     {
-      key: "id",
-      label: "Actions",
-      render: (value, row: ActivityResponse) => (
-        <div className="flex gap-2">
-          <Link
-            href={`/projects/${projectId}/activities/${value}`}
-            className="text-accent hover:text-blue-300 text-sm font-medium"
-          >
-            Edit
-          </Link>
-          <button
-            onClick={() => {
-              if (window.confirm("Are you sure you want to delete this activity?")) {
-                deleteActivityMutation.mutate(String(value));
-              }
-            }}
-            className="text-danger hover:text-danger text-sm font-medium"
-          >
-            Delete
-          </button>
-        </div>
-      ),
+      accessorKey: "lateFinishDate",
+      header: "LF",
+      enableSorting: true,
+      cell: (info) => formatDate(info.getValue() as string | null),
+    },
+    {
+      accessorKey: "id",
+      header: "Actions",
+      cell: (info) => {
+        const row = info.row.original;
+        const value = info.getValue();
+        return (
+          <div className="flex gap-2">
+            <Link
+              href={`/projects/${projectId}/activities/${value}`}
+              className="text-accent hover:text-blue-300 text-sm font-medium"
+            >
+              Edit
+            </Link>
+            <button
+              onClick={() => {
+                if (window.confirm("Are you sure you want to delete this activity?")) {
+                  deleteActivityMutation.mutate(String(value));
+                }
+              }}
+              className="text-danger hover:text-danger text-sm font-medium"
+            >
+              Delete
+            </button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -368,8 +287,13 @@ export default function ProjectDetailPage() {
     },
     costs: {
       title: "Cost Tracking",
-      description: "Monitor your project budget. Budget = what you planned to spend. Actual = what you've spent so far. The S-Curve chart shows spending over time.",
-      steps: ["Budget is set via cost accounts linked to WBS nodes", "Actual costs come from recorded expenses on activities", "Cash Flow S-Curve visualizes planned vs actual spending trends"],
+      description: "Earned-value cost tracking. BAC is your configured cost budget; Actual Cost (AC) accumulates from DPRs as work is recorded each day; Earned Value (EV) is the budgeted value of work done.",
+      steps: [
+        "BAC (Budget at Completion) = your configured project cost budget. Contract Value = the client value from the Primary Contract. Planned Cost = bottom-up resource-plan cost.",
+        "Actual Cost (AC) = sum of DPR line costs (manpower nos × rate, equipment nos × rate, material qty × rate, sub-contractor qty × rate)",
+        "Earned Value (EV) = BAC × work done (BOQ executed ÷ BOQ budgeted). CV = EV − AC, CPI = EV ÷ AC, EAC = BAC ÷ CPI, VAC = BAC − EAC.",
+        "Cash Flow S-Curve plots planned, actual, and forecast spend across financial periods",
+      ],
     },
     evm: {
       title: "Earned Value Management (EVM)",
@@ -410,55 +334,22 @@ export default function ProjectDetailPage() {
       )}
 
       {currentTip && <TabTip title={currentTip.title} description={currentTip.description} steps={currentTip.steps} />}
-      {tab === "overview" && <OverviewTab project={project} projectId={projectId} />}
+      {tab === "overview" && (
+        <div className="space-y-10">
+          <ProjectDashboardTab project={project} projectId={projectId} />
+          <div className="border-t border-hairline pt-8">
+            <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate">
+              Project Details
+            </div>
+            <OverviewTab project={project} projectId={projectId} />
+          </div>
+        </div>
+      )}
       {tab === "wbs" && (
         <WbsTab wbsTree={wbsTree} isLoading={isLoadingWbs} projectId={projectId} project={project} />
       )}
-      {tab === "gantt" && project && (
-        <GanttTab
-          activities={activities}
-          isLoading={isLoadingActivities || isLoadingRelationships || isLoadingBaselineActivities}
-          relationships={relationshipsData?.data ?? []}
-          baselineActivities={(baselineDetailData?.data?.activities ?? []).map((a: BaselineActivityResponse) => ({
-            activityId: a.activityId,
-            baselineStartDate: a.earlyStart,
-            baselineFinishDate: a.earlyFinish,
-          }))}
-          projectId={projectId}
-          project={project}
-          onRunSchedule={() => scheduleMutation.mutate()}
-          isRunningSchedule={scheduleMutation.isPending}
-        />
-      )}
-      {tab === "network" && (
-        <NetworkTab
-          projectId={projectId}
-          activities={activities}
-          relationships={relationshipsData?.data ?? []}
-          isLoading={isLoadingActivities || isLoadingRelationships}
-        />
-      )}
-      {tab === "baselines" && (
-        <BaselinesTab
-          projectId={projectId}
-          baselines={baselinesData?.data ?? []}
-          activeBaselineId={projectData?.data?.activeBaselineId ?? null}
-          isLoading={isLoadingBaselines}
-          onCreateBaseline={(data) => createBaselineMutation.mutate(data)}
-          isCreating={createBaselineMutation.isPending}
-          onDeleteBaseline={(baselineId) => deleteBaselineMutation.mutate(baselineId)}
-          isDeleting={deleteBaselineMutation.isPending}
-          onSetActiveBaseline={(baselineId) => setActiveBaselineMutation.mutate(baselineId)}
-          isActivating={setActiveBaselineMutation.isPending}
-          activatingBaselineId={setActiveBaselineMutation.variables ?? null}
-          onRestoreBaseline={(baselineId) => restoreBaselineMutation.mutate(baselineId)}
-          isRestoring={restoreBaselineMutation.isPending}
-          restoringBaselineId={restoreBaselineMutation.variables ?? null}
-          onUpdateBaseline={(baselineId) => updateBaselineMutation.mutate(baselineId)}
-          isUpdatingBaseline={updateBaselineMutation.isPending}
-          updatingBaselineId={updateBaselineMutation.variables ?? null}
-        />
-      )}
+
+      {tab === "baselines" && <BaselinesPanel projectId={projectId} />}
       {tab === "resources" && <ResourcesTab projectId={projectId} />}
       {tab === "costs" && <CostsTab projectId={projectId} />}
       {tab === "evm" && <EvmTab projectId={projectId} />}
@@ -471,6 +362,7 @@ export default function ProjectDetailPage() {
 function OverviewTab({ project, projectId }: { project: ProjectResponse; projectId: string }) {
   const queryClient = useQueryClient();
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [documentsOpen, setDocumentsOpen] = useState(false);
 
   const { data: poolData } = useQuery({
     queryKey: ["resource-pool", projectId],
@@ -494,19 +386,47 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
 
   const calculateKpisMutation = useMutation({
     mutationFn: () => dashboardApi.calculateProjectKpis(projectId),
-    onSuccess: () => {
+    onSuccess: (resp) => {
+      // POST /kpi-snapshots/calculate returns the freshly computed snapshots in
+      // its ApiResponse envelope. Push them straight into the query cache so the
+      // tile re-renders synchronously instead of waiting for the invalidated
+      // GET to come back (and so that an empty result is rendered as "0 KPIs"
+      // rather than leaving the panel stuck on the "Click Recalculate" prompt
+      // forever — DEFECT-9 from the 20260517-1249 QA run).
+      const computed = resp?.data;
+      if (Array.isArray(computed)) {
+        queryClient.setQueryData(["project-kpis", projectId], resp);
+      }
       queryClient.invalidateQueries({ queryKey: ["project-kpis", projectId] });
-      toast.success("KPIs recalculated");
+      const count = Array.isArray(computed) ? computed.length : 0;
+      if (count === 0) {
+        toast.success("KPI recalculation ran, but no active KPI definitions matched this project");
+      } else {
+        toast.success(`KPIs recalculated (${count})`);
+      }
     },
     onError: (err: unknown) => {
       toast.error(getErrorMessage(err, "Failed to calculate KPIs"));
     },
   });
 
-  const kpiSnapshots = Array.isArray(kpiSnapshotsData?.data) ? kpiSnapshotsData.data : [];
-  const rawKpiDefs = kpiDefsData?.data;
-  const kpiDefs = Array.isArray(rawKpiDefs) ? rawKpiDefs : (rawKpiDefs as unknown as { content?: KpiDefinition[] })?.content ?? [];
+  // axios returns AxiosResponse, so .data is the ApiResponse envelope: {data: KpiSnapshot[]}.
+  // Unwrap one more level (mirror line 535's rawKpiDefs handling).
+  const rawKpiSnapshots = (kpiSnapshotsData as unknown as { data?: { data?: unknown } })?.data?.data;
+  const kpiSnapshots: KpiSnapshot[] = Array.isArray(rawKpiSnapshots)
+    ? (rawKpiSnapshots as KpiSnapshot[])
+    : Array.isArray(kpiSnapshotsData?.data)
+      ? (kpiSnapshotsData.data as unknown as KpiSnapshot[])
+      : [];
+  // Same envelope unwrap as kpiSnapshots above — kpiDefsData is the AxiosResponse,
+  // .data is the ApiResponse envelope, .data.data is the actual array (or {content:[]} for pageable).
+  const rawKpiDefs = (kpiDefsData as unknown as { data?: { data?: unknown } })?.data?.data ?? kpiDefsData?.data;
+  const kpiDefs: KpiDefinition[] = Array.isArray(rawKpiDefs)
+    ? (rawKpiDefs as KpiDefinition[])
+    : (rawKpiDefs as unknown as { content?: KpiDefinition[] })?.content ?? [];
   const kpiDefMap = new Map(kpiDefs.map((d: KpiDefinition) => [d.id, d]));
+
+  const permits = useAuthStore((s) => s.hasPermission);
 
   const statusTransitions: Record<string, { label: string; value: string }[]> = {
     PLANNED: [{ label: "Activate Project", value: "ACTIVE" }],
@@ -518,7 +438,12 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
     COMPLETED: [],
   };
 
-  const availableTransitions = statusTransitions[project.status] ?? [];
+  // Project-level actions (status change, data date, budget, currency, contract, corridor) are
+  // for staff who may edit the project. Site roles read the page but change nothing on it —
+  // previously every one of these buttons was offered to a supervisor and failed with a 403.
+  const canEditProject = permits("PROJECT.UPDATE");
+  const canReadCost = permits("COST.READ");
+  const availableTransitions = canEditProject ? statusTransitions[project.status] ?? [] : [];
 
   const handleStatusTransition = async (newStatus: string) => {
     setIsTransitioning(true);
@@ -535,28 +460,11 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
 
   return (
     <div className="space-y-6">
-      {poolSize === 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-amber-800">
-                No resources in this project yet.
-              </p>
-              <p className="text-sm text-amber-700">
-                Pick from master data to set up your project pool{" "}
-                <a href={`/projects/${projectId}?tab=resources`} className="font-semibold underline hover:text-amber-900">
-                  Open Resources
-                </a>
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      <ProjectSetupProgress
+        projectId={projectId}
+        project={project}
+        poolSize={poolSize >= 0 ? poolSize : 0}
+      />
       <div className="grid grid-cols-2 gap-6">
         <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-text-secondary">Code</h3>
@@ -589,6 +497,23 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
         <p className="mt-2 text-text-primary">{project.description || "No description"}</p>
       </div>
 
+      <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Documents</h3>
+          <p className="mt-1 text-sm text-text-secondary">
+            Browse folders, upload files, and manage versions for this project.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setDocumentsOpen(true)}
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-gold/45 bg-gold-tint/40 px-3 py-2 text-sm font-semibold text-gold-deep transition-colors hover:border-gold hover:bg-gold-tint"
+        >
+          <FileText size={15} strokeWidth={1.75} />
+          Open Documents
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 gap-6">
         <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-text-secondary">Planned Start Date</h3>
@@ -604,13 +529,23 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
         <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
           <h3 className="text-sm font-medium text-text-secondary">Priority</h3>
           <p className={`mt-2 text-lg font-medium ${getPriorityInfo(project.priority).color}`}>
-            {getPriorityInfo(project.priority).label} ({project.priority})
+            {getPriorityInfo(project.priority).label}
           </p>
         </div>
-        <DataDateCard project={project} />
+        <DataDateCard project={project} canEdit={canEditProject} />
       </div>
 
-      <ProjectDetailsSection project={project} projectId={projectId} />
+      <ProjectTeamCard projectId={projectId} />
+
+      {canReadCost && <BudgetCard projectId={projectId} />}
+
+      <CurrencyCard project={project} projectId={projectId} canEdit={canEditProject} />
+
+      <LocationCard project={project} projectId={projectId} />
+
+      <ProjectDetailsSection project={project} projectId={projectId} canEdit={canEditProject} />
+
+      <MaterialAvailabilityCard projectId={projectId} />
 
       {/* KPI Mini-Dashboard */}
       <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
@@ -633,7 +568,11 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
           </div>
         ) : kpiSnapshots.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border py-8 text-center">
-            <p className="text-text-secondary text-sm">No KPI data yet. Click &quot;Recalculate&quot; to generate KPI snapshots.</p>
+            <p className="text-text-secondary text-sm">
+              {calculateKpisMutation.isSuccess
+                ? "Recalculation completed but produced no snapshots. Configure active KPI definitions under Admin → KPI Definitions."
+                : "No KPI data yet. Click \"Recalculate\" to generate KPI snapshots."}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -659,11 +598,22 @@ function OverviewTab({ project, projectId }: { project: ProjectResponse; project
       </div>
 
       <UdfSection entityId={projectId} subject="PROJECT" projectId={projectId} />
+
+      <Dialog open={documentsOpen} onOpenChange={setDocumentsOpen}>
+        <DialogContent className="max-w-6xl h-[85vh] flex flex-col p-0">
+          <DialogHeader>
+            <DialogTitle>Documents</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="flex-1 min-h-0 overflow-hidden p-4">
+            <ProjectDocumentsPanel projectId={projectId} embedded />
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function DataDateCard({ project }: { project: ProjectResponse }) {
+function DataDateCard({ project, canEdit }: { project: ProjectResponse; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [dateValue, setDateValue] = useState(project.dataDate ?? "");
@@ -711,20 +661,272 @@ function DataDateCard({ project }: { project: ProjectResponse }) {
       ) : (
         <div className="mt-2 flex items-center gap-3">
           <p className="text-lg text-text-primary">{project.dataDate ? formatDate(project.dataDate) : "Not set"}</p>
-          <button
-            onClick={() => setIsEditing(true)}
-            className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
-          >
-            Set
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Set
+            </button>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function ProjectDetailsSection({ project }: { project: ProjectResponse; projectId: string }) {
+function CurrencyCard({ project, projectId, canEdit }: { project: ProjectResponse; projectId: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const currentCode = (project.budgetCurrency ?? "INR").toUpperCase();
+  const [selected, setSelected] = useState<string>(currentCode);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["currencies"],
+    queryFn: () => settingsApi.listCurrencies(),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const currencies = data?.data ?? [];
+  const currentName = currencies.find((c) => c.code.toUpperCase() === currentCode)?.name;
+  const options = currencies.length
+    ? currencies.map((c) => ({ code: c.code.toUpperCase(), label: `${c.code} — ${c.name}` }))
+    : [{ code: currentCode, label: currentCode }];
+
+  const mutation = useMutation({
+    mutationFn: (code: string) => projectApi.updateProject(projectId, { budgetCurrency: code }),
+    onSuccess: () => {
+      toast.success("Currency updated — amounts relabeled (values not converted)");
+      // Relabels everywhere: the currency provider derives from ["project"], and
+      // cost cards read ["project-budget"]. Invalidating both re-renders the lot.
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project-budget", projectId] });
+      setConfirming(false);
+      setEditing(false);
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e, "Failed to update currency")),
+  });
+
+  const apply = () => {
+    if (selected === currentCode) { setEditing(false); return; }
+    setConfirming(true);
+  };
+
+  return (
+    <>
+      <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-medium text-text-secondary">Currency</h3>
+            {editing ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <select
+                  value={selected}
+                  onChange={(e) => setSelected(e.target.value)}
+                  disabled={isLoading}
+                  className="rounded-md border border-border bg-surface-hover px-3 py-1.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                >
+                  {options.map((o) => (
+                    <option key={o.code} value={o.code}>{o.label}</option>
+                  ))}
+                </select>
+                <button type="button" onClick={apply} className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover">Apply</button>
+                <button type="button" onClick={() => setEditing(false)} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover/50">Cancel</button>
+              </div>
+            ) : (
+              <p className="mt-2 text-lg font-medium text-text-primary">
+                {currentCode}{currentName ? ` — ${currentName}` : ""}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-text-muted">
+              Used for every money value in this project. Changing it relabels amounts — stored values are not converted.
+            </p>
+          </div>
+          {!editing && canEdit && (
+            <button
+              type="button"
+              onClick={() => { setSelected(currentCode); setEditing(true); }}
+              className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Change
+            </button>
+          )}
+        </div>
+      </div>
+
+      {confirming && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md space-y-4 rounded-lg border border-border bg-surface p-6 shadow-2xl">
+            <div>
+              <h3 className="text-lg font-semibold text-text-primary">Change currency to {selected}?</h3>
+              <p className="mt-2 text-sm text-text-secondary">
+                Every amount in this project will display in <b>{selected}</b> instead of <b>{currentCode}</b>.
+                This <b>relabels only</b> — no exchange-rate conversion is applied, so the underlying numbers do not
+                change (a budget of 250 stays 250, shown in {selected}).
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirming(false)} className="rounded-md border border-border px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover/50">Cancel</button>
+              <button
+                type="button"
+                onClick={() => mutation.mutate(selected)}
+                disabled={mutation.isPending}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+              >
+                {mutation.isPending ? "Applying…" : "Change currency"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function BudgetCard({ projectId }: { projectId: string }) {
+  const queryClient = useQueryClient();
+  const [showInitForm, setShowInitForm] = useState(false);
+  const [initAmount, setInitAmount] = useState("");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["project-budget", projectId],
+    queryFn: () => budgetApi.getBudgetSummary(projectId),
+  });
+
+  const setInitMutation = useMutation({
+    mutationFn: (amount: number) => budgetApi.setInitialBudget(projectId, amount),
+    onSuccess: () => {
+      toast.success("Initial budget set");
+      queryClient.invalidateQueries({ queryKey: ["project-budget", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      setShowInitForm(false);
+      setInitAmount("");
+    },
+    onError: (e: unknown) => toast.error(getErrorMessage(e, "Failed to set budget")),
+  });
+
+  const budget = data?.data;
+  const original = budget?.originalBudget ?? null;
+  const current = budget?.currentBudget ?? null;
+  const isSet = original != null;
+  const currency = budget?.budgetCurrency ?? "INR";
+  const unit = budgetUnit(currency);
+  const fmt = (v: number | null) => formatBudget(v, currency);
+
+  const submitInit = () => {
+    const n = parseFloat(initAmount);
+    if (!isFinite(n) || n <= 0) {
+      toast.error(`Enter a positive amount in ${unit.inputLabel}`);
+      return;
+    }
+    setInitMutation.mutate(n);
+  };
+
+  return (
+    <>
+      <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-medium text-text-secondary">Budget at Completion (BAC)</h3>
+            {isLoading ? (
+              <div className="mt-2 h-6 w-32 animate-pulse rounded bg-surface-hover/50" />
+            ) : isSet ? (
+              <div className="mt-2 grid grid-cols-2 gap-6 sm:grid-cols-4">
+                <div>
+                  <p className="text-xs text-text-muted">Original</p>
+                  <p className="mt-0.5 text-lg font-medium text-text-primary">{fmt(original)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">Current</p>
+                  <p className="mt-0.5 text-lg font-medium text-text-primary">{fmt(current)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">Approved Δ</p>
+                  <p className="mt-0.5 text-sm text-text-primary">
+                    +{fmt(budget?.approvedAdditions ?? 0)} / −{fmt(budget?.approvedReductions ?? 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">Pending</p>
+                  <p className="mt-0.5 text-sm text-text-primary">
+                    {budget?.pendingChangeCount ?? 0} request{(budget?.pendingChangeCount ?? 0) === 1 ? "" : "s"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-lg text-text-muted">Not set</p>
+            )}
+          </div>
+          {isSet ? (
+            <Link
+              href={`/projects/${projectId}/budget-changes`}
+              className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Manage
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowInitForm(true)}
+              className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover"
+            >
+              Set Budget
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showInitForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md space-y-4 rounded-lg border border-border bg-surface p-6 shadow-2xl">
+            <div>
+              <h3 className="text-lg font-semibold text-text-primary">Set Initial Budget (BAC)</h3>
+              <p className="mt-1 text-xs text-text-muted">
+                The approved Budget at Completion. This is set once; later changes go through the budget-change-request workflow.
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-text-primary">Amount ({unit.inputLabel})</label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={initAmount}
+                onChange={(e) => setInitAmount(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submitInit(); }}
+                className="w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder={currency === "OMR" ? "e.g. 61.5" : "e.g. 250"}
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowInitForm(false); setInitAmount(""); }}
+                className="rounded-md border border-border px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover/50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitInit}
+                disabled={setInitMutation.isPending || !initAmount}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+              >
+                {setInitMutation.isPending ? "Saving..." : "Set Budget"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ProjectDetailsSection({ project, canEdit }: { project: ProjectResponse; projectId: string; canEdit: boolean }) {
+  const queryClient = useQueryClient();
+  const { symbol: currencySymbol, money } = useProjectCurrency();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -745,8 +947,9 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
   const [form, setForm] = useState({
     category: project.category ?? "",
     morthCode: project.morthCode ?? "",
-    fromChainageM: project.fromChainageM ?? "",
-    toChainageM: project.toChainageM ?? "",
+    // Chainages are edited as km+metres text ("145+000"); parsed back to metres on save.
+    fromChainageM: project.fromChainageM != null ? chainageLabel(project.fromChainageM) : "",
+    toChainageM: project.toChainageM != null ? chainageLabel(project.toChainageM) : "",
     fromLocation: project.fromLocation ?? "",
     toLocation: project.toLocation ?? "",
     calendarId: project.calendarId ?? "",
@@ -768,8 +971,9 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
       await projectApi.updateProject(project.id, {
         category: form.category || null,
         morthCode: form.morthCode || null,
-        fromChainageM: form.fromChainageM ? Number(form.fromChainageM) : null,
-        toChainageM: form.toChainageM ? Number(form.toChainageM) : null,
+        // parseChainage accepts both "145+000" and bare metres "145000".
+        fromChainageM: form.fromChainageM ? parseChainage(form.fromChainageM) : null,
+        toChainageM: form.toChainageM ? parseChainage(form.toChainageM) : null,
         fromLocation: form.fromLocation || null,
         toLocation: form.toLocation || null,
         calendarId: form.calendarId || null,
@@ -852,12 +1056,34 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
               <input name="morthCode" value={form.morthCode} onChange={handleChange} placeholder="NH-48" className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-text-secondary">From Chainage (m)</label>
-              <input name="fromChainageM" type="number" value={form.fromChainageM} onChange={handleChange} placeholder="145000" className={inputClass} />
+              <label className="block text-xs font-medium text-text-secondary">Start Chainage</label>
+              <input
+                name="fromChainageM"
+                type="text"
+                value={form.fromChainageM}
+                onChange={handleChange}
+                onBlur={() => {
+                  const parsed = parseChainage(form.fromChainageM);
+                  if (parsed != null) setForm((p) => ({ ...p, fromChainageM: chainageLabel(parsed) }));
+                }}
+                placeholder="145+000"
+                className={inputClass}
+              />
             </div>
             <div>
-              <label className="block text-xs font-medium text-text-secondary">To Chainage (m)</label>
-              <input name="toChainageM" type="number" value={form.toChainageM} onChange={handleChange} placeholder="165000" className={inputClass} />
+              <label className="block text-xs font-medium text-text-secondary">End Chainage</label>
+              <input
+                name="toChainageM"
+                type="text"
+                value={form.toChainageM}
+                onChange={handleChange}
+                onBlur={() => {
+                  const parsed = parseChainage(form.toChainageM);
+                  if (parsed != null) setForm((p) => ({ ...p, toChainageM: chainageLabel(parsed) }));
+                }}
+                placeholder="165+000"
+                className={inputClass}
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-text-secondary">From Location</label>
@@ -901,11 +1127,11 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-text-secondary">Contract Value (₹)</label>
+              <label className="block text-xs font-medium text-text-secondary">Contract Value ({currencySymbol})</label>
               <input name="contractValue" type="number" step="0.01" value={form.contractValue} onChange={handleChange} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-text-secondary">Revised Value (₹)</label>
+              <label className="block text-xs font-medium text-text-secondary">Revised Value ({currencySymbol})</label>
               <input name="revisedValue" type="number" step="0.01" value={form.revisedValue} onChange={handleChange} className={inputClass} />
             </div>
             <div>
@@ -925,12 +1151,14 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
           <h3 className="text-sm font-semibold uppercase tracking-wide text-text-secondary">
             Project Category & Corridor
           </h3>
-          <button
-            onClick={() => setIsEditing(true)}
-            className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
-          >
-            Edit
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Edit
+            </button>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -942,12 +1170,12 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
             <p className="text-sm font-medium text-text-primary">{project.morthCode ?? "—"}</p>
           </div>
           <div>
-            <p className="text-xs text-text-secondary">From Chainage (m)</p>
-            <p className="text-sm font-medium text-text-primary">{project.fromChainageM ?? "—"}</p>
+            <p className="text-xs text-text-secondary">Start Chainage</p>
+            <p className="text-sm font-medium text-text-primary">{chainageLabel(project.fromChainageM)}</p>
           </div>
           <div>
-            <p className="text-xs text-text-secondary">To Chainage (m)</p>
-            <p className="text-sm font-medium text-text-primary">{project.toChainageM ?? "—"}</p>
+            <p className="text-xs text-text-secondary">End Chainage</p>
+            <p className="text-sm font-medium text-text-primary">{chainageLabel(project.toChainageM)}</p>
           </div>
           <div>
             <p className="text-xs text-text-secondary">From Location</p>
@@ -974,12 +1202,14 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
           <h3 className="text-sm font-semibold uppercase tracking-wide text-text-secondary">
             Primary Contract
           </h3>
-          <button
-            onClick={() => setIsEditing(true)}
-            className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
-          >
-            Edit
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="rounded-md border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover/50"
+            >
+              Edit
+            </button>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -991,15 +1221,15 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
             <p className="text-sm font-medium text-text-primary">{project.contract?.contractType ?? "—"}</p>
           </div>
           <div>
-            <p className="text-xs text-text-secondary">Contract Value (₹)</p>
+            <p className="text-xs text-text-secondary">Contract Value ({currencySymbol})</p>
             <p className="text-sm font-medium text-text-primary">
-              {project.contract?.contractValue != null ? `₹ ${project.contract.contractValue.toLocaleString("en-IN")}` : "—"}
+              {project.contract?.contractValue != null ? money(project.contract.contractValue, { decimals: 0 }) : "—"}
             </p>
           </div>
           <div>
-            <p className="text-xs text-text-secondary">Revised Value (₹)</p>
+            <p className="text-xs text-text-secondary">Revised Value ({currencySymbol})</p>
             <p className="text-sm font-medium text-text-primary">
-              {project.contract?.revisedValue != null ? `₹ ${project.contract.revisedValue.toLocaleString("en-IN")}` : "—"}
+              {project.contract?.revisedValue != null ? money(project.contract.revisedValue, { decimals: 0 }) : "—"}
             </p>
           </div>
           <div>
@@ -1012,89 +1242,25 @@ function ProjectDetailsSection({ project }: { project: ProjectResponse; projectI
   );
 }
 
-function GanttTab({
-  activities,
-  isLoading,
-  relationships = [],
-  baselineActivities = [],
-  projectId,
-  project,
-  onRunSchedule,
-  isRunningSchedule = false,
-}: {
-  activities: ActivityResponse[];
-  isLoading: boolean;
-  relationships?: Array<{ predecessorActivityId: string; successorActivityId: string; relationshipType: string }>;
-  baselineActivities?: Array<{ activityId: string; baselineStartDate: string | null; baselineFinishDate: string | null }>;
-  projectId: string;
-  project: ProjectResponse;
-  onRunSchedule?: () => void;
-  isRunningSchedule?: boolean;
-}) {
-  const isStale = useScheduleStaleStore((s) => s.isScheduleStale(projectId));
-  // Progress Spotlight (Phase 1.4 of the baseline-progress roadmap). The Gantt already accepts
-  // spotlightStartDate / spotlightEndDate props; the toggle here just decides whether to feed
-  // them from the project's planned-start + data-date pair.
-  const [spotlightOn, setSpotlightOn] = useState(false);
-  const spotlightAvailable = !!project.dataDate;
-
-  if (isLoading) {
-    return <div className="text-center text-text-muted">Loading activities...</div>;
-  }
-
-  if (activities.length === 0) {
-    return (
-      <EmptyState
-        icon={ListTodo}
-        title="No activities"
-        description="This project has no activities yet. Create activities to display the Gantt chart."
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <label
-          className={`inline-flex items-center gap-2 rounded-lg border border-border bg-surface/60 px-3 py-1.5 text-xs font-medium ${
-            spotlightAvailable ? "cursor-pointer text-text-secondary hover:text-text-primary" : "cursor-not-allowed text-text-muted"
-          }`}
-          title={
-            spotlightAvailable
-              ? "Highlight activities between project start and data date"
-              : "Set Data Date on the project to enable Progress Spotlight"
-          }
-        >
-          <input
-            type="checkbox"
-            disabled={!spotlightAvailable}
-            checked={spotlightOn && spotlightAvailable}
-            onChange={(e) => setSpotlightOn(e.target.checked)}
-          />
-          Progress Spotlight
-        </label>
-        {spotlightOn && spotlightAvailable && (
-          <span className="text-xs text-text-muted">
-            Showing {project.plannedStartDate} → {project.dataDate}
-          </span>
-        )}
-      </div>
-      <GanttChart
-        activities={activities}
-        relationships={relationships}
-        baselineActivities={baselineActivities}
-        isStale={isStale}
-        onRunSchedule={onRunSchedule}
-        isRunningSchedule={isRunningSchedule}
-        spotlightStartDate={spotlightOn && spotlightAvailable ? project.plannedStartDate : undefined}
-        spotlightEndDate={spotlightOn && spotlightAvailable ? project.dataDate : undefined}
-      />
-    </div>
-  );
-}
 
 function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeResponse[]; isLoading: boolean; projectId: string; project: ProjectResponse }) {
   const queryClient = useQueryClient();
+  // WbsController gates create/update/delete on PROJECT.UPDATE, so the server
+  // is the source of truth — these checks just hide affordances the user
+  // can't act on (clean UX, not security).
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canEditWbs = hasPermission("PROJECT.UPDATE");
+  // Tree vs flat list — URL-backed so ?tab=wbs&view=list is shareable and survives reloads.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const view: "tree" | "list" = searchParams.get("view") === "list" ? "list" : "tree";
+  const setView = (next: "tree" | "list") => {
+    const sp = new URLSearchParams(searchParams.toString());
+    if (next === "tree") sp.delete("view");
+    else sp.set("view", "list");
+    router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
+  };
   const [showForm, setShowForm] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [showAiDialog, setShowAiDialog] = useState(false);
@@ -1221,28 +1387,58 @@ function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeRe
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2">
-        <button
-          onClick={() => setShowTemplateSelector(!showTemplateSelector)}
-          className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-hover/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-        >
-          <FileText size={16} />
-          Apply Template
-        </button>
-        <button
-          onClick={() => setShowAiDialog(true)}
-          className="inline-flex items-center gap-2 rounded-md border border-gold/40 bg-gold-tint px-4 py-2 text-sm font-medium text-gold-ink hover:bg-gold/20"
-        >
-          <Sparkles size={16} />
-          Generate with AI
-        </button>
-        <button
-          onClick={handleAddRoot}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
-        >
-          <Plus size={16} />
-          Add WBS Node
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex overflow-hidden rounded-md border border-border bg-surface-hover/40 text-sm">
+          <button
+            type="button"
+            onClick={() => setView("tree")}
+            aria-pressed={view === "tree"}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors ${
+              view === "tree"
+                ? "bg-accent text-accent-foreground"
+                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+            }`}
+          >
+            <FolderTree size={14} /> Tree
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            aria-pressed={view === "list"}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors ${
+              view === "list"
+                ? "bg-accent text-accent-foreground"
+                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+            }`}
+          >
+            <List size={14} /> List
+          </button>
+        </div>
+        {canEditWbs && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowTemplateSelector(!showTemplateSelector)}
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-hover/50 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+            >
+              <FileText size={16} />
+              Apply Template
+            </button>
+            <button
+              onClick={() => setShowAiDialog(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-gold/40 bg-gold-tint px-4 py-2 text-sm font-medium text-gold-ink hover:bg-gold/20"
+            >
+              <Sparkles size={16} />
+              Generate with AI
+            </button>
+            <button
+              onClick={handleAddRoot}
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+            >
+              <Plus size={16} />
+              Add WBS Node
+            </button>
+          </div>
+        )}
       </div>
 
       {showTemplateSelector && (
@@ -1379,16 +1575,23 @@ function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeRe
         </div>
       )}
 
-      {wbsTree.length === 0 ? (
+      {view === "list" ? (
+        <WorkPackagesListView projectId={projectId} />
+      ) : wbsTree.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border py-12 text-center">
           <h3 className="text-lg font-medium text-text-primary">No WBS Structure</h3>
-          <p className="mt-2 text-text-muted">Click &quot;Add WBS Node&quot; above to create your first work package, or use &quot;Generate with AI&quot; for a quick start.</p>
+          <p className="mt-2 text-text-muted">
+            {canEditWbs
+              ? "Click \"Add WBS Node\" above to create your first work package, or use \"Generate with AI\" for a quick start."
+              : "No work breakdown structure has been set up for this project yet. Ask the project manager or scheduler to create it."}
+          </p>
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
           <h2 className="mb-4 text-lg font-semibold text-text-primary">Work Breakdown Structure</h2>
           <WbsTree
             nodes={wbsTree}
+            canEdit={canEditWbs}
             onAddChild={handleAddChild}
             onDelete={handleDelete}
             onEdit={handleEditOpen}
@@ -1398,7 +1601,7 @@ function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeRe
         </div>
       )}
 
-      {selectedWbs && (
+      {view === "tree" && selectedWbs && (
         <div className="space-y-2">
           <div className="text-sm text-text-secondary">
             Custom fields for: <span className="font-medium text-accent">{selectedWbs.code} — {selectedWbs.name}</span>
@@ -1419,6 +1622,7 @@ function WbsTab({ wbsTree, isLoading, projectId, project }: { wbsTree: WbsNodeRe
 function WbsTree({
   nodes,
   level = 0,
+  canEdit = true,
   onAddChild,
   onDelete,
   onEdit,
@@ -1428,6 +1632,7 @@ function WbsTree({
 }: {
   nodes: WbsNodeResponse[];
   level?: number;
+  canEdit?: boolean;
   onAddChild: (node: WbsNodeResponse) => void;
   onDelete: (node: WbsNodeResponse) => void;
   onEdit?: (node: WbsNodeResponse) => void;
@@ -1523,37 +1728,39 @@ function WbsTree({
                 </span>
               )}
               {node.summaryPercentComplete != null && (
-                <span className="ml-1 rounded-full bg-emerald-900/40 px-2 py-0.5 text-xs text-success flex-shrink-0">
+                <span className="ml-1 rounded-full bg-success/10 px-2 py-0.5 text-xs text-success flex-shrink-0">
                   {node.summaryPercentComplete}%
                 </span>
               )}
 
               {/* Action buttons */}
-              <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                {onEdit && (
+              {canEdit && (
+                <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                  {onEdit && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onEdit(node); }}
+                      className="rounded p-1 text-text-muted hover:bg-accent/10 hover:text-accent"
+                      title="Edit node"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
                   <button
-                    onClick={(e) => { e.stopPropagation(); onEdit(node); }}
-                    className="rounded p-1 text-text-muted hover:bg-accent/10 hover:text-accent"
-                    title="Edit node"
+                    onClick={() => onAddChild(node)}
+                    className="rounded p-1 text-text-muted hover:bg-success/10 hover:text-success"
+                    title="Add child node"
                   >
-                    <Pencil size={14} />
+                    <Plus size={14} />
                   </button>
-                )}
-                <button
-                  onClick={() => onAddChild(node)}
-                  className="rounded p-1 text-text-muted hover:bg-success/10 hover:text-success"
-                  title="Add child node"
-                >
-                  <Plus size={14} />
-                </button>
-                <button
-                  onClick={() => onDelete(node)}
-                  className="rounded p-1 text-text-muted hover:bg-danger/10 hover:text-danger"
-                  title="Delete node"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </span>
+                  <button
+                    onClick={() => onDelete(node)}
+                    className="rounded p-1 text-text-muted hover:bg-danger/10 hover:text-danger"
+                    title="Delete node"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </span>
+              )}
             </div>
 
             {/* Render children if expanded */}
@@ -1561,6 +1768,7 @@ function WbsTree({
               <WbsTree
                 nodes={node.children}
                 level={level + 1}
+                canEdit={canEdit}
                 onAddChild={onAddChild}
                 onDelete={onDelete}
                 onEdit={onEdit}
@@ -1576,424 +1784,6 @@ function WbsTree({
   );
 }
 
-function NetworkTab({
-  projectId,
-  activities,
-  relationships,
-  isLoading,
-}: {
-  projectId: string;
-  activities: ActivityResponse[];
-  relationships: Array<{
-    predecessorActivityId: string;
-    successorActivityId: string;
-    relationshipType: string;
-  }>;
-  isLoading: boolean;
-}) {
-  const router = useRouter();
-
-  if (isLoading) {
-    return <div className="text-center text-text-muted">Loading network diagram...</div>;
-  }
-
-  if (activities.length === 0) {
-    return (
-      <EmptyState
-        icon={ListTodo}
-        title="No activities"
-        description="This project has no activities yet. Create activities to display the network diagram."
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-text-secondary">
-          {relationships.length} relationship(s) defined
-        </p>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/relationships`)}
-          className="flex items-center gap-1 rounded-md bg-accent/20 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/30 transition-colors"
-        >
-          Manage Relationships
-          <ArrowRight size={14} />
-        </button>
-      </div>
-      <NetworkDiagram activities={activities} relationships={relationships} />
-    </div>
-  );
-}
-
-function BaselinesTab({
-  projectId,
-  baselines,
-  activeBaselineId,
-  isLoading,
-  onCreateBaseline,
-  isCreating,
-  onDeleteBaseline,
-  isDeleting,
-  onSetActiveBaseline,
-  isActivating,
-  activatingBaselineId,
-  onRestoreBaseline,
-  isRestoring,
-  restoringBaselineId,
-  onUpdateBaseline,
-  isUpdatingBaseline,
-  updatingBaselineId,
-}: {
-  projectId: string;
-  baselines: BaselineResponse[];
-  activeBaselineId: string | null;
-  isLoading: boolean;
-  onCreateBaseline: (data: { name: string; baselineType: string; description?: string }) => void;
-  isCreating: boolean;
-  onDeleteBaseline: (baselineId: string) => void;
-  isDeleting: boolean;
-  onSetActiveBaseline: (baselineId: string) => void;
-  onRestoreBaseline: (baselineId: string) => void;
-  isRestoring: boolean;
-  restoringBaselineId: string | null;
-  onUpdateBaseline: (baselineId: string) => void;
-  isUpdatingBaseline: boolean;
-  updatingBaselineId: string | null;
-  isActivating: boolean;
-  activatingBaselineId: string | null;
-}) {
-  const [varianceTab, setVarianceTab] = useState<"schedule" | "cost">("schedule");
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: "", description: "", baselineType: "PROJECT" });
-  const [expandedBaselineId, setExpandedBaselineId] = useState<string | null>(null);
-  const [varianceData, setVarianceData] = useState<Record<string, BaselineVarianceRow[]>>({});
-  const [loadingVarianceId, setLoadingVarianceId] = useState<string | null>(null);
-  const [comparisonBaselineId, setComparisonBaselineId] = useState<string | null>(null);
-  const [comparisonData, setComparisonData] = useState<Record<string, any[]>>({});
-  const [loadingComparisonId, setLoadingComparisonId] = useState<string | null>(null);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (formData.name.trim()) {
-      onCreateBaseline({
-        name: formData.name,
-        baselineType: formData.baselineType,
-        description: formData.description.trim() || undefined,
-      });
-      setFormData({ name: "", description: "", baselineType: "PROJECT" });
-      setShowForm(false);
-    }
-  };
-
-  const handleViewVariance = async (baselineId: string) => {
-    if (expandedBaselineId === baselineId) {
-      setExpandedBaselineId(null);
-      return;
-    }
-
-    if (varianceData[baselineId]) {
-      setExpandedBaselineId(baselineId);
-      return;
-    }
-
-    setLoadingVarianceId(baselineId);
-    try {
-      const response = await baselineApi.getVariance(projectId, baselineId);
-      if (response?.data) {
-        setVarianceData((prev) => ({
-          ...prev,
-          [baselineId]: response.data!,
-        }));
-        setExpandedBaselineId(baselineId);
-      }
-    } catch (error) {
-      console.error("Failed to load variance data:", error);
-    } finally {
-      setLoadingVarianceId(null);
-    }
-  };
-
-  const handleCompareSchedule = async (baselineId: string) => {
-    if (comparisonBaselineId === baselineId) {
-      setComparisonBaselineId(null);
-      return;
-    }
-
-    if (comparisonData[baselineId]) {
-      setComparisonBaselineId(baselineId);
-      return;
-    }
-
-    setLoadingComparisonId(baselineId);
-    try {
-      const response = await baselineApi.getScheduleComparison(projectId, baselineId);
-      if (response?.data) {
-        setComparisonData((prev) => ({
-          ...prev,
-          [baselineId]: response.data!,
-        }));
-        setComparisonBaselineId(baselineId);
-      }
-    } catch (error) {
-      console.error("Failed to load schedule comparison data:", error);
-    } finally {
-      setLoadingComparisonId(null);
-    }
-  };
-
-  if (isLoading) {
-    return <div className="text-center text-text-muted">Loading baselines...</div>;
-  }
-
-  return (
-    <div className="space-y-6">
-      {!showForm && (
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
-          >
-            <Plus size={16} />
-            Create Baseline
-          </button>
-          <Link
-            href={`/projects/${projectId}/baselines/assign`}
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-surface/60 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
-            title="Assign baselines to PRIMARY / SECONDARY / TERTIARY slots (P6-style)"
-          >
-            Assign Baselines
-          </Link>
-        </div>
-      )}
-
-      {showForm && (
-        <div className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
-          <h3 className="mb-4 text-lg font-semibold text-text-primary">Create New Baseline</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
-                placeholder="Baseline name"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">Description</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
-                placeholder="Optional notes — e.g. 'after VO-12 approved', 'pre-monsoon plan'"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">Type</label>
-              <select
-                value={formData.baselineType}
-                onChange={(e) => setFormData({ ...formData, baselineType: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-text-primary focus:border-accent focus:outline-none"
-              >
-                <option value="PROJECT">PROJECT</option>
-                <option value="PRIMARY">PRIMARY</option>
-                <option value="SECONDARY">SECONDARY</option>
-                <option value="TERTIARY">TERTIARY</option>
-              </select>
-            </div>
-            <div className="flex gap-3">
-              <button
-                type="submit"
-                disabled={isCreating}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
-              >
-                {isCreating ? "Creating..." : "Create"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {baselines.length === 0 ? (
-        <EmptyState
-          icon={ListTodo}
-          title="No baselines"
-          description="This project has no baselines yet. Create a baseline to start tracking project variance."
-        />
-      ) : (
-        <div className="space-y-4">
-          {baselines.map((baseline) => {
-            const isActive = activeBaselineId === baseline.id;
-            return (
-            <div key={baseline.id} className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold text-text-primary">{baseline.name}</h3>
-                    {isActive && (
-                      <span className="inline-flex items-center gap-1 rounded-md border border-gold/40 bg-gold-tint px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gold-ink">
-                        <span className="h-1.5 w-1.5 rounded-full bg-gold" />
-                        Active
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-2 space-y-1 text-sm text-text-secondary">
-                    <p>Type: {baseline.baselineType}</p>
-                    <p>Date: {new Date(baseline.baselineDate).toLocaleDateString()}</p>
-                    <p>Activities: {baseline.totalActivities}</p>
-                    {baseline.totalCost > 0 && <p>Total Cost: {formatDefaultCurrency(baseline.totalCost)}</p>}
-                  </div>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  {!isActive && (
-                    <button
-                      onClick={() => onSetActiveBaseline(baseline.id)}
-                      disabled={isActivating && activatingBaselineId === baseline.id}
-                      className="inline-flex items-center gap-2 rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-sm font-medium text-gold-ink hover:bg-gold/20 disabled:opacity-50"
-                    >
-                      {isActivating && activatingBaselineId === baseline.id ? "Setting…" : "Set as active"}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleViewVariance(baseline.id)}
-                    disabled={loadingVarianceId === baseline.id}
-                    className="inline-flex items-center gap-2 rounded-md bg-surface-hover/50 px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-active/50 disabled:opacity-50"
-                  >
-                    <Eye size={16} />
-                    {expandedBaselineId === baseline.id ? "Hide Variance" : "View Variance"}
-                  </button>
-                  <button
-                    onClick={() => handleCompareSchedule(baseline.id)}
-                    disabled={loadingComparisonId === baseline.id}
-                    className="inline-flex items-center gap-2 rounded-md bg-accent/10 px-3 py-2 text-sm font-medium text-accent hover:bg-accent-hover/20 disabled:opacity-50"
-                  >
-                    <Eye size={16} />
-                    {comparisonBaselineId === baseline.id ? "Hide Compare" : "Compare"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Refresh "${baseline.name}" with the current project's dates, durations, costs, and relationships?\n\nThis is the P6 "Update Baseline" action. Existing snapshot entries are overwritten; new activities are inserted.`
-                        )
-                      ) {
-                        onUpdateBaseline(baseline.id);
-                      }
-                    }}
-                    disabled={isUpdatingBaseline && updatingBaselineId === baseline.id}
-                    className="inline-flex items-center gap-2 rounded-md bg-accent/10 px-3 py-2 text-sm font-medium text-accent hover:bg-accent-hover/20 disabled:opacity-50"
-                    title="Update Baseline: re-snapshot the current project state into this baseline. Use the API directly for selective filters."
-                  >
-                    {isUpdatingBaseline && updatingBaselineId === baseline.id ? "Updating…" : "Update"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Restore the project's planned dates, durations, and relationships from "${baseline.name}"?\n\nActual progress (start/finish dates, % complete) will be preserved. This action is audit-logged but not undoable.`
-                        )
-                      ) {
-                        onRestoreBaseline(baseline.id);
-                      }
-                    }}
-                    disabled={isRestoring && restoringBaselineId === baseline.id}
-                    className="inline-flex items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-sm font-medium text-warning hover:bg-warning/20 disabled:opacity-50"
-                    title="Restore: overwrite planned dates / durations / relationships from this baseline. Actuals preserved."
-                  >
-                    {isRestoring && restoringBaselineId === baseline.id ? "Restoring…" : "Restore"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (window.confirm("Are you sure you want to delete this baseline?")) {
-                        onDeleteBaseline(baseline.id);
-                      }
-                    }}
-                    disabled={isDeleting}
-                    className="inline-flex items-center gap-2 rounded-md bg-danger/10 px-3 py-2 text-sm font-medium text-danger hover:bg-danger/20 disabled:opacity-50"
-                  >
-                    <Trash2 size={16} />
-                    Delete
-                  </button>
-                </div>
-              </div>
-
-              {expandedBaselineId === baseline.id && varianceData[baseline.id] && (
-                <div className="mt-6 border-t border-border pt-6">
-                  <h4 className="mb-4 font-semibold text-text-primary">Variance Dashboard</h4>
-                  <VarianceDashboard data={varianceData[baseline.id]} />
-                </div>
-              )}
-
-              {comparisonBaselineId === baseline.id && comparisonData[baseline.id] && (
-                <div className="mt-6 border-t border-border pt-6">
-                  <h4 className="mb-4 font-semibold text-text-primary">Schedule Comparison</h4>
-                  <ScheduleComparisonTable data={comparisonData[baseline.id]} />
-                </div>
-              )}
-            </div>
-            );
-          })}
-        </div>
-      )}
-
-      {activeBaselineId && (
-        <div className="mt-8 space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3 border-t border-hairline pt-6">
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep mb-1">
-                Variance · vs active baseline
-              </div>
-              <h2 className="font-display text-2xl font-semibold tracking-tight text-charcoal">
-                Schedule &amp; cost variance
-              </h2>
-            </div>
-            <div className="inline-flex rounded-lg border border-hairline bg-ivory p-0.5">
-              <button
-                type="button"
-                onClick={() => setVarianceTab("schedule")}
-                className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors ${
-                  varianceTab === "schedule"
-                    ? "bg-paper text-charcoal shadow-sm"
-                    : "text-slate hover:text-charcoal"
-                }`}
-              >
-                Schedule
-              </button>
-              <button
-                type="button"
-                onClick={() => setVarianceTab("cost")}
-                className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors ${
-                  varianceTab === "cost"
-                    ? "bg-paper text-charcoal shadow-sm"
-                    : "text-slate hover:text-charcoal"
-                }`}
-              >
-                Cost
-              </button>
-            </div>
-          </div>
-          {varianceTab === "schedule" ? (
-            <ScheduleVarianceSection projectId={projectId} baselineId={activeBaselineId} />
-          ) : (
-            <CostVarianceSection projectId={projectId} baselineId={activeBaselineId} />
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ComingSoonTab({ tabName }: { tabName: string }) {
   return (
     <div className="rounded-lg border border-dashed border-border py-12 text-center">
@@ -2002,3 +1792,4 @@ function ComingSoonTab({ tabName }: { tabName: string }) {
     </div>
   );
 }
+

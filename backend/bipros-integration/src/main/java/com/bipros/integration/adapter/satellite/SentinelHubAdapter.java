@@ -7,7 +7,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Envelope;
+import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.Polygon;
+import org.locationtech.jts.io.geojson.GeoJsonReader;
 import org.locationtech.jts.io.geojson.GeoJsonWriter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -21,6 +23,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Sentinel Hub (Copernicus) adapter.
@@ -46,6 +50,8 @@ import java.util.List;
 public class SentinelHubAdapter implements SatelliteAdapter {
 
     private static final String VENDOR_ID = "sentinel-hub";
+    /** Extracts the short MGRS tile id (e.g. "46RDV") from a Sentinel-2 product id. */
+    private static final Pattern MGRS_TILE = Pattern.compile("_T(\\d{2}[A-Z]{3})_");
     /** True-colour evalscript — S2 bands B04 (red), B03 (green), B02 (blue). */
     private static final String EVAL_SCRIPT = """
         //VERSION=3
@@ -63,6 +69,7 @@ public class SentinelHubAdapter implements SatelliteAdapter {
     private final String baseUrl;
     private final String tokenUrl;
     private final GeoJsonWriter geoJsonWriter = new GeoJsonWriter();
+    private final GeoJsonReader geoJsonReader = new GeoJsonReader();
 
     // Cached OAuth2 bearer — refreshed when within 5 min of expiry.
     private String cachedToken;
@@ -124,11 +131,31 @@ public class SentinelHubAdapter implements SatelliteAdapter {
 
         if (response == null) return List.of();
         JsonNode features = response.path("features");
+        Envelope aoiEnv = aoi.getEnvelopeInternal();
         List<SceneDescriptor> scenes = new ArrayList<>(features.size());
         for (JsonNode feature : features) {
             String sceneId = feature.path("id").asText(null);
             String dateStr = feature.path("properties").path("datetime").asText(null);
             if (sceneId == null || dateStr == null) continue;
+
+            // Defensive AOI post-filter: the STAC search occasionally returns scenes
+            // whose footprint only touches the requested tile grid, not the AOI itself
+            // (e.g. a T46 tile for an Oman AOI). Drop any feature whose footprint
+            // envelope does not intersect the AOI envelope. Fail open when the
+            // geometry is missing or unparseable — never silently drop a valid scene.
+            JsonNode geometry = feature.path("geometry");
+            if (geometry != null && !geometry.isMissingNode() && !geometry.isNull()) {
+                try {
+                    Geometry footprint = geoJsonReader.read(json.writeValueAsString(geometry));
+                    if (!aoiEnv.intersects(footprint.getEnvelopeInternal())) {
+                        log.debug("[SentinelHub] dropping scene {} — footprint outside AOI", sceneId);
+                        continue;
+                    }
+                } catch (Exception e) {
+                    log.debug("[SentinelHub] keeping scene {} — footprint unparseable: {}", sceneId, e.getMessage());
+                }
+            }
+
             LocalDate capture = Instant.parse(dateStr).atZone(java.time.ZoneOffset.UTC).toLocalDate();
             double cloud = feature.path("properties").path("eo:cloud_cover").asDouble(Double.NaN);
             scenes.add(new SceneDescriptor(
@@ -157,8 +184,14 @@ public class SentinelHubAdapter implements SatelliteAdapter {
         ObjectNode s2 = data.addObject();
         s2.put("type", "sentinel-2-l2a");
         ObjectNode dataFilter = s2.putObject("dataFilter");
-        // We accept any scene that matches the catalog id filter pattern.
-        dataFilter.put("tileId", sceneId);
+        // Sentinel Hub's Process API expects the short MGRS tile id (e.g. "46RDV"),
+        // not the full product id (e.g. S2B_MSIL2A_..._T46RDV_...). Send the tileId
+        // filter only when the product id yields a tile; otherwise omit it rather
+        // than pass a value Sentinel Hub cannot match.
+        Matcher tileMatcher = MGRS_TILE.matcher(sceneId);
+        if (tileMatcher.find()) {
+            dataFilter.put("tileId", tileMatcher.group(1));
+        }
 
         // output
         ObjectNode output = request.putObject("output");

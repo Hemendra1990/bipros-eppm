@@ -64,6 +64,19 @@ public class MonteCarloSimulation extends BaseEntity {
     @Column
     private UUID baselineId;
 
+    /**
+     * Count of live activities that were NOT present in the active baseline snapshot when this
+     * forecast ran (i.e. added/changed after the baseline was captured). Costed from current
+     * approved values, not the baseline. Surfaced so the planner can re-baseline; &gt; 0 means the
+     * forecast scope has drifted from the comparison baseline.
+     */
+    @Column
+    private Integer activitiesNotInBaseline;
+
+    /** Whether this run layered the risk register (Bernoulli drivers) into the forecast. */
+    @Column
+    private Boolean risksEnabled;
+
     @Column
     private LocalDate dataDate;
 

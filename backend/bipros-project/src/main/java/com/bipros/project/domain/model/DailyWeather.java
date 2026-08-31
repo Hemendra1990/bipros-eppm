@@ -63,4 +63,11 @@ public class DailyWeather extends BaseEntity {
 
   @Column(name = "remarks", length = 500)
   private String remarks;
+
+  /**
+   * US AQI (0–500) at the site, from Open-Meteo's air-quality API. Filled by the scheduled
+   * weather ingest on auto rows; null on manual entries (the weather-log form has no AQI field).
+   */
+  @Column(name = "aqi")
+  private Integer aqi;
 }

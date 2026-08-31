@@ -1,0 +1,22 @@
+databaseChangeLog:
+  # Adds a nullable HSE sub-classification to project.dpr_issues so the HSE statistics tab can
+  # count MTC / near-miss / fatality / property-damage / LTI incidents from the live DprIssue
+  # store. Nullable + additive: existing SAFETY rows keep hse_incident_type = null and are not
+  # counted. Dev picks this up via Hibernate ddl-auto:update; prod uses validate, so this
+  # changeset is the source of truth.
+  - changeSet:
+      id: 114-dpr-issue-hse-type
+      author: subrat
+      changes:
+        - addColumn:
+            schemaName: project
+            tableName: dpr_issues
+            columns:
+              - column:
+                  name: hse_incident_type
+                  type: VARCHAR(20)
+      rollback:
+        - dropColumn:
+            schemaName: project
+            tableName: dpr_issues
+            columnName: hse_incident_type

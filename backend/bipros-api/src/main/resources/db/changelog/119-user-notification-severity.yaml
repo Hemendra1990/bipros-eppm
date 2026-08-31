@@ -1,0 +1,28 @@
+databaseChangeLog:
+  # Additive, nullable columns on public.user_notifications so agent-generated notifications can
+  # carry a severity and structured metadata. Nullable → safe under dev ddl-auto:update and for
+  # existing rows. Consumed by the NotificationAgent / channel layer (Track C).
+
+  - changeSet:
+      id: 119-1-user-notification-severity-metadata
+      author: bipros
+      changes:
+        - addColumn:
+            schemaName: public
+            tableName: user_notifications
+            columns:
+              - column:
+                  name: severity
+                  type: VARCHAR(10)
+              - column:
+                  name: metadata
+                  type: JSONB
+      rollback:
+        - dropColumn:
+            schemaName: public
+            tableName: user_notifications
+            columnName: severity
+        - dropColumn:
+            schemaName: public
+            tableName: user_notifications
+            columnName: metadata

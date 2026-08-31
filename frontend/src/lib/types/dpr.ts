@@ -1,0 +1,416 @@
+// Shared DPR domain types — mirror the backend records in
+// backend/bipros-project/.../dto. Kept in /lib/types so non-API callers (forms,
+// charts, AI insights) can import without dragging the axios client along.
+
+export type Side =
+  | "LHS"
+  | "RHS"
+  | "CENTER"
+  | "MEDIAN_LHS"
+  | "MEDIAN_RHS"
+  | "MCW_LHS"
+  | "MCW_RHS"
+  | "CDROAD_LHS"
+  | "CDROAD_RHS";
+
+/**
+ * Display labels for {@link Side}, in dropdown order. Client workbook (01 Aug 2026): the six
+ * corridor-element sides (Median / MCW / CD Road × LHS/RHS) join the original three. Enum
+ * names are ≤10 chars because the backend `side` column is VARCHAR(10) — see backend Side.java.
+ */
+export const SIDE_LABELS: Record<Side, string> = {
+  LHS: "LHS",
+  RHS: "RHS",
+  CENTER: "Center",
+  MEDIAN_LHS: "Median LHS",
+  MEDIAN_RHS: "Median RHS",
+  MCW_LHS: "MCW-LHS",
+  MCW_RHS: "MCW-RHS",
+  CDROAD_LHS: "CD Road-LHS",
+  CDROAD_RHS: "CD Road-RHS",
+};
+export type Shift = "DAY" | "NIGHT";
+export type DprApprovalStatus = "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED";
+export type SafetyIncidentType = "NONE" | "NEAR_MISS" | "INCIDENT";
+export type ManpowerCategory = "SKILLED" | "SEMI_SKILLED" | "UNSKILLED";
+export type EquipmentOwnership = "OWNED" | "HIRED" | "SUBCONTRACTOR";
+export type EquipmentAvailability = "AVAILABLE" | "UTILIZED" | "IDLE" | "BREAKDOWN";
+
+export type Unit = "Cum" | "MT" | "Rm" | "Each" | "Sqm" | "R/mtr" | "Nr";
+
+export type RateBasis = "HOUR" | "DAY" | "EACH";
+
+export interface DprManpowerRow {
+  id?: string | null;
+  /** Optional in the role-only flow; legacy callers may still send it. */
+  resourceAssignmentId?: string | null;
+  resourceId?: string | null;
+  trade: string;
+  category?: ManpowerCategory | null;
+  /** Per-row shift (DAY / NIGHT). Mixed-shift days use separate rows. Defaults DAY server-side. */
+  shift?: Shift | null;
+  nos?: number | null;
+  workingHours?: number | null;
+  otHours?: number | null;
+  /** Idle hours (per crew member). Feeds KPI 1.2 Idle Time Ratio. */
+  idleHours?: number | null;
+  unitRate?: number | null;
+  unitRateBasis?: RateBasis | null;
+  lineCost?: number | null;
+  contractorName?: string | null;
+  remarks?: string | null;
+  /** Role-only model: the manpower-rate variant consumed. */
+  manpowerRoleRateId?: string | null;
+  roleId?: string | null;
+}
+
+export interface DprEquipmentRow {
+  id?: string | null;
+  resourceAssignmentId?: string | null;
+  resourceId?: string | null;
+  equipmentType: string;
+  fleetNo?: string | null;
+  ownership?: EquipmentOwnership | null;
+  /** Per-row shift (DAY / NIGHT). Mixed-shift days use separate rows. Defaults DAY server-side. */
+  shift?: Shift | null;
+  nos?: number | null;
+  workingHours?: number | null;
+  idleHours?: number | null;
+  breakdownHours?: number | null;
+  fuelLitres?: number | null;
+  unitRate?: number | null;
+  unitRateBasis?: RateBasis | null;
+  lineCost?: number | null;
+  operatorName?: string | null;
+  availabilityStatus?: EquipmentAvailability | null;
+  remarks?: string | null;
+  /** Role-only model: which equipment variant. */
+  equipmentRoleVariantId?: string | null;
+  roleId?: string | null;
+}
+
+export interface DprMaterialRow {
+  id?: string | null;
+  resourceAssignmentId?: string | null;
+  materialId?: string | null;
+  resourceId?: string | null;
+  materialName: string;
+  quantity?: number | null;
+  unit?: string | null;
+  source?: string | null;
+  batchNo?: string | null;
+  vendorName?: string | null;
+  unitRate?: number | null;
+  lineCost?: number | null;
+  remarks?: string | null;
+  /** Role-only model: which material variant. */
+  materialRoleVariantId?: string | null;
+  roleId?: string | null;
+}
+
+export interface DprSubContractorRow {
+  id?: string | null;
+  /** Required FK to a planned ActivitySubContractorAssignment for this activity. */
+  activitySubContractorAssignmentId: string;
+  // Snapshots — populated by server on read.
+  subContractorMasterId?: string | null;
+  subContractorName?: string | null;
+  subContractorCode?: string | null;
+  workActivityName?: string | null;
+  unit?: string | null;
+  ratePerUnit?: number | null;
+  /** Required — units delivered by this sub-contractor on this DPR's date. */
+  quantity: number;
+  /** Computed = quantity × ratePerUnit. Response-only. */
+  lineCost?: number | null;
+  remarks?: string | null;
+}
+
+export type IssueCategory =
+  | "SAFETY"
+  | "QUALITY"
+  | "MATERIAL_SHORTAGE"
+  | "EQUIPMENT_BREAKDOWN"
+  | "MANPOWER_SHORTAGE"
+  | "WEATHER"
+  | "DESIGN_CHANGE"
+  | "LAND_ACCESS"
+  | "UTILITY_CLASH"
+  | "PERMIT_DELAY"
+  | "SUBCONTRACTOR"
+  | "ENVIRONMENTAL"
+  | "OTHER";
+
+export type IssueSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export type IssueStatus =
+  | "OPEN"
+  | "IN_PROGRESS"
+  | "BLOCKED"
+  | "RESOLVED"
+  | "CLOSED"
+  | "CANCELLED";
+
+export type HseIncidentType =
+  | "LTI"
+  | "MTC"
+  | "NEAR_MISS"
+  | "FATALITY"
+  | "PROPERTY_DAMAGE";
+
+/**
+ * Field-issue row attached to a DPR. {@code id} is null on insert, non-null on update; the
+ * backend uses merge-by-id semantics (rows absent from a re-save are deleted). Status
+ * transitions to RESOLVED/CLOSED auto-stamp {@code resolvedAt} server-side; the client must
+ * not set it directly.
+ */
+export interface DprIssueRow {
+  id?: string | null;
+  dprId?: string | null;
+  activityId?: string | null;
+  activityName?: string | null;
+  reportDate?: string | null;
+  title: string;
+  description?: string | null;
+  category: IssueCategory;
+  severity: IssueSeverity;
+  status: IssueStatus;
+  supervisorUserId?: string | null;
+  supervisorName?: string | null;
+  assignedToUserId?: string | null;
+  assignedToName?: string | null;
+  openedAt?: string | null;
+  resolvedAt?: string | null;
+  /** Stamped server-side when the issue enters CLOSED; cleared on reopen. Response-only. */
+  closedAt?: string | null;
+  resolutionNotes?: string | null;
+  /** Sub-classification of a SAFETY/ENVIRONMENTAL issue, feeding the HSE statistics. Null for
+   *  non-HSE issues and for legacy safety issues logged before classification existed. */
+  hseIncidentType?: HseIncidentType | null;
+  /** Supervisor's "next-level intervention required" checkbox (AI Agent sheet, DPR row). */
+  interventionRequired?: boolean | null;
+  /** Act-by date ("time frame to act on it"); ISO date, optional. */
+  dueDate?: string | null;
+  /** Response-only, service-managed by the Act-by SLA job: last overdue reminder to the assignee. */
+  lastReminderAt?: string | null;
+  /** Response-only: when the overdue issue was escalated to the assignee's manager (one-shot). */
+  escalatedAt?: string | null;
+  /** Response-only: display name of who the escalation went to. */
+  escalatedToName?: string | null;
+}
+
+/** Request body for creating a standalone DprIssue not tied to a parent DPR. */
+export interface CreateDprIssueRequest {
+  title: string;
+  description?: string | null;
+  category: IssueCategory;
+  severity: IssueSeverity;
+  status?: IssueStatus;
+  supervisorResourceId?: string | null;
+  supervisorName?: string | null;
+  assignedToResourceId?: string | null;
+  assignedToName?: string | null;
+  assignedToUserId?: string | null;
+  activityId?: string | null;
+  activityName?: string | null;
+  reportDate?: string | null;
+  hseIncidentType?: HseIncidentType | null;
+  interventionRequired?: boolean | null;
+  dueDate?: string | null;
+}
+
+/** One status transition in an issue's append-only history timeline. */
+export interface DprIssueStatusHistoryRow {
+  id: string;
+  fromStatus: IssueStatus | null;
+  toStatus: IssueStatus;
+  actorUserId?: string | null;
+  reason?: string | null;
+  createdAt: string;
+}
+
+/** Picker-mode option returned by GET .../resource-assignments/activity/{id}/picker?kind=… */
+export interface AssignedResourceOption {
+  assignmentId: string;
+  resourceId: string;
+  resourceName: string;
+  resourceCode?: string | null;
+  unit?: string | null;
+  unitRateBasis?: RateBasis | null;
+  unitRate?: number | null;
+  rateType?: string | null;
+  plannedUnits?: number | null;
+  actualUnits?: number | null;
+  plannedCost?: number | null;
+  actualCost?: number | null;
+  kind?: "MANPOWER" | "EQUIPMENT" | "MATERIAL" | null;
+}
+
+export interface DprBaseFields {
+  reportDate: string;
+  supervisorUserId?: string | null;
+  supervisorName: string;
+  chainageFromM?: number | null;
+  chainageToM?: number | null;
+  /** Soft FK to activity.activities.id. Required to load assigned resources for the picker. */
+  activityId?: string | null;
+  activityName: string;
+  wbsNodeId?: string | null;
+  /** Workstream B1: new canonical FK to BoqItem.id. Prefer over {@link boqItemNo}. */
+  boqItemId?: string | null;
+  /** Legacy back-link by item-number string. New clients should send {@link boqItemId}. */
+  boqItemNo?: string | null;
+  /** Read-only: the linked BOQ item's description, resolved by the GET detail endpoint.
+   *  Null on write paths and when no BOQ item is linked. */
+  boqItemDescription?: string | null;
+  unit: string;
+  qtyExecuted: number;
+  weatherCondition?: string | null;
+  remarks?: string | null;
+
+  side?: Side | null;
+  landmark?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  shift?: Shift | null;
+  approvalStatus?: DprApprovalStatus | null;
+  contractorName?: string | null;
+  delayReason?: string | null;
+  safetyObservation?: string | null;
+  safetyIncidentType?: SafetyIncidentType | null;
+
+  manpower?: DprManpowerRow[];
+  equipment?: DprEquipmentRow[];
+  materials?: DprMaterialRow[];
+  subContractors?: DprSubContractorRow[];
+  issues?: DprIssueRow[];
+}
+
+/**
+ * Photo attached to a DPR row. Mirrors the backend {@code DprAttachmentResponse} record. The
+ * binary itself is fetched from {@code GET /v1/projects/{projectId}/dpr/{dprId}/photos/{id}},
+ * which is JWT-protected — see {@code dprApi.fetchPhotoBlobUrl} for the auth-aware blob loader
+ * used to feed {@code <img src>}.
+ */
+export interface DprAttachment {
+  id: string;
+  dprId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  caption: string | null;
+  capturedAt: string | null;
+  createdAt: string;
+}
+
+/**
+ * Voice note attached to a DPR row. Mirrors the backend {@code DprVoiceNoteResponse} record.
+ * Distinct from the "Voice fill" feature: voice notes are persisted audio attachments (like
+ * photos), never transcribed. The audio itself is streamed from
+ * {@code GET /v1/projects/{projectId}/dpr/{dprId}/voice-notes/{id}/stream}, which is
+ * JWT-protected — see {@code dprApi.fetchVoiceNoteBlobUrl} for the auth-aware blob loader used
+ * to feed {@code <audio src>}.
+ */
+export interface DprVoiceNote {
+  id: string;
+  dprId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  durationSeconds: number | null;
+  caption: string | null;
+  createdAt: string;
+}
+
+export interface DailyProgressReportResponse extends DprBaseFields {
+  id: string;
+  projectId: string;
+  cumulativeQty: number | null;
+  manpower: DprManpowerRow[];
+  equipment: DprEquipmentRow[];
+  materials: DprMaterialRow[];
+  subContractors: DprSubContractorRow[];
+  attachments?: DprAttachment[];
+  voiceNotes?: DprVoiceNote[];
+  issues?: DprIssueRow[];
+  /** Server-side warnings (e.g. rate-missing:trade-name, assignment-not-found:uuid). */
+  warnings?: string[];
+  // ─── Approval workflow fields ──────────────────────────────────────────────
+  assignedApproverUserId?: string | null;
+  submittedAt?: string | null;
+  /** When the pending approval blew its SLA and was escalated (one-shot); null otherwise. */
+  escalatedAt?: string | null;
+  submittedByUserId?: string | null;
+  approvedByUserId?: string | null;
+  approvedAt?: string | null;
+  rejectedByUserId?: string | null;
+  rejectedAt?: string | null;
+  rejectionReason?: string | null;
+  /** Read-only display names resolved by the GET detail endpoint (null on write paths). */
+  submittedByName?: string | null;
+  approvedByName?: string | null;
+  assignedApproverName?: string | null;
+  rejectedByName?: string | null;
+}
+
+/** Request body for approve / reject / revoke actions. {@code reason} is optional for approve and revoke; required for reject. */
+export interface DprApprovalActionRequest {
+  reason?: string;
+}
+
+/**
+ * Pre-submit answer to "who will this DPR go to for approval?" — resolved by the same ladder
+ * the backend assigns with (reporting chain → CM → PM → Project Control → admin). `source` is
+ * CHAIN / CONSTRUCTION_MANAGER / PM / PROJECT_CONTROL / ADMIN, or NONE when nobody resolves.
+ */
+export interface ApproverPreview {
+  userId: string | null;
+  name: string | null;
+  projectRole: string | null;
+  source: string;
+}
+
+export type CreateDailyProgressReportRequest = DprBaseFields;
+export type UpdateDailyProgressReportRequest = DprBaseFields;
+
+/**
+ * Slim DPR list row returned by the paginated list endpoint. Carries parent fields used by the
+ * Day → Activity → Work-front grouping + collapsed row, plus precomputed child aggregates. Full
+ * child detail (manpower/equipment/material/sub-contractor/issue rows, cumulativeQty, landmark,
+ * remarks) comes from GET /dpr/{id} on row expand — see DailyProgressReportResponse.
+ */
+export interface DprSummaryRow {
+  id: string;
+  projectId: string;
+  reportDate: string;
+  supervisorUserId?: string | null;
+  supervisorName: string;
+  chainageFromM?: number | null;
+  chainageToM?: number | null;
+  activityId?: string | null;
+  activityName: string;
+  boqItemNo?: string | null;
+  unit: string;
+  qtyExecuted?: number | null;
+  side?: Side | null;
+  approvalStatus?: DprApprovalStatus | null;
+  weatherCondition?: string | null;
+  assignedApproverUserId?: string | null;
+  /** User id of whoever submitted this DPR. Used to gate Edit/Delete to the submitter. */
+  submittedByUserId?: string | null;
+  manpowerNos: number;
+  equipmentNos: number;
+  materialCount: number;
+  photoCount: number;
+  issueCount: number;
+  openIssueCount: number;
+  hasCriticalOpen: boolean;
+}
+
+/** One page of the day-cursored DPR list. */
+export interface DprPage {
+  items: DprSummaryRow[];
+  /** Oldest report date in this batch; pass as `before` for the next page. Null when no more. */
+  nextCursor: string | null;
+  hasMore: boolean;
+}

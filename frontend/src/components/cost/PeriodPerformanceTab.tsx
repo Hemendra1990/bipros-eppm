@@ -12,15 +12,11 @@ import {
   type CreateStorePeriodPerformanceRequest,
 } from "@/lib/api/periodPerformanceApi";
 import { activityApi, type ActivityResponse } from "@/lib/api/activityApi";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { KpiTile } from "@/components/common/KpiTile";
 import { AiInsightsPanel } from "@/components/ai/AiInsightsPanel";
-
-const INR_PER_CRORE = 10_000_000;
-
-function formatCrores(val: number | null | undefined): string {
-  const v = (val ?? 0) / INR_PER_CRORE;
-  return `₹${v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}cr`;
-}
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 
 function sumField(records: StorePeriodPerformance[], field: keyof StorePeriodPerformance): number {
   return records.reduce((acc, r) => acc + ((r[field] as number | null) ?? 0), 0);
@@ -40,6 +36,7 @@ const EMPTY_FORM: Omit<CreateStorePeriodPerformanceRequest, "projectId" | "finan
 };
 
 export function PeriodPerformanceTab({ projectId }: { projectId: string }) {
+  const { moneyCompact, symbol } = useProjectCurrency();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>("");
@@ -131,28 +128,181 @@ export function PeriodPerformanceTab({ projectId }: { projectId: string }) {
   const totalPv = sumField(records, "plannedValueCost");
   const totalLaborUnits = sumField(records, "actualLaborUnits");
 
+  const columns = useMemo<ColumnDef<StorePeriodPerformance>[]>(
+    () => [
+      {
+        accessorKey: "financialPeriodId",
+        header: "Period",
+        cell: (info) => {
+          const r = info.row.original;
+          const period = periodMap.get(r.financialPeriodId);
+          return period ? (
+            <span>
+              <span className="font-medium">{period.name}</span>
+              <span className="ml-1 text-xs text-text-muted">
+                ({period.startDate} → {period.endDate})
+              </span>
+            </span>
+          ) : (
+            <span className="text-text-muted text-xs font-mono">
+              {r.financialPeriodId.slice(0, 8)}…
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "activityId",
+        header: "Activity",
+        cell: (info) => {
+          const r = info.row.original;
+          const activity = r.activityId
+            ? activityMap.get(r.activityId)
+            : null;
+          return activity ? (
+            <span>
+              <span className="font-mono text-xs text-accent">
+                {activity.code}
+              </span>{" "}
+              {activity.name}
+            </span>
+          ) : (
+            <span className="italic text-text-muted">Project-level</span>
+          );
+        },
+      },
+      {
+        accessorKey: "actualLaborCost",
+        header: "Labor Cost",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span className="block text-right">
+              {val != null ? moneyCompact(val) : "—"}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "actualNonlaborCost",
+        header: "Non-Labor",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span className="block text-right text-text-secondary">
+              {val != null ? moneyCompact(val) : "—"}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "actualMaterialCost",
+        header: "Material",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span className="block text-right text-text-secondary">
+              {val != null ? moneyCompact(val) : "—"}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "actualExpenseCost",
+        header: "Expense",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span className="block text-right text-text-secondary">
+              {val != null ? moneyCompact(val) : "—"}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "earnedValueCost",
+        header: "EV Cost",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span className="block text-right text-success">
+              {val != null ? moneyCompact(val) : "—"}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "plannedValueCost",
+        header: "PV Cost",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span className="block text-right text-accent">
+              {val != null ? moneyCompact(val) : "—"}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "actualLaborUnits",
+        header: "Labor Units",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span className="block text-right text-text-secondary">
+              {val != null
+                ? val.toLocaleString("en-IN", { maximumFractionDigits: 2 })
+                : "—"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "",
+        cell: (info) => {
+          const r = info.row.original;
+          return (
+            <button
+              onClick={() => {
+                if (window.confirm("Delete this record?")) {
+                  deleteMutation.mutate(r.id);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+              className="text-danger hover:text-danger/80 disabled:opacity-50"
+              title="Delete"
+            >
+              <Trash2 size={14} />
+            </button>
+          );
+        },
+      },
+    ],
+    [periodMap, activityMap, deleteMutation, moneyCompact]
+  );
+
   return (
     <div className="space-y-6 px-6 pb-8">
-      <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/period-performance/ai/insights`} />
+      {/* <AiInsightsPanel projectId={projectId} endpoint={`/v1/projects/${projectId}/period-performance/ai/insights`} /> */}
       {/* Summary KPIs */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <KpiTile
           label="Total Actual Cost"
-          value={formatCrores(totalActualCost)}
+          value={moneyCompact(totalActualCost)}
           hint="Sum across all periods"
           tone="danger"
           icon={<DollarSign size={14} />}
         />
         <KpiTile
           label="Earned Value"
-          value={formatCrores(totalEv)}
+          value={moneyCompact(totalEv)}
           hint="Cumulative EV (SPP)"
           tone="success"
           icon={<TrendingUp size={14} />}
         />
         <KpiTile
           label="Planned Value"
-          value={formatCrores(totalPv)}
+          value={moneyCompact(totalPv)}
           hint="Cumulative PV (SPP)"
           tone="accent"
           icon={<BarChart3 size={14} />}
@@ -236,10 +386,10 @@ export function PeriodPerformanceTab({ projectId }: { projectId: string }) {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {(
               [
-                { field: "actualLaborCost", label: "Actual Labor Cost (₹)" },
-                { field: "actualNonlaborCost", label: "Actual Non-Labor Cost (₹)" },
-                { field: "actualMaterialCost", label: "Actual Material Cost (₹)" },
-                { field: "actualExpenseCost", label: "Actual Expense Cost (₹)" },
+                { field: "actualLaborCost", label: `Actual Labor Cost (${symbol})` },
+                { field: "actualNonlaborCost", label: `Actual Non-Labor Cost (${symbol})` },
+                { field: "actualMaterialCost", label: `Actual Material Cost (${symbol})` },
+                { field: "actualExpenseCost", label: `Actual Expense Cost (${symbol})` },
               ] as const
             ).map(({ field, label }) => (
               <div key={field}>
@@ -287,8 +437,8 @@ export function PeriodPerformanceTab({ projectId }: { projectId: string }) {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {(
               [
-                { field: "earnedValueCost", label: "Earned Value Cost (₹)" },
-                { field: "plannedValueCost", label: "Planned Value Cost (₹)" },
+                { field: "earnedValueCost", label: `Earned Value Cost (${symbol})` },
+                { field: "plannedValueCost", label: `Planned Value Cost (${symbol})` },
               ] as const
             ).map(({ field, label }) => (
               <div key={field}>
@@ -346,111 +496,13 @@ export function PeriodPerformanceTab({ projectId }: { projectId: string }) {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-surface-hover/60">
-                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Period
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Activity
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Labor Cost
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Non-Labor
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Material
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Expense
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  EV Cost
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  PV Cost
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Labor Units
-                </th>
-                <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-text-secondary" />
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((r) => {
-                const period = periodMap.get(r.financialPeriodId);
-                const activity = r.activityId ? activityMap.get(r.activityId) : null;
-                return (
-                  <tr key={r.id} className="border-b border-border hover:bg-surface-hover/40">
-                    <td className="px-3 py-2 text-text-primary">
-                      {period ? (
-                        <span>
-                          <span className="font-medium">{period.name}</span>
-                          <span className="ml-1 text-xs text-text-muted">
-                            ({period.startDate} → {period.endDate})
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-text-muted text-xs font-mono">{r.financialPeriodId.slice(0, 8)}…</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-text-secondary">
-                      {activity ? (
-                        <span>
-                          <span className="font-mono text-xs text-accent">{activity.code}</span>
-                          {" "}{activity.name}
-                        </span>
-                      ) : (
-                        <span className="italic text-text-muted">Project-level</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right text-text-primary">
-                      {r.actualLaborCost != null ? formatCrores(r.actualLaborCost) : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right text-text-secondary">
-                      {r.actualNonlaborCost != null ? formatCrores(r.actualNonlaborCost) : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right text-text-secondary">
-                      {r.actualMaterialCost != null ? formatCrores(r.actualMaterialCost) : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right text-text-secondary">
-                      {r.actualExpenseCost != null ? formatCrores(r.actualExpenseCost) : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right text-success">
-                      {r.earnedValueCost != null ? formatCrores(r.earnedValueCost) : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right text-accent">
-                      {r.plannedValueCost != null ? formatCrores(r.plannedValueCost) : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right text-text-secondary">
-                      {r.actualLaborUnits != null
-                        ? r.actualLaborUnits.toLocaleString("en-IN", { maximumFractionDigits: 2 })
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <button
-                        onClick={() => {
-                          if (window.confirm("Delete this record?")) {
-                            deleteMutation.mutate(r.id);
-                          }
-                        }}
-                        disabled={deleteMutation.isPending}
-                        className="text-danger hover:text-danger/80 disabled:opacity-50"
-                        title="Delete"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={records}
+          sortable
+          resizable
+          searchable={false}
+        />
       )}
     </div>
   );

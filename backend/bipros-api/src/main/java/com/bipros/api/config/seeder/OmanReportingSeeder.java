@@ -35,7 +35,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-import java.util.Random;
 import java.util.UUID;
 
 @Slf4j
@@ -90,7 +89,6 @@ public class OmanReportingSeeder implements CommandLineRunner {
             return;
         }
 
-        Random rng = new Random(DETERMINISTIC_SEED);
         LocalDate dataDate = project.getDataDate() != null ? project.getDataDate() : DEFAULT_DATA_DATE;
 
         List<WbsNode> wbsNodes = wbsNodeRepository.findByProjectIdOrderBySortOrder(projectId);
@@ -99,9 +97,9 @@ public class OmanReportingSeeder implements CommandLineRunner {
             .toList();
 
         List<KpiDefinition> kpis = seedKpiDefinitions();
-        int snapCount = seedKpiSnapshots(kpis, projectId, dataDate, rng);
-        int nodeSnapCount = seedKpiNodeSnapshots(kpis, projectId, dataDate, rng);
-        int evmCount = seedMonthlyEvmSnapshots(projectId, leafNodes, dataDate, rng);
+        int snapCount = seedKpiSnapshots(kpis, projectId, dataDate);
+        int nodeSnapCount = seedKpiNodeSnapshots(kpis, projectId, dataDate);
+        int evmCount = seedMonthlyEvmSnapshots(project, leafNodes, dataDate);
         seedDashboards();
         List<ReportDefinition> reports = seedReportDefinitions();
         int execCount = seedReportExecutions(reports, projectId);
@@ -131,16 +129,18 @@ public class OmanReportingSeeder implements CommandLineRunner {
         return kpis;
     }
 
-    private int seedKpiSnapshots(List<KpiDefinition> kpis, UUID projectId, LocalDate dataDate, Random rng) {
+    private int seedKpiSnapshots(List<KpiDefinition> kpis, UUID projectId, LocalDate dataDate) {
         int weeks = 12;
         int created = 0;
         for (KpiDefinition kpi : kpis) {
             for (int w = weeks - 1; w >= 0; w--) {
                 LocalDate weekDate = dataDate.minusWeeks(w);
                 String period = weekDate.getYear() + "-W" + String.format("%02d", weekDate.getDayOfYear() / 7 + 1);
+                // Deterministic ramp around target — no random noise. The drift is a stable
+                // function of (kpi code, week index) so reruns reproduce.
                 double base = kpi.getGreenThreshold() != null ? kpi.getGreenThreshold() : 1.0;
-                double noise = (rng.nextDouble() - 0.3) * 0.3;
-                double value = Math.max(0, base + noise);
+                int hashStep = ((Math.abs(kpi.getCode().hashCode()) + w) % 11) - 5; // -5..+5
+                double value = Math.max(0, base + (hashStep / 100.0) * base);
                 KpiSnapshot.KpiStatus status = deriveKpiStatus(kpi, value);
 
                 KpiSnapshot snap = new KpiSnapshot();
@@ -157,7 +157,7 @@ public class OmanReportingSeeder implements CommandLineRunner {
         return created;
     }
 
-    private int seedKpiNodeSnapshots(List<KpiDefinition> kpis, UUID projectId, LocalDate dataDate, Random rng) {
+    private int seedKpiNodeSnapshots(List<KpiDefinition> kpis, UUID projectId, LocalDate dataDate) {
         String[] nodeCodes = {"BNK-S1", "BNK-S2", "BNK-S3", "BNK-S4", "PROGRAMME"};
         String[] topKpiCodes = {"SPI", "CPI", "SCH_VARIANCE", "COST_VARIANCE", "RESOURCE_UTIL"};
         int created = 0;
@@ -168,8 +168,9 @@ public class OmanReportingSeeder implements CommandLineRunner {
 
             for (String nodeCode : nodeCodes) {
                 double base = kpi.getGreenThreshold() != null ? kpi.getGreenThreshold() : 1.0;
-                double noise = (rng.nextDouble() - 0.3) * 0.25;
-                double value = Math.max(0, base + noise);
+                // Deterministic per-(kpi, node) drift — no RNG.
+                int hashStep = ((Math.abs(kpiCode.hashCode()) + Math.abs(nodeCode.hashCode())) % 9) - 4; // -4..+4
+                double value = Math.max(0, base + (hashStep / 100.0) * base);
                 KpiSnapshot.KpiStatus rag = deriveKpiStatus(kpi, value);
 
                 KpiNodeSnapshot snap = KpiNodeSnapshot.builder()
@@ -189,17 +190,33 @@ public class OmanReportingSeeder implements CommandLineRunner {
         return created;
     }
 
-    private int seedMonthlyEvmSnapshots(UUID projectId, List<WbsNode> leafNodes, LocalDate dataDate, Random rng) {
+    private int seedMonthlyEvmSnapshots(Project project, List<WbsNode> leafNodes, LocalDate dataDate) {
         if (leafNodes.isEmpty()) return 0;
+        // Allocate the project's authoritative BAC uniformly across leaf nodes — no random
+        // per-node BAC. If the project has no BAC set yet, fall back to a fixed per-leaf
+        // reference value (still deterministic).
+        BigDecimal projectBac = project.getCurrentBudget() != null
+            ? project.getCurrentBudget()
+            : project.getOriginalBudget();
+        double perNodeBac = projectBac != null && projectBac.signum() > 0
+            ? projectBac.doubleValue() / leafNodes.size()
+            : 1_000_000.0;
+
+        UUID projectId = project.getId();
         int created = 0;
         for (int m = 0; m < 4; m++) {
             LocalDate reportMonth = LocalDate.of(2026, 1 + m, 1);
             for (WbsNode node : leafNodes) {
-                double bacVal = 500_000 + rng.nextInt(2_000_000);
-                double pctComplete = Math.min(1.0, (m + 1) * 0.15 + rng.nextDouble() * 0.1);
+                int nodeHash = Math.abs(node.getCode() != null ? node.getCode().hashCode() : 0);
+                // Deterministic % complete: month-driven baseline + per-node stable offset (0..9%).
+                double pctOffset = (nodeHash % 10) / 100.0;
+                double pctComplete = Math.min(1.0, (m + 1) * 0.15 + pctOffset);
+                // Stable cost-overrun factor 0.90..1.15 from per-node hash (no RNG).
+                double overrun = 0.90 + ((nodeHash % 26) / 100.0);
+                double bacVal = perNodeBac;
                 double bcws = bacVal * Math.min(1.0, (m + 1) * 0.20);
                 double bcwp = bacVal * pctComplete;
-                double acwp = bcwp * (0.90 + rng.nextDouble() * 0.25);
+                double acwp = bcwp * overrun;
                 double spi = bcws > 0 ? bcwp / bcws : 1.0;
                 double cpi = acwp > 0 ? bcwp / acwp : 1.0;
                 double sv = bcwp - bcws;
@@ -228,8 +245,10 @@ public class OmanReportingSeeder implements CommandLineRunner {
                     .pctCompleteAi(BigDecimal.valueOf(pctComplete * 100).setScale(2, RoundingMode.HALF_UP))
                     .pctCompleteContractor(BigDecimal.valueOf(Math.min(100, pctComplete * 100 + 3)).setScale(2, RoundingMode.HALF_UP))
                     .scheduleStatus(scheduleStatus)
-                    .redRisksCount(rng.nextInt(4))
-                    .openRaBillsCrores(BigDecimal.valueOf(rng.nextDouble() * 2).setScale(2, RoundingMode.HALF_UP))
+                    // Deterministic risk count 0..3 per (node, month) hash.
+                    .redRisksCount((nodeHash + m) % 4)
+                    // Deterministic open RA-bills 0..2 OMR-millions per (node, month) hash.
+                    .openRaBillsCrores(BigDecimal.valueOf(((nodeHash + m * 17) % 200) / 100.0).setScale(2, RoundingMode.HALF_UP))
                     .mprStatus("SUBMITTED")
                     .build();
                 monthlyEvmSnapshotRepository.save(snap);

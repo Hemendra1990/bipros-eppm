@@ -17,6 +17,8 @@ import { KpiTile } from "@/components/common/KpiTile";
 import { ragFill, ragFromScore } from "@/lib/utils/rag";
 import {
   CHART_TOOLTIP_STYLE,
+  CHART_TOOLTIP_LABEL_STYLE,
+  CHART_TOOLTIP_ITEM_STYLE,
   EmptyBlock,
   LoadingBlock,
   SectionCard,
@@ -35,13 +37,15 @@ export function ResourcesSection({ projectId }: { projectId: string }) {
 
   const byType = useMemo(() => {
     const map = new Map<string, { planned: number; actual: number }>();
-    rows.forEach((r) => {
-      const key = r.type || "Other";
-      const g = map.get(key) ?? { planned: 0, actual: 0 };
-      g.planned += r.plannedHours ?? 0;
-      g.actual += r.actualHours ?? 0;
-      map.set(key, g);
-    });
+    rows
+      .filter((r) => r.type !== "MATERIAL")
+      .forEach((r) => {
+        const key = r.type || "Other";
+        const g = map.get(key) ?? { planned: 0, actual: 0 };
+        g.planned += r.plannedHours ?? 0;
+        g.actual += r.actualHours ?? 0;
+        map.set(key, g);
+      });
     return Array.from(map.entries()).map(([type, g]) => ({
       type,
       planned: g.planned,
@@ -71,6 +75,7 @@ export function ResourcesSection({ projectId }: { projectId: string }) {
   }
 
   const topRows = [...rows]
+    .filter((r) => r.type !== "MATERIAL")
     .sort((a, b) => b.utilPct - a.utilPct)
     .slice(0, 10)
     .map((r) => ({
@@ -98,13 +103,15 @@ export function ResourcesSection({ projectId }: { projectId: string }) {
           <div className="space-y-3">
             {byType.map((t) => {
               const pct = Math.min(100, t.utilPct);
-              const fill = ragFill(ragFromScore(t.utilPct));
+              const rag = t.utilPct > 100 ? "RED" : ragFromScore(t.utilPct);
+              const fill = ragFill(rag);
               return (
                 <div key={t.type}>
                   <div className="mb-1 flex items-center justify-between text-xs">
                     <span className="font-medium text-text-primary">{t.type}</span>
-                    <span className="text-text-secondary">
+                    <span className={t.utilPct > 100 ? "text-danger font-semibold" : "text-text-secondary"}>
                       {t.actual.toFixed(0)} / {t.planned.toFixed(0)} ({t.utilPct.toFixed(1)}%)
+                      {t.utilPct > 100 ? " ⚠ over" : ""}
                     </span>
                   </div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-surface-hover">
@@ -122,11 +129,13 @@ export function ResourcesSection({ projectId }: { projectId: string }) {
           </h3>
           <ResponsiveContainer width="100%" height={Math.max(220, topRows.length * 30)}>
             <BarChart data={topRows} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis type="number" stroke="#64748b" style={{ fontSize: "12px" }} domain={[0, 100]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis type="number" stroke="#64748b" style={{ fontSize: "12px" }} domain={[0, "auto"]} />
               <YAxis type="category" dataKey="name" stroke="#64748b" style={{ fontSize: "11px" }} width={160} />
               <Tooltip
                 contentStyle={CHART_TOOLTIP_STYLE}
+                labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                itemStyle={CHART_TOOLTIP_ITEM_STYLE}
                 formatter={(value, _name, props) => {
                   const row = props.payload as (typeof topRows)[number];
                   return [`${Number(value ?? 0).toFixed(1)}% (${row.type})`, "Util"];
@@ -134,7 +143,7 @@ export function ResourcesSection({ projectId }: { projectId: string }) {
               />
               <Bar dataKey="util" radius={[0, 4, 4, 0]}>
                 {topRows.map((row, i) => (
-                  <Cell key={i} fill={ragFill(ragFromScore(row.util))} />
+                  <Cell key={i} fill={ragFill(row.util > 100 ? "RED" : ragFromScore(row.util))} />
                 ))}
               </Bar>
             </BarChart>

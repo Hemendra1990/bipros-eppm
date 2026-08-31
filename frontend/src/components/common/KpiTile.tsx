@@ -9,6 +9,8 @@ interface KpiTileProps {
   tone?: Tone;
   icon?: React.ReactNode;
   delta?: { value: string; direction: "up" | "down" | "flat" };
+  onClick?: () => void;
+  valueTitle?: string;
 }
 
 const valueToneCls: Record<Tone, string> = {
@@ -57,10 +59,25 @@ const hoverTone: Record<Tone, string> = {
   accent: "hover:shadow-[0_8px_20px_-10px_rgba(212,175,55,0.30)]",
 };
 
-export function KpiTile({ label, value, hint, tone = "default", icon, delta }: KpiTileProps) {
+export function KpiTile({ label, value, hint, tone = "default", icon, delta, onClick, valueTitle }: KpiTileProps) {
+  const interactiveProps = onClick
+    ? {
+        role: "button" as const,
+        tabIndex: 0,
+        onClick,
+        onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick();
+          }
+        },
+      }
+    : {};
+
   return (
     <div
-      className={`group relative overflow-hidden rounded-xl border p-4 shadow-[0_1px_2px_rgba(28,28,28,0.03)] transition-all duration-200 hover:-translate-y-0.5 ${tileTone[tone]} ${hoverTone[tone]}`}
+      {...interactiveProps}
+      className={`group relative overflow-hidden rounded-xl border p-4 shadow-[0_1px_2px_rgba(28,28,28,0.03)] transition-all duration-200 hover:-translate-y-0.5 ${tileTone[tone]} ${hoverTone[tone]}${onClick ? " cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50" : ""}`}
     >
       {/* Top status stripe so the tone reads even before you parse the value */}
       {tone !== "default" && (
@@ -81,9 +98,10 @@ export function KpiTile({ label, value, hint, tone = "default", icon, delta }: K
           </div>
         )}
       </div>
-      <div className="relative mt-2 flex items-baseline gap-2">
+      <div className="relative mt-2 flex min-w-0 items-baseline gap-2">
         <div
-          className={`font-display text-[26px] font-semibold leading-none tracking-tight ${valueToneCls[tone]}`}
+          className={`min-w-0 truncate font-display text-[24px] font-semibold leading-none tracking-tight ${valueToneCls[tone]}`}
+          title={valueTitle ?? String(value ?? "")}
         >
           {value}
         </div>

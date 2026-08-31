@@ -1,29 +1,65 @@
 package com.bipros.project.domain.repository;
 
 import com.bipros.project.domain.model.DailyProgressReport;
+import com.bipros.project.domain.model.DprApprovalStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+
+import org.springframework.data.domain.Pageable;
 
 @Repository
 public interface DailyProgressReportRepository extends JpaRepository<DailyProgressReport, UUID> {
 
   List<DailyProgressReport> findByProjectIdOrderByReportDateAscIdAsc(UUID projectId);
 
+  /** APPROVED-only variant — same as {@link #findByProjectIdOrderByReportDateAscIdAsc} but restricted to APPROVED DPRs. */
+  List<DailyProgressReport> findByProjectIdAndApprovalStatusOrderByReportDateAscIdAsc(
+      UUID projectId, DprApprovalStatus approvalStatus);
+
+  /**
+   * Used by the create path to reject duplicate DPRs for the same (project, day, activity).
+   * The ledger {@code daily_activity_resource_outputs} has a unique key on
+   * {@code (project_id, output_date, activity_id, resource_id)} — two DPRs that touch the same
+   * activity on the same day with overlapping resources collide on save. Catch it up front so
+   * the user sees a clear "edit the existing DPR" message instead of a constraint violation.
+   */
+  Optional<DailyProgressReport> findFirstByProjectIdAndReportDateAndActivityId(
+      UUID projectId, LocalDate reportDate, UUID activityId);
+
+  /**
+   * Multi-supervisor variant: an activity can have multiple supervisors, each filing their own
+   * DPR for the same day. The uniqueness key narrows to {@code (project, date, activity,
+   * supervisor_user_id)} — the same supervisor can't file twice, but two different supervisors
+   * on the same activity/day are allowed. Resource-overlap collisions across those two DPRs
+   * are still caught by the ledger's unique key on
+   * {@code (project_id, output_date, activity_id, resource_id)}.
+   */
+  Optional<DailyProgressReport> findFirstByProjectIdAndReportDateAndActivityIdAndSupervisorUserId(
+      UUID projectId, LocalDate reportDate, UUID activityId, UUID supervisorUserId);
+
   List<DailyProgressReport> findByProjectIdAndReportDateBetweenOrderByReportDateAscIdAsc(
       UUID projectId, LocalDate from, LocalDate to);
+
+  /** APPROVED-only variant — same as {@link #findByProjectIdAndReportDateBetweenOrderByReportDateAscIdAsc} but restricted to APPROVED DPRs. */
+  List<DailyProgressReport> findByProjectIdAndApprovalStatusAndReportDateBetweenOrderByReportDateAscIdAsc(
+      UUID projectId, DprApprovalStatus approvalStatus, LocalDate from, LocalDate to);
 
   List<DailyProgressReport> findByProjectIdAndActivityNameIgnoreCaseOrderByReportDateAsc(
       UUID projectId, String activityName);
 
-  long countBySupervisorResourceIdAndReportDateGreaterThanEqual(
-      UUID supervisorResourceId, LocalDate sinceInclusive);
+  long countBySupervisorUserIdAndReportDateGreaterThanEqual(
+      UUID supervisorUserId, LocalDate sinceInclusive);
 
   /**
    * Sum of qty_executed for the (project, activityName) up to and including {@code reportDate}.
@@ -41,4 +77,371 @@ public interface DailyProgressReportRepository extends JpaRepository<DailyProgre
       @Param("projectId") UUID projectId,
       @Param("activityName") String activityName,
       @Param("reportDate") LocalDate reportDate);
+
+  /**
+   * This activity's OWN Σ qty_executed across its BOQ-linked DPRs (BOQ item must have a
+   * positive boq_qty). Numerator for the per-activity BOQ progress (precedence #1) — note this
+   * is the activity's own workdone, NOT the BOQ's cross-activity {@code qty_executed_to_date},
+   * so two activities sharing a BOQ each get their own share. Never null.
+   */
+  @Query(value = """
+      SELECT COALESCE(SUM(d.qty_executed), 0)
+      FROM project.daily_progress_reports d
+      JOIN project.boq_items b ON b.id = d.boq_item_id
+      WHERE d.activity_id = :activityId
+        AND b.boq_qty IS NOT NULL AND b.boq_qty > 0
+      """, nativeQuery = true)
+  BigDecimal sumActivityWorkdoneOnBoq(@Param("activityId") UUID activityId);
+
+  /** APPROVED-only variant — same as {@link #sumActivityWorkdoneOnBoq} but restricted to APPROVED DPRs. */
+  @Query(value = """
+      SELECT COALESCE(SUM(d.qty_executed), 0)
+      FROM project.daily_progress_reports d
+      JOIN project.boq_items b ON b.id = d.boq_item_id
+      WHERE d.activity_id = :activityId
+        AND b.boq_qty IS NOT NULL AND b.boq_qty > 0
+        AND d.approval_status = 'APPROVED'
+      """, nativeQuery = true)
+  BigDecimal sumActivityWorkdoneOnBoqApproved(@Param("activityId") UUID activityId);
+
+  /**
+   * Σ boq_qty of the DISTINCT BOQ items referenced by this activity's DPRs (only positive
+   * boq_qty). Denominator for the per-activity BOQ progress. A positive result means the
+   * activity is "BOQ-driven" and BOQ workdone takes precedence over its percentCompleteType.
+   * Never null.
+   */
+  @Query(value = """
+      SELECT COALESCE(SUM(b.boq_qty), 0)
+      FROM project.boq_items b
+      WHERE b.id IN (
+        SELECT DISTINCT d.boq_item_id FROM project.daily_progress_reports d
+        WHERE d.activity_id = :activityId AND d.boq_item_id IS NOT NULL)
+        AND b.boq_qty IS NOT NULL AND b.boq_qty > 0
+      """, nativeQuery = true)
+  BigDecimal sumLinkedBoqQty(@Param("activityId") UUID activityId);
+
+  /** APPROVED-only variant — same as {@link #sumLinkedBoqQty} but restricted to APPROVED DPRs. */
+  @Query(value = """
+      SELECT COALESCE(SUM(b.boq_qty), 0)
+      FROM project.boq_items b
+      WHERE b.id IN (
+        SELECT DISTINCT d.boq_item_id FROM project.daily_progress_reports d
+        WHERE d.activity_id = :activityId AND d.boq_item_id IS NOT NULL
+          AND d.approval_status = 'APPROVED')
+        AND b.boq_qty IS NOT NULL AND b.boq_qty > 0
+      """, nativeQuery = true)
+  BigDecimal sumLinkedBoqQtyApproved(@Param("activityId") UUID activityId);
+
+  // ---- From-scratch rebuild queries (Task 1: DPR Data Repair) ----
+
+  /** All DPRs for a project — used by the data-repair orchestrator for full-project scans. */
+  List<DailyProgressReport> findByProjectId(UUID projectId);
+
+  long countByActivityIdIn(Collection<UUID> activityIds);
+
+  /** Per-activity DPR counts for the given activity ids. Each row = [UUID activityId, Long count]. */
+  @Query("select d.activityId, count(d) from DailyProgressReport d where d.activityId in :ids group by d.activityId")
+  List<Object[]> countDprsByActivityIdInGrouped(@Param("ids") Collection<UUID> ids);
+
+  @org.springframework.data.jpa.repository.Query(
+      "select min(d.reportDate) from DailyProgressReport d where d.projectId = :projectId")
+  java.util.Optional<java.time.LocalDate> findMinReportDate(
+      @org.springframework.data.repository.query.Param("projectId") UUID projectId);
+
+  @org.springframework.data.jpa.repository.Query(
+      "select max(d.reportDate) from DailyProgressReport d where d.projectId = :projectId")
+  java.util.Optional<java.time.LocalDate> findMaxReportDate(
+      @org.springframework.data.repository.query.Param("projectId") UUID projectId);
+
+  /**
+   * Absolute sum of qty_executed across all DPRs for a (project, boqItem).
+   * Used by the from-scratch BOQ rebuild to set qtyExecutedToDate idempotently.
+   */
+  @org.springframework.data.jpa.repository.Query(
+      "select coalesce(sum(d.qtyExecuted), 0) from DailyProgressReport d "
+          + "where d.projectId = :projectId and d.boqItemId = :boqItemId")
+  java.math.BigDecimal sumQtyExecutedByBoqItemId(
+      @org.springframework.data.repository.query.Param("projectId") UUID projectId,
+      @org.springframework.data.repository.query.Param("boqItemId") UUID boqItemId);
+
+  /** APPROVED-only variant — same as {@link #sumQtyExecutedByBoqItemId} but restricted to APPROVED DPRs. */
+  @org.springframework.data.jpa.repository.Query(
+      "select coalesce(sum(d.qtyExecuted), 0) from DailyProgressReport d "
+          + "where d.projectId = :projectId and d.boqItemId = :boqItemId "
+          + "and d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED")
+  java.math.BigDecimal sumQtyExecutedByBoqItemIdApproved(
+      @org.springframework.data.repository.query.Param("projectId") UUID projectId,
+      @org.springframework.data.repository.query.Param("boqItemId") UUID boqItemId);
+
+  /** Stage 4: approved qty per operation of one split line. A null key groups the pre-split rows
+   *  ({@code boq_operation_id IS NULL}) — the caller resolves them to the legacy operation (§7.3). */
+  @org.springframework.data.jpa.repository.Query(value =
+      "SELECT d.boq_operation_id, COALESCE(SUM(d.qty_executed), 0) FROM project.daily_progress_reports d "
+          + "WHERE d.project_id = :projectId AND d.boq_item_id = :boqItemId AND d.approval_status = 'APPROVED' "
+          + "GROUP BY d.boq_operation_id", nativeQuery = true)
+  java.util.List<Object[]> sumQtyExecutedByOperationApproved(
+      @org.springframework.data.repository.query.Param("projectId") UUID projectId,
+      @org.springframework.data.repository.query.Param("boqItemId") UUID boqItemId);
+
+  /** Approved DPR executed qty per BOQ item per date, with that item's boqQty and budgetedRate.
+   *  Feeds cumulative earned-value capping in {@link com.bipros.project.application.service.DprEarnedValueLookup}. */
+  @org.springframework.data.jpa.repository.Query(
+      "select d.boqItemId, d.reportDate, coalesce(sum(d.qtyExecuted), 0), b.boqQty, b.budgetedRate "
+          + "from DailyProgressReport d, BoqItem b "
+          + "where d.projectId = :projectId and d.boqItemId = b.id "
+          + "and d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED "
+          + "and d.reportDate is not null and d.qtyExecuted is not null "
+          + "and b.budgetedRate is not null and b.boqQty is not null "
+          + "group by d.boqItemId, d.reportDate, b.boqQty, b.budgetedRate")
+  java.util.List<Object[]> sumQtyByBoqItemAndDate(
+      @org.springframework.data.repository.query.Param("projectId") java.util.UUID projectId);
+
+  /** Stage 4 (B2) twin of {@link #sumQtyByBoqItemAndDate} restricted to MEASURED rows: on a
+   *  WEIGHTED-split line only measurement-operation and pre-split (null-operation) rows count —
+   *  summing every operation's qty as line qty would distort the per-date EV shape.
+   *  QUANTITY_PARTITION children all count. */
+  @org.springframework.data.jpa.repository.Query(
+      "select d.boqItemId, d.reportDate, coalesce(sum(d.qtyExecuted), 0), b.boqQty, b.budgetedRate "
+          + "from DailyProgressReport d, BoqItem b "
+          + "where d.projectId = :projectId and d.boqItemId = b.id "
+          + "and d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED "
+          + "and d.reportDate is not null and d.qtyExecuted is not null "
+          + "and b.budgetedRate is not null and b.boqQty is not null "
+          + "and (d.boqOperationId is null or b.splitMode = 'QUANTITY_PARTITION' "
+          + "     or exists (select 1 from BoqOperation o where o.id = d.boqOperationId and o.isMeasure = true)) "
+          + "group by d.boqItemId, d.reportDate, b.boqQty, b.budgetedRate")
+  java.util.List<Object[]> sumQtyByBoqItemAndDateMeasured(
+      @org.springframework.data.repository.query.Param("projectId") java.util.UUID projectId);
+
+  /**
+   * Per (BOQ item, activity) Σ qty_executed across APPROVED DPRs for the project. Used by
+   * {@code CostService.getEvmByWbs} to find the "executing activity" for a BOQ item (the one
+   * with the largest executed qty) so BOQ budget can be regrouped onto that activity's WBS node
+   * instead of the BOQ item's own (frequently null) {@code wbsNodeId} — the same key the AC
+   * (actual cost) side already groups by. Only rows with both ids present count.
+   */
+  @Query("select d.boqItemId, d.activityId, coalesce(sum(d.qtyExecuted), 0) "
+      + "from DailyProgressReport d "
+      + "where d.projectId = :projectId and d.boqItemId is not null and d.activityId is not null "
+      + "and d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED "
+      + "group by d.boqItemId, d.activityId")
+  List<Object[]> boqItemExecutingActivities(@Param("projectId") UUID projectId);
+
+  /**
+   * Null out the supervisor FK when the underlying user is deleted. {@code supervisorName}
+   * stays put because the column is NOT NULL and the display snapshot is still valid history.
+   */
+  @Modifying
+  @Query("UPDATE DailyProgressReport d SET d.supervisorUserId = null "
+      + "WHERE d.supervisorUserId = :userId")
+  int detachSupervisor(@Param("userId") UUID userId);
+
+  /**
+   * Distinct supervisor identities that filed any DPR for {@code (projectId, date)}.
+   * Used by the DBS rollup listener to find which supervisor day-rows need recomputing
+   * after a deployment/material event (those events don't carry the supervisor identity).
+   * Null supervisors are excluded — the caller appends a {@code null} entry when needed.
+   */
+  @Query("SELECT DISTINCT d.supervisorUserId FROM DailyProgressReport d "
+      + "WHERE d.projectId = :projectId AND d.reportDate = :date "
+      + "AND d.supervisorUserId IS NOT NULL")
+  List<UUID> findDistinctSupervisorUserIdsByProjectAndDate(
+      @Param("projectId") UUID projectId, @Param("date") LocalDate date);
+
+  /** APPROVED-only variant — same as {@link #findDistinctSupervisorUserIdsByProjectAndDate} but restricted to APPROVED DPRs. */
+  @Query("SELECT DISTINCT d.supervisorUserId FROM DailyProgressReport d "
+      + "WHERE d.projectId = :projectId AND d.reportDate = :date "
+      + "AND d.supervisorUserId IS NOT NULL "
+      + "AND d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED")
+  List<UUID> findDistinctSupervisorUserIdsByProjectAndDateApproved(
+      @Param("projectId") UUID projectId, @Param("date") LocalDate date);
+
+  /** Actual DPR count for the (project, date) — drives the PM-tab "DPRs" KPI honestly. */
+  long countByProjectIdAndReportDate(UUID projectId, LocalDate reportDate);
+
+  /**
+   * Real DPR-document counts per supervisor over a window — any approval status, the same
+   * basis as {@code GET /dpr/supervisors-used}. Drives the DBS roster's {@code dprCount}
+   * so both supervisor dropdowns show the same number, computed live from the ledger
+   * rather than from the DBS recompute snapshots.
+   */
+  @Query("SELECT d.supervisorUserId, COUNT(d) FROM DailyProgressReport d "
+      + "WHERE d.projectId = :projectId AND d.reportDate BETWEEN :from AND :to "
+      + "AND d.supervisorUserId IS NOT NULL "
+      + "GROUP BY d.supervisorUserId")
+  List<Object[]> countDprsBySupervisorBetween(
+      @Param("projectId") UUID projectId,
+      @Param("from") LocalDate from,
+      @Param("to") LocalDate to);
+
+  /**
+   * Most-recent distinct report dates for the project within an optional [from,to] window and
+   * strictly older than an optional {@code before} cursor, optionally narrowed to one activity,
+   * one supervisor and one approval status.
+   * Ordered newest-first; pass a {@code Pageable} of size {@code days+1} to detect "has more".
+   *
+   * <p>The supervisor / status predicates must match {@link
+   * #findByProjectIdAndReportDateInOrderByReportDateDescIdAsc} exactly: a date only earns a slot
+   * in the page if it still has a matching row, otherwise pages come back visibly empty.
+   * A null {@code status} means "any"; {@code DRAFT} also matches legacy rows whose
+   * approval_status was never set, mirroring the frontend's {@code approvalStatus ?? "DRAFT"}.
+   */
+  @Query("""
+      select distinct d.reportDate from DailyProgressReport d
+      where d.projectId = :projectId
+        and (cast(:from as date) is null or d.reportDate >= :from)
+        and (cast(:to as date) is null or d.reportDate <= :to)
+        and (cast(:before as date) is null or d.reportDate < :before)
+        and (cast(:activity as string) is null or lower(d.activityName) = lower(cast(:activity as string)))
+        and (:supervisorUserId is null or d.supervisorUserId = :supervisorUserId)
+        and (cast(:supervisorName as string) is null
+             or d.supervisorName = cast(:supervisorName as string))
+        and (:status is null
+             or coalesce(d.approvalStatus, com.bipros.project.domain.model.DprApprovalStatus.DRAFT) = :status)
+        and (:scoped = false
+             or d.supervisorUserId in :scopeUserIds
+             or d.submittedByUserId in :scopeUserIds
+             or d.assignedApproverUserId in :scopeUserIds
+             or (d.supervisorUserId is null and lower(trim(d.supervisorName)) in :scopeAliases)
+             or d.activityId in :scopeActivityIds)
+      order by d.reportDate desc
+      """)
+  List<LocalDate> findDistinctReportDatesDesc(
+      @Param("projectId") UUID projectId,
+      @Param("from") LocalDate from,
+      @Param("to") LocalDate to,
+      @Param("before") LocalDate before,
+      @Param("activity") String activity,
+      @Param("supervisorUserId") UUID supervisorUserId,
+      @Param("supervisorName") String supervisorName,
+      @Param("status") DprApprovalStatus status,
+      @Param("scoped") boolean scoped,
+      @Param("scopeUserIds") java.util.Collection<UUID> scopeUserIds,
+      @Param("scopeAliases") List<String> scopeAliases,
+      @Param("scopeActivityIds") List<UUID> scopeActivityIds,
+      Pageable pageable);
+
+  /**
+   * All DPR rows for the given set of report dates, newest-first, optionally narrowed to one
+   * activity, supervisor and approval status. Keep the predicates in lockstep with
+   * {@link #findDistinctReportDatesDesc}.
+   */
+  @Query("""
+      select d from DailyProgressReport d
+      where d.projectId = :projectId
+        and d.reportDate in :dates
+        and (cast(:activity as string) is null or lower(d.activityName) = lower(cast(:activity as string)))
+        and (:supervisorUserId is null or d.supervisorUserId = :supervisorUserId)
+        and (cast(:supervisorName as string) is null
+             or d.supervisorName = cast(:supervisorName as string))
+        and (:status is null
+             or coalesce(d.approvalStatus, com.bipros.project.domain.model.DprApprovalStatus.DRAFT) = :status)
+        and (:scoped = false
+             or d.supervisorUserId in :scopeUserIds
+             or d.submittedByUserId in :scopeUserIds
+             or d.assignedApproverUserId in :scopeUserIds
+             or (d.supervisorUserId is null and lower(trim(d.supervisorName)) in :scopeAliases)
+             or d.activityId in :scopeActivityIds)
+      order by d.reportDate desc, d.id asc
+      """)
+  List<DailyProgressReport> findByProjectIdAndReportDateInOrderByReportDateDescIdAsc(
+      @Param("projectId") UUID projectId,
+      @Param("dates") Collection<LocalDate> dates,
+      @Param("activity") String activity,
+      @Param("supervisorUserId") UUID supervisorUserId,
+      @Param("supervisorName") String supervisorName,
+      @Param("status") DprApprovalStatus status,
+      @Param("scoped") boolean scoped,
+      @Param("scopeUserIds") java.util.Collection<UUID> scopeUserIds,
+      @Param("scopeAliases") List<String> scopeAliases,
+      @Param("scopeActivityIds") List<UUID> scopeActivityIds);
+
+  /**
+   * Gate-3 OWN/TEAM-scope variant of the plain list (access-control round, 2026-08-11): rows the
+   * caller is involved in — filed by them, supervised by them (id or legacy free-text name
+   * alias), awaiting their approval, or on an activity they supervise. The predicate matches
+   * the scope clause of the two paged queries above — keep all three in lockstep.
+   */
+  @Query("""
+      select d from DailyProgressReport d
+      where d.projectId = :projectId
+        and (cast(:from as date) is null or d.reportDate >= :from)
+        and (cast(:to as date) is null or d.reportDate <= :to)
+        and (cast(:activity as string) is null or lower(d.activityName) = lower(cast(:activity as string)))
+        and (d.supervisorUserId in :scopeUserIds
+             or d.submittedByUserId in :scopeUserIds
+             or d.assignedApproverUserId in :scopeUserIds
+             or (d.supervisorUserId is null and lower(trim(d.supervisorName)) in :scopeAliases)
+             or d.activityId in :scopeActivityIds)
+      order by d.reportDate asc, d.id asc
+      """)
+  List<DailyProgressReport> findScopedList(
+      @Param("projectId") UUID projectId,
+      @Param("from") LocalDate from,
+      @Param("to") LocalDate to,
+      @Param("activity") String activity,
+      @Param("scopeUserIds") java.util.Collection<UUID> scopeUserIds,
+      @Param("scopeAliases") List<String> scopeAliases,
+      @Param("scopeActivityIds") List<UUID> scopeActivityIds);
+
+  /**
+   * Refresh the denormalized {@code activityName} snapshot on every DPR for {@code activityId}.
+   * Called from the {@code ActivityUpdatedEvent} listener so renames in the Activities tab
+   * propagate to the DPR list group headers, which group on this column.
+   */
+  @Modifying
+  @Query("UPDATE DailyProgressReport d SET d.activityName = :newName "
+      + "WHERE d.activityId = :activityId")
+  int renameActivity(@Param("activityId") UUID activityId, @Param("newName") String newName);
+
+  /**
+   * Earliest {@code reportDate} among APPROVED DPRs for the given activity.
+   * Used by {@code ActivityStartOnFirstDprListener} to gate NOT_STARTED → IN_PROGRESS on
+   * approval (not mere submission). Returns {@link Optional#empty()} when no APPROVED DPR exists.
+   */
+  @Query("SELECT MIN(d.reportDate) FROM DailyProgressReport d "
+      + "WHERE d.activityId = :activityId "
+      + "AND d.approvalStatus = com.bipros.project.domain.model.DprApprovalStatus.APPROVED")
+  Optional<LocalDate> findEarliestApprovedReportDateForActivity(@Param("activityId") UUID activityId);
+
+  // ─── Approval queue finders ─────────────────────────────────────────────────────
+
+  /** SUBMITTED DPRs assigned to a specific approver, ordered by report date (oldest first). */
+  List<DailyProgressReport> findByProjectIdAndApprovalStatusAndAssignedApproverUserIdOrderByReportDateAsc(
+      UUID projectId, DprApprovalStatus approvalStatus, UUID assignedApproverUserId);
+
+  /** SUBMITTED DPRs with no assigned approver, ordered by report date (oldest first). */
+  List<DailyProgressReport> findByProjectIdAndApprovalStatusAndAssignedApproverUserIdIsNullOrderByReportDateAsc(
+      UUID projectId, DprApprovalStatus approvalStatus);
+
+  // ─── SLA escalation finder ───────────────────────────────────────────────────
+
+  /**
+   * Returns SUBMITTED DPRs that were submitted before {@code submittedAtBefore} and have not yet
+   * been escalated ({@code escalatedAt} is null). Used by {@link com.bipros.api.scheduling.DprApprovalSlaEscalationJob}
+   * to find DPRs pending approval past the SLA window.
+   */
+  List<DailyProgressReport> findByApprovalStatusAndSubmittedAtBeforeAndEscalatedAtIsNull(
+      DprApprovalStatus approvalStatus, Instant submittedAtBefore);
+
+  // ─── Unit-consistency repair ─────────────────────────────────────────────────
+
+  /** Lightweight projection (id, activityId, unit) for the unit-consistency repair — avoids
+   *  hydrating full DPR entities for a ~9k-row project. Each row = [UUID id, UUID activityId, String unit]. */
+  @Query("select d.id, d.activityId, d.unit from DailyProgressReport d where d.projectId = :projectId")
+  List<Object[]> findIdActivityUnitByProjectId(@Param("projectId") UUID projectId);
+
+  /** Distinct (boqItemId, activityId) pairs for the project's DPRs that carry a BOQ link.
+   *  Each row = [UUID boqItemId, UUID activityId]. Used to map a BOQ item to the activities that use it. */
+  @Query("select distinct d.boqItemId, d.activityId from DailyProgressReport d "
+      + "where d.projectId = :projectId and d.boqItemId is not null")
+  List<Object[]> findDistinctBoqItemActivityPairsByProjectId(@Param("projectId") UUID projectId);
+
+  /** Targeted column-only bulk relabel: set unit on the given DPR ids, skipping rows already at :unit.
+   *  Returns the number of rows changed. Column-only, so it never conflicts with edits to other DPR
+   *  fields and fires no events (pure relabel). */
+  @Modifying
+  @Query("update DailyProgressReport d set d.unit = :unit "
+      + "where d.id in :ids and (d.unit is null or d.unit <> :unit)")
+  int bulkSetUnit(@Param("ids") List<UUID> ids, @Param("unit") String unit);
 }

@@ -1,0 +1,1280 @@
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  AudioLines,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Image as ImageIcon,
+  Package,
+  Truck,
+  Users,
+  X,
+} from "lucide-react";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import { useAuthStore } from "@/lib/state/store";
+import { useProjectCurrencyOptional } from "@/lib/currency/ProjectCurrencyProvider";
+import { chainageLabel } from "@/lib/format/chainage";
+import { dprApi } from "@/lib/api/dprApi";
+import { dbsApi } from "@/lib/api/dbsApi";
+import { DprTotalsBar } from "./DprTotalsBar";
+import { fmtQty, productivitySideFromPreview } from "./dprFormulas";
+import type {
+  DailyProgressReportResponse,
+  DprApprovalStatus,
+  DprSummaryRow,
+  DprVoiceNote,
+} from "@/lib/types/dpr";
+import { SIDE_LABELS } from "@/lib/types/dpr";
+import {
+  SEVERITY_VARIANT,
+  STATUS_VARIANT as ISSUE_STATUS_VARIANT,
+  categoryLabel,
+} from "./IssueBadges";
+import { DprApprovalActions } from "./DprApprovalActions";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+
+// ─── Small helpers ──────────────────────────────────────────────────────────────
+
+const STATUS_VARIANT: Record<DprApprovalStatus, BadgeVariant> = {
+  DRAFT: "neutral",
+  SUBMITTED: "info",
+  APPROVED: "success",
+  REJECTED: "danger",
+};
+
+const STATUS_PILL: Record<DprApprovalStatus, { dot: string; text: string }> = {
+  DRAFT: { dot: "bg-ash", text: "text-parchment" },
+  SUBMITTED: { dot: "bg-sky-300", text: "text-sky-100" },
+  APPROVED: { dot: "bg-emerald-300", text: "text-emerald-100" },
+  REJECTED: { dot: "bg-rose-300", text: "text-rose-100" },
+};
+
+const SIDE_LABEL: Record<string, string> = SIDE_LABELS;
+
+const num = (n: number | null | undefined, digits = 2) =>
+  typeof n === "number" && Number.isFinite(n)
+    ? n.toLocaleString(undefined, { maximumFractionDigits: digits })
+    : "—";
+
+const sum = (xs: Array<number | null | undefined>) =>
+  xs.reduce<number>((a, b) => a + (typeof b === "number" && Number.isFinite(b) ? b : 0), 0);
+
+function fmtDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { dateStyle: "medium" });
+}
+
+/** Whole hours elapsed since an ISO timestamp; null when absent/unparseable. */
+function hoursSince(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.floor((Date.now() - t) / 3_600_000));
+}
+
+type TabKey = "details" | "manpower" | "equipment" | "material" | "sub" | "issues";
+
+interface Props {
+  projectId: string;
+  row: DprSummaryRow;
+  open: boolean;
+  onClose: () => void;
+}
+
+/**
+ * Read-only DPR detail modal — a professional preview (hero, KPI strip, tabbed
+ * detail, photos + voice, approval trail) with the Approve/Reject/Revoke actions
+ * in the footer. Shared by the Daily-Reports work-front rows and the Approvals
+ * queue. Lazy-loads the full {@link DailyProgressReportResponse} on open.
+ */
+export function DprDetailModal({ projectId, row, open, onClose }: Props) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden p-0">
+        {/* Body lives in its own component so it mounts fresh on each open —
+            the active tab resets to Details with no setState-in-effect. */}
+        <DprDetailBody projectId={projectId} row={row} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DprDetailBody({ projectId, row }: { projectId: string; row: DprSummaryRow }) {
+  const [tab, setTab] = useState<TabKey>("details");
+  const cur = useProjectCurrencyOptional();
+  const money = (n: number | null | undefined) =>
+    n == null ? "—" : cur ? cur.money(n) : num(n);
+
+  const {
+    data: detailData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ["dpr-detail", projectId, row.id],
+    queryFn: () => dprApi.get(projectId, row.id),
+    staleTime: 1000 * 60 * 5,
+  });
+  const detail = detailData?.data ?? undefined;
+
+  // Inputs for the reused DprTotalsBar summary (Fuel ratio + norm-based productivity side).
+  const { data: dbsConfigResp } = useQuery({
+    queryKey: ["dbs-config"],
+    queryFn: dbsApi.getConfig,
+    staleTime: Infinity,
+  });
+  const fuelCostRatio = dbsConfigResp?.data?.fuelMachineryCostRatio ?? 0.35;
+
+  const { data: previewResp } = useQuery({
+    queryKey: ["dpr-detail-preview", projectId, detail?.id],
+    queryFn: () =>
+      dprApi.productivityPreview(projectId, detail!.activityId!, {
+        manpower: (detail!.manpower ?? []).map((r) => ({ roleId: r.roleId ?? null, nos: r.nos ?? null })),
+        equipment: (detail!.equipment ?? []).map((r) => ({
+          roleId: r.roleId ?? null,
+          nos: r.nos ?? null,
+          workingHours: r.workingHours ?? null,
+        })),
+      }),
+    enabled: !!detail?.activityId,
+    staleTime: 1000 * 60 * 5,
+  });
+  const productivitySide = productivitySideFromPreview(previewResp?.data);
+
+  const status = (detail?.approvalStatus ?? row.approvalStatus ?? "DRAFT") as DprApprovalStatus;
+  const canApprove = useAuthStore((s) => s.hasPermission)("DPR.APPROVE");
+  const showApprovalActions =
+    canApprove && (status === "SUBMITTED" || status === "APPROVED");
+
+  return (
+    <>
+      <div className="flex-1 overflow-y-auto">
+        <Hero row={row} detail={detail} status={status} />
+        <KpiStrip row={row} detail={detail} money={money} fuelCostRatio={fuelCostRatio} status={status} />
+        <DetailCard
+          row={row}
+          detail={detail}
+          isLoading={isLoading}
+          isError={isError}
+          onRetry={() => refetch()}
+          tab={tab}
+          setTab={setTab}
+          money={money}
+        />
+        <IdleMaterialPanel projectId={projectId} dprId={row.id} money={money} />
+        {detail && (
+          <div className="space-y-3 border-t border-hairline px-4 py-4">
+            <MediaRow projectId={projectId} detail={detail} />
+            {/* Approval trail re-enabled 2026-08-31 (owner request: the supervisor and every
+                approver should see who the DPR is with, how long, and whether it escalated). */}
+            <ApprovalTrail detail={detail} status={status} />
+          </div>
+        )}
+      </div>
+
+      {/* Pinned summary strip — always visible regardless of the active tab. */}
+      {detail && (
+        <div className="shrink-0 border-t border-hairline bg-paper px-4 py-3">
+          <DprTotalsBar
+            manpower={detail.manpower ?? []}
+            equipment={detail.equipment ?? []}
+            materials={detail.materials ?? []}
+            subContractors={detail.subContractors ?? []}
+            qtyExecuted={detail.qtyExecuted ?? row.qtyExecuted ?? 0}
+            unit={row.unit}
+            productivitySide={productivitySide}
+            fuelCostRatio={fuelCostRatio}
+            showDayCost={false}
+          />
+        </div>
+      )}
+
+      {showApprovalActions && (
+        <div className="shrink-0 rounded-b-2xl border-t border-hairline bg-ivory px-3 py-2">
+          <DprApprovalActions
+            projectId={projectId}
+            row={row}
+            className="flex items-center justify-end gap-1.5"
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Hero ─────────────────────────────────────────────────────────────────────
+
+function Hero({
+  row,
+  detail,
+  status,
+}: {
+  row: DprSummaryRow;
+  detail?: DailyProgressReportResponse;
+  status: DprApprovalStatus;
+}) {
+  const pill = STATUS_PILL[status];
+  const shift = detail?.shift ? (detail.shift === "DAY" ? "Day shift" : "Night shift") : null;
+  const chainage =
+    row.chainageFromM != null || row.chainageToM != null
+      ? `CH ${chainageLabel(row.chainageFromM)} → ${chainageLabel(row.chainageToM)}`
+      : null;
+  const sub = [
+    "Daily Progress Report",
+    row.reportDate,
+    shift,
+    chainage,
+    row.side ? `${SIDE_LABEL[row.side] ?? row.side} side` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div className="flex items-center gap-3 bg-charcoal px-4 py-3 pr-10 text-paper sm:gap-4 sm:px-5 sm:pr-12">
+      <span className="h-9 w-1 shrink-0 rounded-full bg-gold" />
+      <div className="min-w-0 flex-1">
+        <h2 className="truncate font-display text-lg font-bold leading-tight tracking-tight sm:text-xl">
+          {row.activityName || "Daily Progress Report"}
+        </h2>
+        <div className="mt-0.5 truncate text-[11px] text-parchment/70">{sub}</div>
+      </div>
+      <span
+        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full bg-paper/10 px-3 py-1 text-[11px] font-bold ${pill.text}`}
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${pill.dot}`} />
+        {status.charAt(0) + status.slice(1).toLowerCase()}
+      </span>
+    </div>
+  );
+}
+
+// ─── KPI strip ──────────────────────────────────────────────────────────────────
+
+function KpiStrip({
+  row,
+  detail,
+  money,
+  fuelCostRatio,
+  status,
+}: {
+  row: DprSummaryRow;
+  detail?: DailyProgressReportResponse;
+  money: (n: number | null | undefined) => string;
+  fuelCostRatio: number;
+  status: DprApprovalStatus;
+}) {
+  // Day cost includes derived Fuel = equipment cost × ratio (matches the create-page totals bar).
+  const equipmentCost = sum((detail?.equipment ?? []).map((r) => r.lineCost));
+  const dayCost =
+    detail &&
+    sum([
+      ...(detail.manpower ?? []).map((r) => r.lineCost),
+      ...(detail.equipment ?? []).map((r) => r.lineCost),
+      ...(detail.materials ?? []).map((r) => r.lineCost),
+      ...(detail.subContractors ?? []).map((r) => r.lineCost),
+    ]) + equipmentCost * fuelCostRatio;
+  const length =
+    row.chainageFromM != null && row.chainageToM != null
+      ? Math.abs(row.chainageToM - row.chainageFromM)
+      : null;
+
+  // Identity (submitted by / approver) shown as leading KPI boxes.
+  const submittedBy = detail?.submittedByName ?? row.supervisorName ?? "—";
+  const submittedWhen = detail?.submittedAt ? fmtDateTime(detail.submittedAt) : "—";
+  const approverName = detail?.approvedByName ?? detail?.assignedApproverName ?? "—";
+  const pendingHours = status === "SUBMITTED" ? hoursSince(detail?.submittedAt) : null;
+  const approverWhen = detail?.approvedAt
+    ? fmtDateTime(detail.approvedAt)
+    : status === "SUBMITTED"
+      ? `Pending${pendingHours != null ? ` · ${pendingHours}h` : ""}${detail?.escalatedAt ? " · Escalated" : ""}`
+      : "—";
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      <Kpi label="Submitted By" value={submittedBy} sub={submittedWhen} valueMono={false} />
+      <Kpi label="Approver" value={approverName} sub={approverWhen} valueMono={false} />
+      <Kpi
+        label="Work Done"
+        value={fmtQty(row.qtyExecuted ?? detail?.qtyExecuted)}
+        unit={row.unit}
+        sub="today"
+      />
+      <Kpi
+        label="Cumulative"
+        value={detail ? fmtQty(detail.cumulativeQty) : "…"}
+        unit={row.unit}
+        sub="to date"
+      />
+      <Kpi
+        label="Chainage"
+        value={length != null ? num(length, 0) : "—"}
+        unit={length != null ? "m" : undefined}
+        sub={
+          row.chainageFromM != null || row.chainageToM != null
+            ? `${chainageLabel(row.chainageFromM)} → ${chainageLabel(row.chainageToM)}`
+            : ""
+        }
+      />
+      <Kpi
+        label="Day Cost"
+        value={detail ? money(dayCost ?? 0) : "…"}
+        sub="all resources"
+        valueMono={false}
+      />
+    </div>
+  );
+}
+
+
+function Kpi({
+  label,
+  value,
+  unit,
+  sub,
+  accent,
+  valueMono = true,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  sub?: string;
+  accent?: boolean;
+  valueMono?: boolean;
+}) {
+  return (
+    <div
+      className={`border-b border-r border-hairline px-4 py-2.5 ${accent ? "bg-gold-tint" : "bg-ivory"}`}
+    >
+      <div className="text-[10px] font-bold uppercase tracking-wider text-slate">{label}</div>
+      <div
+        className={`mt-1 text-lg font-bold tracking-tight ${valueMono ? "font-mono tabular-nums" : "font-display"} ${accent ? "text-gold-deep" : "text-charcoal"}`}
+      >
+        {value}
+        {unit && <span className="ml-1 text-[11px] font-medium text-ash">{unit}</span>}
+      </div>
+      {sub && <div className="text-[10px] font-medium text-ash">{sub}</div>}
+    </div>
+  );
+}
+
+// ─── Detail card (tabs) ─────────────────────────────────────────────────────────
+
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: "details", label: "Details" },
+  { key: "manpower", label: "Manpower" },
+  { key: "equipment", label: "Equipment" },
+  { key: "material", label: "Material" },
+  { key: "sub", label: "Sub-Contractor" },
+  { key: "issues", label: "Issues" },
+];
+
+function DetailCard({
+  row,
+  detail,
+  isLoading,
+  isError,
+  onRetry,
+  tab,
+  setTab,
+  money,
+}: {
+  row: DprSummaryRow;
+  detail?: DailyProgressReportResponse;
+  isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
+  tab: TabKey;
+  setTab: (t: TabKey) => void;
+  money: (n: number | null | undefined) => string;
+}) {
+  const liveIssues = (detail?.issues ?? []).filter((i) => i.status !== "CANCELLED");
+  const counts: Record<TabKey, number | null> = {
+    details: null,
+    manpower: detail?.manpower?.length ?? row.manpowerNos ?? 0,
+    equipment: detail?.equipment?.length ?? row.equipmentNos ?? 0,
+    material: detail?.materials?.length ?? row.materialCount ?? 0,
+    sub: detail?.subContractors?.length ?? 0,
+    issues: detail ? liveIssues.length : row.issueCount ?? 0,
+  };
+
+  return (
+    <div className="bg-paper">
+      {/* Tab bar */}
+      <div className="flex gap-1 overflow-x-auto border-b border-hairline px-2">
+        {TABS.map((t) => {
+          const active = tab === t.key;
+          const count = counts[t.key];
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-sm transition-colors ${
+                active
+                  ? "border-gold font-bold text-charcoal"
+                  : "border-transparent font-semibold text-slate hover:text-charcoal"
+              }`}
+            >
+              {t.label}
+              {count != null && (
+                <span
+                  className={`rounded-full px-1.5 py-px font-mono text-[10px] font-bold ${
+                    active
+                      ? "bg-gold text-paper"
+                      : count > 0
+                        ? "bg-gold-tint text-gold-deep"
+                        : "bg-parchment text-ash"
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="p-4">
+        {isError && (
+          <div className="flex items-center gap-2 text-xs text-burgundy">
+            Failed to load detail.
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded border border-burgundy/30 px-2 py-0.5 font-semibold hover:bg-burgundy/10"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {isLoading && !detail && (
+          <div className="space-y-2">
+            <div className="h-4 w-40 animate-pulse rounded bg-parchment" />
+            <div className="h-20 animate-pulse rounded bg-parchment/60" />
+            <div className="h-20 animate-pulse rounded bg-parchment/60" />
+          </div>
+        )}
+
+        {tab === "details" && <DetailsTab row={row} detail={detail} />}
+        {tab === "manpower" && <ManpowerTab detail={detail} money={money} />}
+        {tab === "equipment" && <EquipmentTab detail={detail} money={money} />}
+        {tab === "material" && <MaterialTab detail={detail} money={money} />}
+        {tab === "sub" && <SubTab detail={detail} money={money} />}
+        {tab === "issues" && <IssuesTab issues={liveIssues} hasDetail={!!detail} />}
+      </div>
+    </div>
+  );
+}
+
+// ─── Details tab ────────────────────────────────────────────────────────────────
+
+function Section({ color, title, children }: { color: string; title: string; children: ReactNode }) {
+  return (
+    <section>
+      <div className="mb-3 flex items-center gap-2.5">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-sm" style={{ background: color }} />
+        <h3 className="whitespace-nowrap text-[11px] font-bold uppercase tracking-wider text-charcoal">
+          {title}
+        </h3>
+        <span className="h-px flex-1 bg-hairline" />
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Renders nothing when the value is absent — keeps the compact grid free of
+ *  placeholder dashes. Pass real values or `null`; never the literal "—". */
+function Field({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
+  if (value == null || value === "" || value === "—") return null;
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate">{label}</span>
+      <span className={`text-[13px] font-semibold text-charcoal ${mono ? "font-mono tabular-nums" : ""}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function Grid({ children }: { children: ReactNode }) {
+  return <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">{children}</div>;
+}
+
+function DetailsTab({
+  row,
+  detail,
+}: {
+  row: DprSummaryRow;
+  detail?: DailyProgressReportResponse;
+}) {
+  const d = detail;
+  const incidentOk = !d?.safetyIncidentType || d.safetyIncidentType === "NONE";
+  const times =
+    d?.startTime || d?.endTime ? `${d?.startTime || "—"} / ${d?.endTime || "—"}` : null;
+  const chainageStr =
+    row.chainageFromM != null || row.chainageToM != null
+      ? `${chainageLabel(row.chainageFromM)} → ${chainageLabel(row.chainageToM)}`
+      : null;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Section color="#0058CA" title="Schedule & Conditions">
+        <Grid>
+          <Field label="Shift" value={d?.shift ? (d.shift === "DAY" ? "Day" : "Night") : null} />
+          <Field label="Weather" value={d?.weatherCondition || row.weatherCondition || null} />
+          <Field label="Start / End" value={times} mono />
+          <Field label="Contractor" value={d?.contractorName || null} />
+        </Grid>
+      </Section>
+
+      <Section color="#0FA3A3" title="Location & Activity">
+        <Grid>
+          <Field label="Activity" value={row.activityName || null} />
+          <Field
+            label="BOQ Item"
+            value={
+              d?.boqItemNo && d?.boqItemDescription
+                ? `${d.boqItemNo} : ${d.boqItemDescription}`
+                : d?.boqItemDescription || d?.boqItemNo || null
+            }
+          />
+          <Field label="Chainage" value={chainageStr} mono />
+          <Field label="Side" value={row.side ? SIDE_LABEL[row.side] ?? row.side : null} />
+          <Field label="Landmark" value={d?.landmark || null} />
+        </Grid>
+      </Section>
+
+      <Section color="#C2392B" title="Issues: Safety, Delay & Remarks">
+        <Grid>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate">
+              Safety Incident
+            </span>
+            {incidentOk ? (
+              <span className="inline-flex items-center gap-1.5 self-start rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                <Check className="h-3.5 w-3.5" /> No incidents
+              </span>
+            ) : (
+              <span className="self-start">
+                <Badge variant="danger" withDot>
+                  {d?.safetyIncidentType?.replace("_", " ")}
+                </Badge>
+              </span>
+            )}
+          </div>
+          <Field label="Safety Observation" value={d?.safetyObservation || null} />
+          <Field label="Delay Reason" value={d?.delayReason || null} />
+          {d?.remarks && (
+            <div className="col-span-2 sm:col-span-3">
+              <Field label="Remarks" value={d.remarks} />
+            </div>
+          )}
+        </Grid>
+      </Section>
+    </div>
+  );
+}
+
+// ─── Resource table ─────────────────────────────────────────────────────────────
+
+function ResourceTable({
+  headers,
+  rows,
+  footer,
+}: {
+  headers: Array<{ label: string; right?: boolean }>;
+  rows: ReactNode[][];
+  footer: ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-hairline">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-ivory/70 text-[10px] uppercase tracking-wider text-slate">
+            <tr>
+              {headers.map((h, i) => (
+                <th key={i} className={`px-3 py-2.5 font-bold ${h.right ? "text-right" : ""}`}>
+                  {h.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="font-semibold text-charcoal">
+            {rows.map((r, ri) => (
+              <tr key={ri} className="border-t border-hairline">
+                {r.map((c, ci) => (
+                  <td
+                    key={ci}
+                    className={`px-3 py-3 ${headers[ci]?.right ? "text-right font-mono tabular-nums" : ""}`}
+                  >
+                    {c}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center justify-between gap-3 border-t border-hairline bg-ivory/50 px-3 py-2.5 text-xs">
+        {footer}
+      </div>
+    </div>
+  );
+}
+
+function EmptyTab({ icon, title, sub }: { icon: ReactNode; title: string; sub: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center px-5 py-14 text-center">
+      <span className="mb-3.5 flex h-12 w-12 items-center justify-center rounded-xl bg-parchment text-ash">
+        {icon}
+      </span>
+      <div className="text-sm font-bold text-charcoal">{title}</div>
+      <div className="mt-1 text-xs text-ash">{sub}</div>
+    </div>
+  );
+}
+
+function ManpowerTab({
+  detail,
+  money,
+}: {
+  detail?: DailyProgressReportResponse;
+  money: (n: number | null | undefined) => string;
+}) {
+  const rows = detail?.manpower ?? [];
+  if (!detail) return null;
+  if (rows.length === 0)
+    return <EmptyTab icon={<Users className="h-5 w-5" />} title="No manpower recorded" sub="No crew was logged for this activity." />;
+  const workers = sum(rows.map((r) => r.nos));
+  const manHours = sum(rows.map((r) => (r.nos ?? 0) * (r.workingHours ?? 0)));
+  const total = sum(rows.map((r) => r.lineCost));
+  return (
+    <ResourceTable
+      headers={[
+        { label: "Trade" },
+        { label: "Shift" },
+        { label: "Nos", right: true },
+        { label: "Hours", right: true },
+        { label: "OT", right: true },
+        { label: "Rate", right: true },
+        { label: "Line cost", right: true },
+      ]}
+      rows={rows.map((m) => [
+        m.trade,
+        m.shift ? (m.shift === "DAY" ? "Day" : "Night") : "—",
+        num(m.nos, 0),
+        num(m.workingHours, 1),
+        m.otHours ? num(m.otHours, 1) : "—",
+        m.unitRate != null ? money(m.unitRate) : "—",
+        money(m.lineCost),
+      ])}
+      footer={
+        <>
+          <span className="font-semibold text-slate">
+            {rows.length} trade{rows.length === 1 ? "" : "s"} · {num(workers, 0)} workers · {num(manHours, 1)} man-hours
+          </span>
+          <span className="font-mono font-bold text-charcoal">{money(total)}</span>
+        </>
+      }
+    />
+  );
+}
+
+function EquipmentTab({
+  detail,
+  money,
+}: {
+  detail?: DailyProgressReportResponse;
+  money: (n: number | null | undefined) => string;
+}) {
+  const rows = detail?.equipment ?? [];
+  if (!detail) return null;
+  if (rows.length === 0)
+    return <EmptyTab icon={<Truck className="h-5 w-5" />} title="No equipment recorded" sub="No plant or machinery was logged for this activity." />;
+  const total = sum(rows.map((r) => r.lineCost));
+  return (
+    <ResourceTable
+      headers={[
+        { label: "Equipment" },
+        { label: "Fleet #" },
+        { label: "Nos", right: true },
+        { label: "Hours", right: true },
+        { label: "Rate", right: true },
+        { label: "Line cost", right: true },
+      ]}
+      rows={rows.map((e) => [
+        e.equipmentType,
+        e.fleetNo || "—",
+        num(e.nos, 0),
+        num(e.workingHours, 1),
+        e.unitRate != null ? money(e.unitRate) : "—",
+        money(e.lineCost),
+      ])}
+      footer={
+        <>
+          <span className="font-semibold text-slate">{rows.length} item{rows.length === 1 ? "" : "s"}</span>
+          <span className="font-mono font-bold text-charcoal">{money(total)}</span>
+        </>
+      }
+    />
+  );
+}
+
+function MaterialTab({
+  detail,
+  money,
+}: {
+  detail?: DailyProgressReportResponse;
+  money: (n: number | null | undefined) => string;
+}) {
+  const rows = detail?.materials ?? [];
+  if (!detail) return null;
+  if (rows.length === 0)
+    return <EmptyTab icon={<Package className="h-5 w-5" />} title="No materials recorded" sub="No material consumption was entered for this report." />;
+  const total = sum(rows.map((r) => r.lineCost));
+  return (
+    <ResourceTable
+      headers={[
+        { label: "Material" },
+        { label: "Unit" },
+        { label: "Qty", right: true },
+        { label: "Rate", right: true },
+        { label: "Line cost", right: true },
+      ]}
+      rows={rows.map((m) => [
+        m.materialName,
+        m.unit || "—",
+        num(m.quantity, 3),
+        m.unitRate != null ? money(m.unitRate) : "—",
+        money(m.lineCost),
+      ])}
+      footer={
+        <>
+          <span className="font-semibold text-slate">{rows.length} item{rows.length === 1 ? "" : "s"}</span>
+          <span className="font-mono font-bold text-charcoal">{money(total)}</span>
+        </>
+      }
+    />
+  );
+}
+
+function SubTab({
+  detail,
+  money,
+}: {
+  detail?: DailyProgressReportResponse;
+  money: (n: number | null | undefined) => string;
+}) {
+  const rows = detail?.subContractors ?? [];
+  if (!detail) return null;
+  if (rows.length === 0)
+    return <EmptyTab icon={<Users className="h-5 w-5" />} title="No sub-contractors" sub="No sub-contractor work was recorded for this day." />;
+  const total = sum(rows.map((r) => r.lineCost));
+  return (
+    <ResourceTable
+      headers={[
+        { label: "Sub-Contractor" },
+        { label: "Unit" },
+        { label: "Qty", right: true },
+        { label: "Rate", right: true },
+        { label: "Line cost", right: true },
+      ]}
+      rows={rows.map((s) => [
+        s.subContractorName || "—",
+        s.unit || "—",
+        num(s.quantity, 3),
+        s.ratePerUnit != null ? money(s.ratePerUnit) : "—",
+        money(s.lineCost),
+      ])}
+      footer={
+        <>
+          <span className="font-semibold text-slate">{rows.length} sub-contractor{rows.length === 1 ? "" : "s"}</span>
+          <span className="font-mono font-bold text-charcoal">{money(total)}</span>
+        </>
+      }
+    />
+  );
+}
+
+function IssuesTab({ issues, hasDetail }: { issues: DailyProgressReportResponse["issues"]; hasDetail: boolean }) {
+  if (!hasDetail) return null;
+  const list = issues ?? [];
+  if (list.length === 0)
+    return <EmptyTab icon={<Check className="h-5 w-5 text-emerald-600" />} title="No issues raised" sub="This report was filed with no open issues or blockers." />;
+  const todayIso = new Date().toISOString().split("T")[0];
+  const isOverdue = (i: NonNullable<DailyProgressReportResponse["issues"]>[number]) =>
+    !!i.dueDate &&
+    i.dueDate < todayIso &&
+    i.status !== "RESOLVED" &&
+    i.status !== "CLOSED" &&
+    i.status !== "CANCELLED";
+  return (
+    <div className="overflow-hidden rounded-xl border border-hairline">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-ivory/70 text-[10px] uppercase tracking-wider text-slate">
+            <tr>
+              <th className="px-3 py-2.5 font-bold">Title</th>
+              <th className="px-3 py-2.5 font-bold">Reason</th>
+              <th className="px-3 py-2.5 font-bold">Severity</th>
+              <th className="px-3 py-2.5 font-bold">Status</th>
+              <th className="px-3 py-2.5 font-bold">Assigned</th>
+              <th className="px-3 py-2.5 font-bold">Act by</th>
+              <th className="px-3 py-2.5 font-bold">Follow-up</th>
+            </tr>
+          </thead>
+          <tbody className="font-semibold text-charcoal">
+            {list.map((i) => (
+              <tr key={i.id ?? i.title} className="border-t border-hairline">
+                <td className="px-3 py-3">{i.title}</td>
+                <td className="px-3 py-3">{categoryLabel(i.category)}</td>
+                <td className="px-3 py-3"><Badge variant={SEVERITY_VARIANT[i.severity]}>{i.severity}</Badge></td>
+                <td className="px-3 py-3"><Badge variant={ISSUE_STATUS_VARIANT[i.status]} withDot>{i.status}</Badge></td>
+                <td className="px-3 py-3">{i.assignedToName ?? "—"}</td>
+                <td className="px-3 py-3">
+                  {i.dueDate ? (
+                    <span className={isOverdue(i) ? "font-bold text-burgundy" : ""}>
+                      {i.dueDate}
+                      {isOverdue(i) ? " · overdue" : ""}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-3 py-3">
+                  {i.escalatedAt ? (
+                    <span className="text-burgundy">
+                      Escalated{i.escalatedToName ? ` to ${i.escalatedToName}` : ""}
+                    </span>
+                  ) : i.lastReminderAt ? (
+                    <span className="text-slate">Reminded {fmtDate(i.lastReminderAt)}</span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Media row (photos + voice) ─────────────────────────────────────────────────
+
+function MediaRow({ projectId, detail }: { projectId: string; detail: DailyProgressReportResponse }) {
+  const photos = detail.attachments ?? [];
+  const voice = detail.voiceNotes ?? [];
+  if (photos.length === 0 && voice.length === 0) return null;
+
+  return (
+    <div className="grid gap-3 md:grid-cols-[1.55fr_1fr]">
+      {photos.length > 0 && <PhotosPanel projectId={projectId} dprId={detail.id} photos={photos} />}
+      {voice.length > 0 && (
+        <div className="rounded-2xl border border-hairline bg-paper p-5">
+          <PanelHeader
+            icon={<AudioLines className="h-4 w-4" />}
+            title="Voice Notes"
+            sub={`${voice.length} recording${voice.length === 1 ? "" : "s"}`}
+          />
+          <div className="mt-4 grid grid-cols-1 gap-2">
+            {voice.map((n) => (
+              <VoiceNotePlayer key={n.id} projectId={projectId} dprId={detail.id} note={n} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PanelHeader({ icon, title, sub }: { icon: ReactNode; title: string; sub: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold-tint text-gold-deep">
+        {icon}
+      </span>
+      <div>
+        <div className="text-sm font-bold text-charcoal">{title}</div>
+        <div className="text-xs text-ash">{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+function PhotosPanel({
+  projectId,
+  dprId,
+  photos,
+}: {
+  projectId: string;
+  dprId: string;
+  photos: NonNullable<DailyProgressReportResponse["attachments"]>;
+}) {
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [lb, setLb] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const created: string[] = [];
+    photos.forEach((p) => {
+      dprApi
+        .fetchPhotoBlobUrl(projectId, dprId, p.id)
+        .then((url) => {
+          if (cancelled) URL.revokeObjectURL(url);
+          else {
+            created.push(url);
+            setUrls((m) => ({ ...m, [p.id]: url }));
+          }
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+      created.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [projectId, dprId, photos]);
+
+  const close = () => setLb(null);
+  const prev = () => setLb((i) => (i == null ? i : (i + photos.length - 1) % photos.length));
+  const next = () => setLb((i) => (i == null ? i : (i + 1) % photos.length));
+  const active = lb != null ? photos[lb] : null;
+
+  return (
+    <div className="rounded-2xl border border-hairline bg-paper p-5">
+      <div className="flex items-center justify-between gap-3">
+        <PanelHeader icon={<ImageIcon className="h-4 w-4" />} title="Site Photos" sub={`${photos.length} image${photos.length === 1 ? "" : "s"}`} />
+        <span className="rounded-md bg-parchment px-2.5 py-1 text-xs font-semibold text-slate">Tap to enlarge</span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {photos.map((p, i) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setLb(i)}
+            className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-hairline bg-parchment"
+          >
+            {urls[p.id] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={urls[p.id]} alt={p.caption ?? p.fileName} className="h-full w-full object-cover" />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-ash">
+                <ImageIcon className="h-6 w-6" />
+              </span>
+            )}
+            {p.caption && (
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-charcoal/85 to-transparent px-2.5 py-2 text-left text-[11px] font-semibold text-paper">
+                <span className="line-clamp-1">{p.caption}</span>
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {active && (
+        <div
+          onClick={close}
+          className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-charcoal/85 p-6 backdrop-blur-sm"
+        >
+          <div
+            className="flex w-full max-w-3xl items-center justify-between text-paper"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="min-w-0">
+              <div className="truncate text-sm font-bold">{active.caption ?? active.fileName}</div>
+              <div className="font-mono text-xs text-parchment/70">
+                {active.fileName}
+                {active.capturedAt && <span> · {fmtDateTime(active.capturedAt)}</span>}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Close"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-paper/20 bg-paper/10 text-paper"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div
+            className="relative flex w-full max-w-3xl items-center justify-center overflow-hidden rounded-xl bg-charcoal"
+            style={{ aspectRatio: "16 / 10" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {urls[active.id] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={urls[active.id]} alt={active.caption ?? active.fileName} className="max-h-full max-w-full object-contain" />
+            ) : (
+              <span className="text-parchment/50"><ImageIcon className="h-12 w-12" /></span>
+            )}
+            {photos.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={prev}
+                  aria-label="Previous"
+                  className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-charcoal/50 text-paper"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={next}
+                  aria-label="Next"
+                  className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-charcoal/50 text-paper"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </>
+            )}
+          </div>
+          <div className="font-mono text-xs text-parchment/70">{(lb ?? 0) + 1} / {photos.length}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Approval trail ──────────────────────────────────────────────────────────────
+
+function ApprovalTrail({
+  detail,
+  status,
+}: {
+  detail: DailyProgressReportResponse;
+  status: DprApprovalStatus;
+}) {
+  const terminal =
+    status === "APPROVED"
+      ? { label: "Approved", at: detail.approvedAt, by: detail.approvedByName, tone: "text-emerald-700", dot: "bg-emerald-500" }
+      : status === "REJECTED"
+        ? { label: "Rejected", at: detail.rejectedAt, by: detail.rejectedByName ?? null, tone: "text-burgundy", dot: "bg-burgundy" }
+        : null;
+  const pendingHours = status === "SUBMITTED" ? hoursSince(detail.submittedAt) : null;
+
+  return (
+    <div className="rounded-2xl border border-hairline bg-paper p-5">
+      <div className="mb-4 flex items-center gap-2.5">
+        <span className="h-1.5 w-1.5 rounded-sm bg-emerald-500" />
+        <h3 className="text-xs font-bold uppercase tracking-wider text-charcoal">Approval Trail</h3>
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <TrailStep
+          dot="bg-gold-tint text-gold-deep"
+          icon="↑"
+          label={detail.submittedByName ? `Submitted by ${detail.submittedByName}` : "Submitted"}
+          sub={fmtDateTime(detail.submittedAt)}
+        />
+        {status === "SUBMITTED" && (
+          <>
+            <ChevronRight className="h-4 w-4 text-ash" />
+            <TrailStep
+              dot="bg-sky-100 text-sky-700"
+              icon="…"
+              label={
+                detail.assignedApproverName
+                  ? `With ${detail.assignedApproverName} for approval`
+                  : "In the shared approval queue"
+              }
+              sub={pendingHours != null ? `pending ${pendingHours}h` : "pending"}
+            />
+          </>
+        )}
+        {terminal && (
+          <>
+            <ChevronRight className="h-4 w-4 text-ash" />
+            <TrailStep
+              dot={`${terminal.dot} text-paper`}
+              icon="✓"
+              label={terminal.by ? `${terminal.label} by ${terminal.by}` : terminal.label}
+              sub={fmtDateTime(terminal.at)}
+              tone={terminal.tone}
+            />
+          </>
+        )}
+        <div className="ml-auto text-right">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate">Current status</div>
+          <div className="mt-1.5 inline-flex">
+            <Badge variant={STATUS_VARIANT[status]} withDot>{status}</Badge>
+          </div>
+        </div>
+      </div>
+      {status === "SUBMITTED" && detail.escalatedAt && (
+        <div className="mt-4 rounded-md border border-burgundy/25 bg-burgundy/5 px-3 py-2 text-xs text-charcoal">
+          <span className="font-semibold text-burgundy">Escalated: </span>
+          this DPR passed the approval SLA — the approver and their manager were notified on{" "}
+          {fmtDateTime(detail.escalatedAt)}.
+        </div>
+      )}
+      {status === "REJECTED" && detail.rejectionReason && (
+        <div className="mt-4 rounded-md border border-burgundy/25 bg-burgundy/5 px-3 py-2 text-xs text-charcoal">
+          <span className="font-semibold text-burgundy">Reason: </span>
+          {detail.rejectionReason}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TrailStep({
+  dot,
+  icon,
+  label,
+  sub,
+  tone,
+}: {
+  dot: string;
+  icon: string;
+  label: string;
+  sub: string;
+  tone?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${dot}`}>{icon}</span>
+      <div>
+        <div className={`text-sm font-bold ${tone ?? "text-charcoal"}`}>{label}</div>
+        <div className="mt-0.5 font-mono text-[11px] text-ash">{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Voice-note player (auth blob → object URL) ─────────────────────────────────
+
+function VoiceNotePlayer({
+  projectId,
+  dprId,
+  note,
+}: {
+  projectId: string;
+  dprId: string;
+  note: DprVoiceNote;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [playError, setPlayError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let createdUrl: string | null = null;
+    dprApi
+      .fetchVoiceNoteBlobUrl(projectId, dprId, note.id)
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+        } else {
+          createdUrl = url;
+          setSrc(url);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [projectId, dprId, note.id]);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-hairline bg-ivory/40">
+      <div className="flex items-center gap-1.5 border-b border-hairline px-3 py-2 text-xs text-charcoal">
+        <AudioLines className="h-3.5 w-3.5 shrink-0 text-gold" />
+        <span className="truncate" title={note.fileName}>{note.fileName}</span>
+        {note.durationSeconds != null && <span className="shrink-0 text-ash">· {note.durationSeconds}s</span>}
+      </div>
+      {src && !failed ? (
+        <>
+          <audio controls src={src} onError={() => setPlayError(true)} className="w-full px-2 py-2" />
+          {playError && (
+            <div className="px-2 pb-2 text-center text-xs text-slate">
+              Your browser can&apos;t play this audio format.{" "}
+              <a href={src} download={note.fileName} className="font-semibold text-gold underline">Download</a> instead.
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="px-2 py-3 text-center text-xs text-slate">{failed ? "Failed to load" : "Loading…"}</div>
+      )}
+      {note.caption && (
+        <div className="border-t border-hairline px-3 py-2 text-xs text-charcoal">
+          <span className="line-clamp-2">{note.caption}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Outstanding-material warning. Shown when the DPR's supervisor is still holding store-issued
+ * material that the remaining work no longer needs, so the approver sees it before approving.
+ * Deliberately non-blocking — approval is already an SLA-tracked bottleneck.
+ */
+function IdleMaterialPanel({
+  projectId,
+  dprId,
+  money,
+}: {
+  projectId: string;
+  dprId: string;
+  money: (n: number | null | undefined) => string;
+}) {
+  const { data } = useQuery({
+    queryKey: ["dpr-material-idle-check", projectId, dprId],
+    queryFn: () => dprApi.materialIdleCheck(projectId, dprId),
+    staleTime: 1000 * 60 * 5,
+  });
+  const rows = data?.data?.rows ?? [];
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="border-t border-hairline px-4 py-4">
+      <div className="rounded-lg border border-amber-300 bg-amber-500/10 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-amber-900">Material still outstanding</span>
+          {data?.data?.approvedOnly && (
+            <span className="rounded bg-amber-200/70 px-1.5 py-0.5 text-[11px] font-medium text-amber-900">
+              Excludes this DPR — not yet approved
+            </span>
+          )}
+        </div>
+        <div className="mt-2 space-y-2">
+          {rows.map((r) => (
+            <div key={`${r.materialKey}-${r.activityId ?? "pool"}`} className="text-xs text-amber-900">
+              <div className="font-medium">
+                {r.materialName}
+                {r.activityName ? ` · ${r.activityName}` : " · across open activities"} —{" "}
+                {r.percentComplete}% complete
+              </div>
+              <div className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5">
+                <span>Issued {r.issuedToDate.toLocaleString()} {r.unit ?? ""}</span>
+                <span>Consumed {r.consumedToDate.toLocaleString()} {r.unit ?? ""}</span>
+                <span>Still needs {r.need.toLocaleString()} {r.unit ?? ""}</span>
+                <span className="font-semibold">
+                  Outstanding {r.excess.toLocaleString()} {r.unit ?? ""}
+                  {r.excessValue != null ? ` (${money(r.excessValue)})` : ""}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

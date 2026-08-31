@@ -3,6 +3,7 @@ package com.bipros.api.config.seeder;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.project.domain.model.DailyProgressReport;
+import com.bipros.project.domain.model.DprApprovalStatus;
 import com.bipros.project.domain.model.DailyResourceDeployment;
 import com.bipros.project.domain.model.DailyWeather;
 import com.bipros.project.domain.model.DeploymentResourceType;
@@ -226,8 +227,16 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
     Project project = projectOpt.get();
     UUID projectId = project.getId();
 
-    if (!dprRepository.findByProjectIdOrderByReportDateAscIdAsc(projectId).isEmpty()) {
-      log.info("[BNK-DAILY] DPR rows already present for project '{}' — skipping", PROJECT_CODE);
+    // Idempotency gate: skip the entire seeder when ANY daily-ops data already exists.
+    // Checking only DPRs is too narrow — the test-data reset endpoint wipes DPRs but leaves
+    // environmental rows like weather alone. Without this broader check, a re-boot after a
+    // reset triggers duplicate-key violations on weather (and other once-only tables) and
+    // worse, re-creates the DPRs/deployments the user just wiped on purpose.
+    boolean dprsExist = !dprRepository.findByProjectIdOrderByReportDateAscIdAsc(projectId).isEmpty();
+    boolean weatherExists = !weatherRepository.findByProjectIdOrderByLogDateAscIdAsc(projectId).isEmpty();
+    if (dprsExist || weatherExists) {
+      log.info("[BNK-DAILY] daily-ops data already present for project '{}' (dprs={}, weather={}) — skipping",
+          PROJECT_CODE, dprsExist, weatherExists);
       return;
     }
 
@@ -289,7 +298,6 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
                                        List<ProductivityNorm> norms, Random rng) {
     if (workingDays.isEmpty()) return 0;
     Map<String, BigDecimal> cumulativeByActivity = new HashMap<>();
-    int approvedThreshold = (int) (workingDays.size() * 0.80);  // first 80% APPROVED, rest SUBMITTED
     long workFront = CHAINAGE_START_M;
     List<DailyProgressReport> rows = new ArrayList<>();
 
@@ -311,8 +319,6 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
       cumulativeByActivity.put(activityName, cumulative);
 
       String unit = pickUnit(act, norms);
-      String approvalStatus = i < approvedThreshold ? "APPROVED" : "SUBMITTED";
-
       DailyProgressReport d = DailyProgressReport.builder()
           .projectId(projectId)
           .reportDate(day)
@@ -324,7 +330,8 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
           .qtyExecuted(qty)
           // cumulativeQty is computed on read — no longer stored.
           .weatherCondition(weatherConditionForDay(day, i))
-          .remarks("Section " + supervisor + " — " + approvalStatus)
+          .remarks("Section " + supervisor)
+          .approvalStatus(DprApprovalStatus.APPROVED)
           .build();
       rows.add(d);
     }
@@ -630,14 +637,18 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
     Map<String, BigDecimal> openingByMaterial = new HashMap<>();
     List<MaterialConsumptionLog> rows = new ArrayList<>();
     for (String matName : ACTIVE_MATERIALS) {
-      BigDecimal opening = BigDecimal.valueOf(500 + rng.nextInt(2000));
+      // Deterministic per-material opening + per-day flows. Stable across reruns so
+      // material consumption + cost rollups reproduce exactly.
+      int matHash = Math.abs(matName.hashCode());
+      BigDecimal opening = BigDecimal.valueOf(500L + (matHash % 2001L));
       openingByMaterial.put(matName, opening);
       String unit = resolveMaterialUnit(matName);
       UUID resourceId = findResourceIdByMaterialName(materials, matName);
       int dayIdx = 0;
       for (LocalDate day : sampleDays) {
-        BigDecimal received = BigDecimal.valueOf(50 + rng.nextInt(150));
-        BigDecimal consumed = BigDecimal.valueOf(40 + rng.nextInt(120));
+        int dayHash = matHash + dayIdx * 31;
+        BigDecimal received = BigDecimal.valueOf(50L + (dayHash % 151L));
+        BigDecimal consumed = BigDecimal.valueOf(40L + ((dayHash / 7) % 121L));
         BigDecimal closing = opening.add(received).subtract(consumed);
         if (closing.signum() < 0) {
           // Top up to keep balance non-negative.
@@ -645,7 +656,7 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
           received = received.add(topUp);
           closing = opening.add(received).subtract(consumed);
         }
-        BigDecimal wastage = BigDecimal.valueOf(0.5 + rng.nextDouble() * 3.0)
+        BigDecimal wastage = BigDecimal.valueOf(0.5 + ((dayHash % 351) / 100.0))
             .setScale(2, RoundingMode.HALF_UP);
 
         rows.add(MaterialConsumptionLog.builder()
@@ -782,14 +793,18 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
         idx++;
         continue;
       }
-      double inStock = 50 + rng.nextInt(500);
+      // Deterministic stock + valuation per material — no RNG. Stock + rate are stable
+      // functions of materialId hash so cost rollups reproduce on every reseed.
+      int matHash = Math.abs(materialId.hashCode());
+      double inStock = 50 + (matHash % 501);
       double opening = round2(inStock * 0.85);
       double receivedMonth = round2(inStock * 0.30);
       double issuedMonth = round2(inStock * 0.20);
       double current = round2(inStock);
       double cumulativeConsumed = round2(inStock * 1.5);
-      double wastagePct = round2(0.5 + rng.nextDouble() * 3.0);
-      double stockValue = round2(current * (10.0 + rng.nextInt(80)));
+      double wastagePct = round2(0.5 + ((matHash % 351) / 100.0)); // 0.5..3.5
+      double rate = 10.0 + (matHash % 80); // 10..90 OMR/unit, fixed per material
+      double stockValue = round2(current * rate);
 
       StockStatusTag tag = current >= 100
           ? StockStatusTag.OK
@@ -837,9 +852,13 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
       // Skip if this GRN number already exists (idempotent).
       if (grnRepository.findByGrnNumber(grnNo).isPresent()) continue;
 
-      BigDecimal qty = BigDecimal.valueOf(20 + rng.nextInt(180))
+      // Stable per-(material, index) qty + rate — no RNG. The unitRate is anchored to a
+      // small set of fixed reference rates per material so cost rollups reproduce.
+      int matBucket = Math.abs(materialId.hashCode()) % 5;
+      double[] refRates = {5.0, 12.5, 20.0, 35.0, 60.0};
+      BigDecimal qty = BigDecimal.valueOf(20L + ((Math.abs(materialId.hashCode()) + i) % 180L))
           .setScale(3, RoundingMode.HALF_UP);
-      BigDecimal unitRate = BigDecimal.valueOf(5 + rng.nextInt(60))
+      BigDecimal unitRate = BigDecimal.valueOf(refRates[matBucket])
           .setScale(4, RoundingMode.HALF_UP);
       BigDecimal amount = qty.multiply(unitRate).setScale(2, RoundingMode.HALF_UP);
 
@@ -852,7 +871,7 @@ public class OmanRoadDailyDataSeeder implements CommandLineRunner {
           .unitRate(unitRate)
           .amount(amount)
           .poNumber(String.format("BNK-PO-2026-%03d", i + 1))
-          .vehicleNumber("OM-" + (1000 + rng.nextInt(9000)))
+          .vehicleNumber("OM-" + (1000 + (i * 37) % 9000))
           .acceptedQuantity(qty)
           .rejectedQuantity(BigDecimal.ZERO)
           .remarks("Supplier: " + src.getName() + " — INV-" + (10000 + i))

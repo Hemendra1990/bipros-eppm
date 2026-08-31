@@ -11,5 +11,7 @@ public record CreateProfileRequest(
         @NotBlank @Size(max = 120) String name,
         @Size(max = 500) String description,
         @NotBlank @Size(max = 60) String legacyRoleName,
-        @NotNull Set<String> permissions
+        @NotNull Set<String> permissions,
+        /** OWN | PROJECT | ALL; null defaults to PROJECT (validated in ProfileService). */
+        @Size(max = 10) String dataScope
 ) {}

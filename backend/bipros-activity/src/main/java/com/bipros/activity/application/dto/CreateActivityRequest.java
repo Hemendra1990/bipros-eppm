@@ -53,5 +53,40 @@ public record CreateActivityRequest(
      * Soft FK to {@code cost.cost_accounts.id}. Optional — when present, assigns the activity to
      * a cost account directly, overriding any cost account inherited from the WBS node.
      */
-    UUID costAccountId
+    UUID costAccountId,
+
+    // Deprecated (Phase 4.5): ignored by ActivityService.createActivity. The legacy
+    // Activity.responsibleResourceId cache was dropped by Liquibase 094; supervisor
+    // identity is now assigned via PUT /v1/activities/{id}/supervisor
+    // (Activity.supervisorUserId). Retained on the request to keep older frontends compiling.
+    UUID supervisorResourceId,
+
+    // Deprecated (Phase 4.5): ignored by ActivityService.createActivity (the display
+    // cache it fed is gone — see supervisorResourceId).
+    String supervisorResourceName,
+
+    /**
+     * DBS-Phase-2: mark this activity as a BOQ Section 1 Preliminary (mobilisation, site setup,
+     * diversions, etc.) so its cost contribution is rolled up into the DBS {@code prelim_cost}
+     * bucket. Optional — {@code null} leaves the entity default of {@code false}.
+     */
+    Boolean preliminary,
+
+    /**
+     * Hierarchy (design D10): optional containment parent. The service validates same-project,
+     * no cycles, and that the parent holds no scheduling relationships; the new activity's code
+     * becomes {@code parentCode.segment} (D11).
+     */
+    UUID parentActivityId,
+
+    /** BOQ link (design D8/D9): the ONE BOQ line this activity executes. Optional. */
+    UUID boqItemId,
+
+    /** §5.3: this activity's own workdone target (defaults to the line's boqQty when sole-linked). */
+    java.math.BigDecimal plannedQty,
+
+    /** Stage 4: the operation of the linked (split) BOQ line this activity executes. Optional —
+     *  must belong to {@code boqItemId}'s line; the sole-covering activity's plannedQty then
+     *  defaults to the operation's target instead of the line's boqQty. */
+    UUID boqOperationId
 ) {}

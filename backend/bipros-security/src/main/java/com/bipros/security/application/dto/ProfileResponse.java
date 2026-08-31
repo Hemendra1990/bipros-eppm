@@ -13,7 +13,9 @@ public record ProfileResponse(
         String description,
         boolean systemDefault,
         String legacyRoleName,
-        Set<String> permissions
+        Set<String> permissions,
+        /** Row-visibility level: OWN | PROJECT | ALL (gate 3; null column reads as PROJECT). */
+        String dataScope
 ) {
     public static ProfileResponse from(Profile p) {
         return new ProfileResponse(
@@ -23,7 +25,8 @@ public record ProfileResponse(
                 p.getDescription(),
                 p.isSystemDefault(),
                 p.getLegacyRoleName(),
-                new TreeSet<>(p.getPermissions())
+                new TreeSet<>(p.getPermissions()),
+                p.dataScopeOrDefault().name()
         );
     }
 }

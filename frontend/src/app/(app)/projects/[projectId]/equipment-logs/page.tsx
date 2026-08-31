@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { equipmentApi, type EquipmentLogResponse, type CreateEquipmentLogRequest, type EquipmentUtilizationSummary } from "@/lib/api/equipmentApi";
 import { resourceApi, type ResourceResponse } from "@/lib/api/resourceApi";
 import { TabTip } from "@/components/common/TabTip";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { getErrorMessage } from "@/lib/utils/error";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import type { PagedResponse } from "@/lib/types";
 import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/lib/state/store";
 
 // Spring's native Page<T> serialises with these fields at the root of the
 // response body (no `pagination` sub-object). The paged endpoints in
@@ -48,6 +51,10 @@ const initialFormState: EquipmentLogForm = {
 };
 
 export default function EquipmentLogsPage() {
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  // Equipment hours / breakdown logging is supervisor-tier write; DPR.UPDATE
+  // captures the daily reporting role-set without overlapping resource pool edits.
+  const canWrite = hasPermission("DPR.UPDATE") || hasPermission("RESOURCE.UPDATE");
   const params = useParams();
   const projectId = params.projectId as string;
 
@@ -113,10 +120,13 @@ export default function EquipmentLogsPage() {
   }, [resourcesQueryData]);
 
   // Build a lookup so the Resource column can render `${code} — ${name}`.
-  const resourceById = new Map<string, { code: string; name: string }>();
-  for (const r of resources) {
-    resourceById.set(r.id, { code: r.code, name: r.name });
-  }
+  const resourceById = useMemo(() => {
+    const map = new Map<string, { code: string; name: string }>();
+    for (const r of resources) {
+      map.set(r.id, { code: r.code, name: r.name });
+    }
+    return map;
+  }, [resources]);
 
   useEffect(() => {
     loadEquipmentLogs();
@@ -149,6 +159,76 @@ export default function EquipmentLogsPage() {
       setError(getErrorMessage(err, "Failed to create equipment log"));
     }
   };
+
+  const columns = useMemo<ColumnDef<EquipmentLogResponse>[]>(() => [
+    {
+      accessorKey: "logDate",
+      header: "Date",
+    },
+    {
+      accessorKey: "resourceId",
+      header: "Resource",
+      cell: ({ row }) => {
+        const r = resourceById.get(row.original.resourceId);
+        return r ? `${r.code} — ${r.name}` : row.original.resourceId;
+      },
+    },
+    {
+      accessorKey: "deploymentSite",
+      header: "Deployment Site",
+      cell: ({ row }) => row.original.deploymentSite ?? "—",
+    },
+    {
+      accessorKey: "operatingHours",
+      header: "Operating Hrs",
+      cell: ({ row }) => row.original.operatingHours ?? "—",
+    },
+    {
+      accessorKey: "idleHours",
+      header: "Idle Hrs",
+      cell: ({ row }) => row.original.idleHours ?? "—",
+    },
+    {
+      accessorKey: "breakdownHours",
+      header: "Breakdown Hrs",
+      cell: ({ row }) => row.original.breakdownHours ?? "—",
+    },
+    {
+      accessorKey: "fuelConsumed",
+      header: "Fuel (L)",
+      cell: ({ row }) => row.original.fuelConsumed ?? "—",
+    },
+    {
+      accessorKey: "operatorName",
+      header: "Operator",
+      cell: ({ row }) => row.original.operatorName ?? "—",
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const status = row.original.status;
+        const cls =
+          status === "WORKING"
+            ? "bg-success/10 text-success ring-1 ring-success/20"
+            : status === "IDLE"
+              ? "bg-warning/10 text-warning ring-1 ring-warning/20"
+              : status === "BREAKDOWN"
+                ? "bg-danger/10 text-danger ring-1 ring-danger/20"
+                : "bg-surface-active/50 text-text-secondary ring-1 ring-border/50";
+        return (
+          <span className={`px-2 py-1 rounded text-sm ${cls}`}>
+            {status.replace("_", " ")}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "remarks",
+      header: "Remarks",
+      cell: ({ row }) => row.original.remarks ?? "—",
+    },
+  ], [resourceById]);
 
   if (isLoading && logs.length === 0) {
     return <div className="p-6 text-text-muted">Loading equipment logs...</div>;
@@ -192,12 +272,14 @@ export default function EquipmentLogsPage() {
           </div>
         </div>
 
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="mb-6 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
-        >
-          {showForm ? "Cancel" : "Add Equipment Log"}
-        </button>
+        {canWrite && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="mb-6 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent-hover"
+          >
+            {showForm ? "Cancel" : "Add Equipment Log"}
+          </button>
+        )}
 
         {error && <div className="text-danger mb-4">{error}</div>}
 
@@ -322,79 +404,14 @@ export default function EquipmentLogsPage() {
           </form>
         )}
 
-        {/* Logs Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Date</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Resource</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Site</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Operating Hrs</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Idle Hrs</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Breakdown Hrs</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary" title="operatingHours / 8">Days</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary" title="operating / (operating + idle + breakdown)">% Util</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Status</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Operator</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((log) => {
-                const res = resourceById.get(log.resourceId);
-                const resourceLabel = res
-                  ? `${res.code} \u2014 ${res.name}`
-                  : `${log.resourceId.substring(0, 8)}...`;
-                const op = log.operatingHours ?? 0;
-                const idle = log.idleHours ?? 0;
-                const bd = log.breakdownHours ?? 0;
-                const totalHours = op + idle + bd;
-                const days = op / 8;
-                const utilPct = totalHours > 0 ? (op / totalHours) * 100 : null;
-                const utilBand =
-                  utilPct === null
-                    ? "text-text-muted"
-                    : utilPct >= 80
-                      ? "text-success font-semibold"
-                      : utilPct >= 50
-                        ? "text-warning font-semibold"
-                        : "text-danger font-semibold";
-                return (
-                <tr key={log.id} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2">{log.logDate}</td>
-                  <td className="border border-border px-4 py-2">{resourceLabel}</td>
-                  <td className="border border-border px-4 py-2">{log.deploymentSite || "-"}</td>
-                  <td className="border border-border px-4 py-2 text-right">{op}</td>
-                  <td className="border border-border px-4 py-2 text-right">{idle}</td>
-                  <td className="border border-border px-4 py-2 text-right">{bd}</td>
-                  <td className="border border-border px-4 py-2 text-right">
-                    {days > 0 ? days.toFixed(2) : "\u2014"}
-                  </td>
-                  <td className={`border border-border px-4 py-2 text-right ${utilBand}`}>
-                    {utilPct === null ? "\u2014" : `${utilPct.toFixed(1)}%`}
-                  </td>
-                  <td className="border border-border px-4 py-2">
-                    <span
-                      className={`px-2 py-1 rounded text-text-primary text-sm ${
-                        log.status === "WORKING"
-                          ? "bg-success/10 text-success ring-1 ring-success/20"
-                          : log.status === "IDLE"
-                            ? "bg-warning/10 text-warning ring-1 ring-amber-500/20"
-                            : log.status === "UNDER_MAINTENANCE"
-                              ? "bg-accent/10 text-accent ring-1 ring-accent/20"
-                              : "bg-danger/10 text-danger ring-1 ring-red-500/20"
-                      }`}
-                    >
-                      {log.status.replace(/_/g, " ")}
-                    </span>
-                  </td>
-                  <td className="border border-border px-4 py-2">{log.operatorName || "-"}</td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <VirtualDataTable
+          columns={columns}
+          data={logs}
+          sortable
+          resizable
+          isLoading={isLoading}
+          emptyMessage="No equipment logs for this project."
+        />
 
         {/* Pagination */}
         {totalElements > 20 && (

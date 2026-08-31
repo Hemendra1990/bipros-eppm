@@ -3,11 +3,19 @@ package com.bipros.ai.tool.dpr;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.ai.context.AiContext;
+import com.bipros.ai.resolver.EffectiveRate;
+import com.bipros.ai.resolver.EffectiveRateResolver;
 import com.bipros.ai.tool.Tool;
 import com.bipros.ai.tool.ToolResult;
 import com.bipros.project.domain.model.DailyProgressReport;
+import com.bipros.project.domain.model.DprEquipment;
+import com.bipros.project.domain.model.DprManpower;
+import com.bipros.project.domain.model.DprMaterial;
 import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.DailyProgressReportRepository;
+import com.bipros.project.domain.repository.DprEquipmentRepository;
+import com.bipros.project.domain.repository.DprManpowerRepository;
+import com.bipros.project.domain.repository.DprMaterialRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,6 +52,10 @@ public class GetDprDetailsTool implements Tool {
   private final DailyProgressReportRepository dprRepository;
   private final ActivityRepository activityRepository;
   private final WbsNodeRepository wbsRepository;
+  private final DprManpowerRepository manpowerRepository;
+  private final DprEquipmentRepository equipmentRepository;
+  private final DprMaterialRepository materialRepository;
+  private final EffectiveRateResolver rateResolver;
   private final ObjectMapper objectMapper;
 
   @Override
@@ -57,7 +69,10 @@ public class GetDprDetailsTool implements Tool {
         + "context. Two lookup modes: by dpr_id (UUID, single record), or by "
         + "report_date + activity_code (zero or more, since a supervisor may split a day's "
         + "work across chainage segments). Use this AFTER query_dpr surfaces an interesting "
-        + "row, or when the user names a specific date and activity. Project-scoped.";
+        + "row, or when the user names a specific date and activity. Project-scoped. "
+        + "Each manpower/equipment/material row carries unit_rate, unit_rate_basis, line_cost, "
+        + "cost_formula (e.g. 'rate × NOS' for DAY basis, 'rate × NOS × hours' for HOUR basis), "
+        + "and formula_overrides flagging rate drift or pool-override mismatches.";
   }
 
   @Override
@@ -109,13 +124,17 @@ public class GetDprDetailsTool implements Tool {
 
     Map<String, Activity> activityByName = new HashMap<>();
     Map<UUID, WbsNode> wbsById = new HashMap<>();
+    // Hoist the project-wide activity list out of the loop — was per-row, now once.
+    List<Activity> projectActivities = null;
     for (DailyProgressReport d : matches) {
       if (d.getActivityName() != null && !activityByName.containsKey(d.getActivityName())) {
         activityRepository.findByProjectIdAndCode(projectId, d.getActivityName())
             .ifPresent(a -> activityByName.put(d.getActivityName(), a));
-        // also try name match if code lookup failed
         if (!activityByName.containsKey(d.getActivityName())) {
-          for (Activity a : activityRepository.findByProjectId(projectId)) {
+          if (projectActivities == null) {
+            projectActivities = activityRepository.findByProjectId(projectId);
+          }
+          for (Activity a : projectActivities) {
             if (d.getActivityName().equalsIgnoreCase(a.getName())) {
               activityByName.put(d.getActivityName(), a);
               break;
@@ -127,6 +146,15 @@ public class GetDprDetailsTool implements Tool {
         wbsRepository.findById(d.getWbsNodeId()).ifPresent(w -> wbsById.put(d.getWbsNodeId(), w));
       }
     }
+
+    // Batch-fetch all child rows for every matched DPR — one query per child table, not per DPR.
+    List<UUID> matchedIds = matches.stream().map(DailyProgressReport::getId).toList();
+    Map<UUID, List<DprManpower>> manpowerByDpr = manpowerRepository.findByDprIdIn(matchedIds).stream()
+        .collect(java.util.stream.Collectors.groupingBy(DprManpower::getDprId));
+    Map<UUID, List<DprEquipment>> equipmentByDpr = equipmentRepository.findByDprIdIn(matchedIds).stream()
+        .collect(java.util.stream.Collectors.groupingBy(DprEquipment::getDprId));
+    Map<UUID, List<DprMaterial>> materialByDpr = materialRepository.findByDprIdIn(matchedIds).stream()
+        .collect(java.util.stream.Collectors.groupingBy(DprMaterial::getDprId));
 
     ArrayNode rows = objectMapper.createArrayNode();
     java.util.Set<UUID> linkedActivities = new java.util.LinkedHashSet<>();
@@ -162,6 +190,73 @@ public class GetDprDetailsTool implements Tool {
       row.put("chainage_to_m", d.getChainageToM());
       row.put("weather_condition", d.getWeatherCondition());
       row.put("remarks", d.getRemarks());
+      if (d.getSide() != null) row.put("side", d.getSide().name());
+      if (d.getShift() != null) row.put("shift", d.getShift().name());
+      if (d.getApprovalStatus() != null) row.put("approval_status", d.getApprovalStatus().name());
+      if (d.getContractorName() != null) row.put("contractor_name", d.getContractorName());
+      if (d.getLandmark() != null) row.put("landmark", d.getLandmark());
+      if (d.getDelayReason() != null) row.put("delay_reason", d.getDelayReason());
+      if (d.getSafetyObservation() != null) row.put("safety_observation", d.getSafetyObservation());
+      if (d.getSafetyIncidentType() != null) row.put("safety_incident_type", d.getSafetyIncidentType().name());
+
+      // Per-resource child arrays — sourced from the batch maps above (one query per table).
+      ArrayNode mp = objectMapper.createArrayNode();
+      for (DprManpower m : manpowerByDpr.getOrDefault(d.getId(), List.of())) {
+        ObjectNode n = objectMapper.createObjectNode();
+        n.put("trade", m.getTrade());
+        n.put("category", m.getCategory() == null ? null : m.getCategory().name());
+        n.put("nos", m.getNos());
+        n.put("working_hours", m.getWorkingHours() == null ? null : m.getWorkingHours().doubleValue());
+        n.put("ot_hours", m.getOtHours() == null ? null : m.getOtHours().doubleValue());
+        n.put("contractor_name", m.getContractorName());
+        n.put("unit_rate", m.getUnitRate() == null ? null : m.getUnitRate().doubleValue());
+        n.put("unit_rate_basis", m.getUnitRateBasis());
+        n.put("line_cost", m.getLineCost() == null ? null : m.getLineCost().doubleValue());
+        n.put("cost_formula", manpowerCostFormula(m.getUnitRateBasis()));
+        n.set("formula_overrides", dprRowOverrides(projectId, m.getResourceId(), m.getUnitRate()));
+        mp.add(n);
+      }
+      row.set("manpower", mp);
+
+      ArrayNode eq = objectMapper.createArrayNode();
+      for (DprEquipment e : equipmentByDpr.getOrDefault(d.getId(), List.of())) {
+        ObjectNode n = objectMapper.createObjectNode();
+        n.put("equipment_type", e.getEquipmentType());
+        n.put("fleet_no", e.getFleetNo());
+        n.put("ownership", e.getOwnership() == null ? null : e.getOwnership().name());
+        n.put("nos", e.getNos());
+        n.put("working_hours", e.getWorkingHours() == null ? null : e.getWorkingHours().doubleValue());
+        n.put("idle_hours", e.getIdleHours() == null ? null : e.getIdleHours().doubleValue());
+        n.put("breakdown_hours", e.getBreakdownHours() == null ? null : e.getBreakdownHours().doubleValue());
+        n.put("fuel_litres", e.getFuelLitres() == null ? null : e.getFuelLitres().doubleValue());
+        n.put("operator_name", e.getOperatorName());
+        n.put("availability_status", e.getAvailabilityStatus() == null ? null : e.getAvailabilityStatus().name());
+        n.put("unit_rate", e.getUnitRate() == null ? null : e.getUnitRate().doubleValue());
+        n.put("unit_rate_basis", e.getUnitRateBasis());
+        n.put("line_cost", e.getLineCost() == null ? null : e.getLineCost().doubleValue());
+        n.put("cost_formula", equipmentCostFormula(e.getUnitRateBasis()));
+        n.set("formula_overrides", dprRowOverrides(projectId, e.getResourceId(), e.getUnitRate()));
+        eq.add(n);
+      }
+      row.set("equipment", eq);
+
+      ArrayNode mat = objectMapper.createArrayNode();
+      for (DprMaterial m : materialByDpr.getOrDefault(d.getId(), List.of())) {
+        ObjectNode n = objectMapper.createObjectNode();
+        n.put("material_name", m.getMaterialName());
+        n.put("quantity", m.getQuantity() == null ? null : m.getQuantity().doubleValue());
+        n.put("unit", m.getUnit());
+        n.put("source", m.getSource());
+        n.put("vendor_name", m.getVendorName());
+        n.put("batch_no", m.getBatchNo());
+        n.put("unit_rate", m.getUnitRate() == null ? null : m.getUnitRate().doubleValue());
+        n.put("line_cost", m.getLineCost() == null ? null : m.getLineCost().doubleValue());
+        n.put("cost_formula", "rate × qty");
+        n.set("formula_overrides", dprRowOverrides(projectId, m.getResourceId(), m.getUnitRate()));
+        mat.add(n);
+      }
+      row.set("materials", mat);
+
       rows.add(row);
     }
 
@@ -233,5 +328,53 @@ public class GetDprDetailsTool implements Tool {
 
   private static String orNull(String s) {
     return s == null || s.isBlank() ? null : s.trim();
+  }
+
+  private static String manpowerCostFormula(String basis) {
+    return equipmentCostFormula(basis);
+  }
+
+  private static String equipmentCostFormula(String basis) {
+    if (basis == null) return "rate × NOS";
+    String b = basis.trim().toUpperCase();
+    return switch (b) {
+      case "HOUR" -> "rate × NOS × hours";
+      case "EACH" -> "rate × qty";
+      default -> "rate × NOS";
+    };
+  }
+
+  /**
+   * Build the formula_overrides array for a DPR line. Always carries the known
+   * core-math gap ({@code dpr_line_cost_uses_base_rate}) because
+   * {@code DailyProgressReportService.lookupAssignmentSnapshot} reads
+   * {@code Resource.cost_per_unit} directly and ignores
+   * {@code ProjectResource.rateOverride}. When the resource id + project id are
+   * known we additionally call the resolver and flag rate drift if the DPR's
+   * captured rate disagrees with what the project would charge today.
+   */
+  private ArrayNode dprRowOverrides(UUID projectId, UUID resourceId, java.math.BigDecimal dprRate) {
+    ArrayNode notes = objectMapper.createArrayNode();
+    notes.add("dpr_line_cost_uses_base_rate");
+    if (projectId == null || resourceId == null || dprRate == null) return notes;
+    EffectiveRate er = rateResolver.resolve(projectId, resourceId);
+    if (er.rate() != null && er.rate().compareTo(dprRate) != 0) {
+      notes.add("dpr_rate_mismatches_current_effective_rate");
+    }
+    if (er.overrideApplied()) {
+      notes.add("rate_overridden_per_project");
+    }
+    return notes;
+  }
+
+  @Override
+  public java.util.Set<String> allowedRoles() {
+    return java.util.Set.of(
+            "PROJECT_MANAGER", "PORTFOLIO_MANAGER",
+            "SITE_MANAGER", "PROJECT_ENGINEER", "QC_MANAGER", "QA_QC_ENGINEER",
+            "BIM_DATA_COORDINATOR",
+            "SITE_ENGINEER", "RESOURCE_MANAGER", "SCHEDULER",
+            "EXECUTIVE_VIEWER"
+    );
   }
 }

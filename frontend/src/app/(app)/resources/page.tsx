@@ -6,12 +6,17 @@ import { Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { resourceApi, type ResourceResponse } from "@/lib/api/resourceApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { manpowerRateMasterApi } from "@/lib/api/manpowerRateMasterApi";
+import { equipmentRateMasterApi } from "@/lib/api/equipmentRateMasterApi";
+import { materialRateMasterApi } from "@/lib/api/materialRateMasterApi";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TabTip } from "@/components/common/TabTip";
 import { notificationHelpers } from "@/lib/notificationHelpers";
+import { displayResourceTypeName } from "@/lib/utils/resourceTypeLabel";
 
 type TypeTab = "ALL" | "MANPOWER" | "EQUIPMENT" | "MATERIAL";
 
@@ -22,8 +27,9 @@ const TYPE_TABS: { key: TypeTab; label: string }[] = [
   { key: "MATERIAL", label: "Material" },
 ];
 
-// The "Manpower" tab is a UX label; the backend's seeded ResourceType code is "LABOR".
-const tabKeyToTypeCode = (key: TypeTab): string => (key === "MANPOWER" ? "LABOR" : key);
+// Tab key already matches the backend resource_types.code now that LABOR was
+// renamed to MANPOWER. Kept as a function for symmetry / future remapping.
+const tabKeyToTypeCode = (key: TypeTab): string => key;
 
 export default function ResourcesPage() {
   const queryClient = useQueryClient();
@@ -33,6 +39,34 @@ export default function ResourcesPage() {
     queryKey: ["resources"],
     queryFn: () => resourceApi.listResources(),
   });
+
+  const { data: manpowerRatesData } = useQuery({
+    queryKey: ["manpower-rate-master"],
+    queryFn: () => manpowerRateMasterApi.list(),
+  });
+  const { data: equipmentRatesData } = useQuery({
+    queryKey: ["equipment-rate-master"],
+    queryFn: () => equipmentRateMasterApi.list(),
+  });
+  const { data: materialRatesData } = useQuery({
+    queryKey: ["material-rate-master"],
+    queryFn: () => materialRateMasterApi.list(),
+  });
+
+  /** Lookup map: rate-master row id → short label for the grid column. */
+  const rateMasterLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of manpowerRatesData?.data ?? []) {
+      map.set(r.id, `${r.roleName ?? "?"} / Grade ${r.gradeCode ?? "?"} — ${r.unit} @ ${r.rate}`);
+    }
+    for (const r of equipmentRatesData?.data ?? []) {
+      map.set(r.id, `${r.equipmentName} / ${r.make} ${r.model} — ${r.unit} @ ${r.rate}`);
+    }
+    for (const r of materialRatesData?.data ?? []) {
+      map.set(r.id, `${r.categoryName ?? "?"} / ${r.specGrade} — ${r.unit} @ ${r.rate}`);
+    }
+    return map;
+  }, [manpowerRatesData, equipmentRatesData, materialRatesData]);
 
   const deleteMutation = useMutation({
     mutationFn: (resourceId: string) => resourceApi.deleteResource(resourceId),
@@ -69,92 +103,116 @@ export default function ResourcesPage() {
   // /v1/resources/{id}, not the list — so we render only what's on ResourceResponse.
   const columns = useMemo<ColumnDef<ResourceResponse>[]>(() => {
     const baseCols: ColumnDef<ResourceResponse>[] = [
-      { key: "code", label: "Code", sortable: true },
-      { key: "name", label: "Name", sortable: true },
+      { accessorKey: "code", header: "Code", enableSorting: true },
+      { accessorKey: "name", header: "Name", enableSorting: true },
     ];
 
     const typeCol: ColumnDef<ResourceResponse> = {
-      key: "resourceTypeName",
-      label: "Type",
-      sortable: true,
-      render: (_value, row) => (
-        <span className="text-sm font-medium">
-          {row.resourceTypeName ?? row.resourceTypeCode ?? "—"}
-        </span>
-      ),
+      accessorKey: "resourceTypeName",
+      header: "Type",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <span className="text-sm font-medium">
+            {row.resourceTypeName
+              ? displayResourceTypeName(row.resourceTypeName)
+              : row.resourceTypeCode ?? "—"}
+          </span>
+        );
+      },
     };
 
     const roleCol: ColumnDef<ResourceResponse> = {
-      key: "roleName",
-      label: "Role",
-      sortable: true,
-      render: (_value, row) => row.roleName ?? "—",
+      accessorKey: "roleName",
+      header: "Role",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return row.roleName ?? "—";
+      },
     };
 
-    const availabilityCol: ColumnDef<ResourceResponse> = {
-      key: "availability",
-      label: "Availability",
-      sortable: true,
-      render: (_value, row) =>
-        row.availability == null ? "—" : Number(row.availability).toFixed(2),
+    const rateMasterCol: ColumnDef<ResourceResponse> = {
+      accessorKey: "rateMasterId",
+      header: "Rate Master",
+      enableSorting: true,
+      cell: (info) => {
+        const id = info.row.original.rateMasterId;
+        if (!id) return <span className="text-text-muted">—</span>;
+        const label = rateMasterLabels.get(id);
+        return <span className="text-sm text-text-secondary">{label ?? "linked"}</span>;
+      },
     };
 
     const unitCol: ColumnDef<ResourceResponse> = {
-      key: "unit",
-      label: "Unit",
-      sortable: true,
-      render: (_value, row) => row.unit ?? "—",
+      accessorKey: "unit",
+      header: "Unit",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return row.unit ?? "—";
+      },
+    };
+
+    const rateCol: ColumnDef<ResourceResponse> = {
+      accessorKey: "costPerUnit",
+      header: "Rate",
+      enableSorting: true,
+      cell: (info) => {
+        const v = info.row.original.costPerUnit;
+        // Global resource master — rates are currency-neutral (interpreted in each
+        // project's own currency), so no currency symbol here.
+        return v == null
+          ? "—"
+          : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
+      },
     };
 
     const statusCol: ColumnDef<ResourceResponse> = {
-      key: "status",
-      label: "Status",
-      render: (value) => <StatusBadge status={String(value)} />,
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => <StatusBadge status={String(info.getValue())} />,
     };
 
     const actionsCol: ColumnDef<ResourceResponse> = {
-      key: "id",
-      label: "Actions",
-      render: (_value, row) => (
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/resources/${row.id}`}
-            className="text-accent hover:underline text-sm"
-            onClick={(e) => e.stopPropagation()}
-          >
-            View
-          </Link>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (window.confirm("Delete this resource?")) {
-                deleteMutation.mutate(String(row.id));
-              }
-            }}
-            disabled={deleteMutation.isPending}
-            className="text-text-secondary hover:text-danger disabled:text-text-muted"
-            title="Delete resource"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      ),
+      id: "actions",
+      header: "Actions",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/resources/${row.id}`}
+              className="text-accent hover:underline text-sm"
+              onClick={(e) => e.stopPropagation()}
+            >
+              View
+            </Link>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm("Delete this resource?")) {
+                  deleteMutation.mutate(String(row.id));
+                }
+              }}
+              disabled={deleteMutation.isPending}
+              className="text-text-secondary hover:text-danger disabled:text-text-muted"
+              title="Delete resource"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        );
+      },
     };
 
-    if (typeTab === "MATERIAL") {
-      return [...baseCols, typeCol, roleCol, unitCol, availabilityCol, statusCol, actionsCol];
-    }
-    if (typeTab === "MANPOWER") {
-      return [...baseCols, typeCol, roleCol, availabilityCol, statusCol, actionsCol];
-    }
-    if (typeTab === "EQUIPMENT") {
-      return [...baseCols, typeCol, roleCol, availabilityCol, statusCol, actionsCol];
-    }
-    return [...baseCols, typeCol, roleCol, availabilityCol, statusCol, actionsCol];
-  }, [typeTab, deleteMutation]);
+    // Phase 8: every tab now shows Unit + Rate; Availability column dropped (low-value clutter).
+    return [...baseCols, typeCol, roleCol, rateMasterCol, unitCol, rateCol, statusCol, actionsCol];
+  }, [typeTab, deleteMutation, rateMasterLabels]);
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       <PageHeader
         title="Resources"
         description="Manpower, equipment and material resources used across projects"
@@ -178,7 +236,7 @@ export default function ResourcesPage() {
             </button>
             <Link
               href="/resources/new"
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-hover"
             >
               <Plus size={16} />
               New Resource
@@ -200,7 +258,7 @@ export default function ResourcesPage() {
             onClick={() => setTypeTab(t.key)}
             className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               typeTab === t.key
-                ? "bg-accent text-accent-foreground"
+                ? "bg-accent text-text-primary"
                 : "border border-border bg-surface/50 text-text-secondary hover:bg-surface-hover/50"
             }`}
           >
@@ -236,12 +294,14 @@ export default function ResourcesPage() {
       )}
 
       {resources.length > 0 && (
-        <DataTable
+        <VirtualDataTable
           columns={columns}
           data={resources}
-          rowKey="id"
           searchable
-          searchPlaceholder="Search resources..."
+          sortable
+          resizable
+          fullHeight
+          className="flex-1 min-h-0"
         />
       )}
     </div>

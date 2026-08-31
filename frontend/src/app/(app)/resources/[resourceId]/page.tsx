@@ -18,10 +18,15 @@ import { employmentTypeMasterApi } from "@/lib/api/employmentTypeMasterApi";
 import { skillMasterApi } from "@/lib/api/skillMasterApi";
 import { skillLevelMasterApi } from "@/lib/api/skillLevelMasterApi";
 import { nationalityMasterApi } from "@/lib/api/nationalityMasterApi";
+import { manpowerRateMasterApi } from "@/lib/api/manpowerRateMasterApi";
+import { equipmentRateMasterApi } from "@/lib/api/equipmentRateMasterApi";
+import { materialRateMasterApi } from "@/lib/api/materialRateMasterApi";
+import { resourceRoleApi } from "@/lib/api/resourceRoleApi";
 import { Breadcrumb } from "@/components/common/Breadcrumb";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { MultiSelect } from "@/components/common/MultiSelect";
+import { rateUnitOptionsWithFallback } from "@/lib/constants/resourceUnits";
 import { getErrorMessage } from "@/lib/utils/error";
 
 type TypeKind = "MANPOWER" | "EQUIPMENT" | "MATERIAL" | "OTHER";
@@ -138,6 +143,9 @@ export default function ResourceDetailPage() {
         <StatusBadge status={resource.status} />
       </div>
 
+      {/* Core resource info — unit, default rate, rate master link, availability, status */}
+      <CoreInfoPanel resource={resource} onUpdated={invalidate} />
+
       {/* DPR-supervisor summary (Phase 7 / CC-5) */}
       {kind === "MANPOWER" && (
         <DprSupervisorSummaryPanel resourceId={resource.id} />
@@ -241,7 +249,7 @@ function EquipmentTabs({
                 type="button"
                 disabled={mutation.isPending}
                 onClick={() => mutation.mutate(draft)}
-                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
               >
                 {mutation.isPending ? "Saving…" : "Save"}
               </button>
@@ -475,7 +483,7 @@ function MaterialTabs({
                 type="button"
                 disabled={mutation.isPending}
                 onClick={handleSave}
-                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
               >
                 {mutation.isPending ? "Saving…" : "Save"}
               </button>
@@ -656,7 +664,7 @@ function ManpowerTabs({
                 type="button"
                 disabled={mutation.isPending}
                 onClick={handleSave}
-                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-accent-hover disabled:opacity-50"
               >
                 {mutation.isPending ? "Saving…" : "Save"}
               </button>
@@ -1017,7 +1025,7 @@ function Tabs<T extends string>({
           onClick={() => onChange(item.key)}
           className={`rounded-t-md px-3 py-2 text-sm font-medium transition-colors ${
             value === item.key
-              ? "bg-accent text-accent-foreground"
+              ? "bg-accent text-text-primary"
               : "text-text-secondary hover:bg-surface-hover/50"
           }`}
         >
@@ -1227,6 +1235,383 @@ function DprSupervisorSummaryPanel({ resourceId }: { resourceId: string }) {
     <div className="mb-6 rounded-xl border border-border bg-surface/40 px-4 py-3 text-sm text-text-secondary">
       Acted as <strong className="text-text-primary">supervisor on {summary.count} DPR row{summary.count === 1 ? "" : "s"}</strong>{" "}
       in the last {summary.days} days (since {summary.sinceInclusive}).
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Core info panel — Unit, Default Rate, Rate Master, Availability, Description, Status
+// Always visible, always editable. The per-type tabs above edit detail tables;
+// this panel edits the slim core Resource row.
+// ────────────────────────────────────────────────────────────────────────────
+
+type CoreForm = {
+  name: string;
+  description: string;
+  availability: string;
+  costPerUnit: string;
+  unit: string;
+  rateMasterId: string;
+  roleId: string;
+  status: "ACTIVE" | "INACTIVE";
+};
+
+function coreFormFromResource(r: ResourceResponse): CoreForm {
+  return {
+    name: r.name ?? "",
+    description: r.description ?? "",
+    availability: r.availability == null ? "" : String(r.availability),
+    costPerUnit: r.costPerUnit == null ? "" : String(r.costPerUnit),
+    unit: r.unit ?? "",
+    rateMasterId: r.rateMasterId ?? "",
+    roleId: r.roleId ?? "",
+    status: r.status,
+  };
+}
+
+function CoreInfoPanel({
+  resource,
+  onUpdated,
+}: {
+  resource: ResourceResponse;
+  onUpdated: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<CoreForm>(coreFormFromResource(resource));
+
+  const kind = classifyType(resource.resourceTypeCode);
+
+  const { data: manpowerRatesData } = useQuery({
+    queryKey: ["manpower-rate-master"],
+    queryFn: () => manpowerRateMasterApi.list(),
+    enabled: editing && kind === "MANPOWER",
+  });
+  const { data: equipmentRatesData } = useQuery({
+    queryKey: ["equipment-rate-master"],
+    queryFn: () => equipmentRateMasterApi.list(),
+    enabled: editing && kind === "EQUIPMENT",
+  });
+  const { data: materialRatesData } = useQuery({
+    queryKey: ["material-rate-master"],
+    queryFn: () => materialRateMasterApi.list(),
+    enabled: editing && kind === "MATERIAL",
+  });
+
+  const { data: rolesData } = useQuery({
+    queryKey: ["resource-roles", "by-type", resource.resourceTypeId],
+    queryFn: () => resourceRoleApi.listByType(resource.resourceTypeId),
+    enabled: editing && !!resource.resourceTypeId,
+  });
+  const roleOptions = useMemo(
+    () => (rolesData?.data ?? []).filter((r) => r.active),
+    [rolesData],
+  );
+
+  const rateMasterOptions = useMemo(() => {
+    if (kind === "MANPOWER") {
+      return (manpowerRatesData?.data ?? [])
+        .filter((r) => r.active)
+        .map((r) => ({
+          id: r.id,
+          label: `${r.roleName ?? "?"} / ${r.categoryName ?? "?"} / Grade ${r.gradeCode ?? "?"} — ${r.unit} @ ${r.rate}`,
+          unit: r.unit,
+          rate: r.rate,
+        }));
+    }
+    if (kind === "EQUIPMENT") {
+      return (equipmentRatesData?.data ?? [])
+        .filter((r) => r.active)
+        .map((r) => ({
+          id: r.id,
+          label: `${r.equipmentName} / ${r.make} ${r.model} — ${r.unit} @ ${r.rate}`,
+          unit: r.unit,
+          rate: r.rate,
+        }));
+    }
+    if (kind === "MATERIAL") {
+      return (materialRatesData?.data ?? [])
+        .filter((r) => r.active)
+        .map((r) => ({
+          id: r.id,
+          label: `${r.categoryName ?? "?"} / ${r.specGrade} — ${r.unit} @ ${r.rate}`,
+          unit: r.unit,
+          rate: r.rate,
+        }));
+    }
+    return [];
+  }, [kind, manpowerRatesData, equipmentRatesData, materialRatesData]);
+
+  const linkedLabel = useMemo(() => {
+    if (!resource.rateMasterId) return null;
+    return rateMasterOptions.find((o) => o.id === resource.rateMasterId)?.label ?? null;
+  }, [resource.rateMasterId, rateMasterOptions]);
+
+  const startEdit = () => {
+    setForm(coreFormFromResource(resource));
+    setEditing(true);
+  };
+
+  const cancel = () => {
+    setForm(coreFormFromResource(resource));
+    setEditing(false);
+  };
+
+  const save = async () => {
+    try {
+      await resourceApi.updateResource(resource.id, {
+        code: resource.code,
+        name: form.name.trim(),
+        description: form.description.trim() || undefined,
+        roleId: form.roleId || resource.roleId,
+        resourceTypeId: resource.resourceTypeId,
+        availability:
+          form.availability.trim() === "" ? null : Number(form.availability),
+        costPerUnit:
+          form.costPerUnit.trim() === "" ? null : Number(form.costPerUnit),
+        unit: form.unit.trim() || null,
+        rateMasterId: form.rateMasterId || null,
+        status: form.status,
+        calendarId: resource.calendarId ?? null,
+        parentId: resource.parentId ?? null,
+        userId: resource.userId ?? null,
+        sortOrder: resource.sortOrder,
+      });
+      toast.success("Resource updated");
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ["resource", resource.id] });
+      queryClient.invalidateQueries({ queryKey: ["resources"] });
+      onUpdated();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to update resource"));
+    }
+  };
+
+  const inputCls =
+    "w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";
+
+  if (!editing) {
+    return (
+      <div className="mb-6 rounded-xl border border-border bg-surface/50 p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-text-primary">Core Info</h2>
+          <button
+            type="button"
+            onClick={startEdit}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-hover px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-active"
+          >
+            <Pencil size={12} /> Edit
+          </button>
+        </div>
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 md:grid-cols-2">
+          <ReadOnlyRow label="Role" value={resource.roleName ?? "—"} />
+          <ReadOnlyRow label="Status" value={resource.status} />
+          <ReadOnlyRow label="Default Rate" value={resource.costPerUnit ?? "—"} />
+          <ReadOnlyRow label="Unit" value={resource.unit ?? "—"} />
+          <ReadOnlyRow
+            label="Rate Master"
+            value={resource.rateMasterId ? (linkedLabel ?? resource.rateMasterId) : "— not linked —"}
+            colSpan={2}
+          />
+          <ReadOnlyRow
+            label="Availability"
+            value={resource.availability == null ? "—" : String(resource.availability)}
+          />
+          <ReadOnlyRow
+            label="Description"
+            value={resource.description ?? "—"}
+            colSpan={2}
+          />
+        </dl>
+      </div>
+    );
+  }
+
+  const unitOptions = rateUnitOptionsWithFallback(form.unit);
+  const linked = !!form.rateMasterId;
+
+  return (
+    <div className="mb-6 rounded-xl border border-border bg-surface/50 p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-text-primary">Edit Core Info</h2>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={save}
+            className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-text-primary hover:bg-accent-hover"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={cancel}
+            className="rounded-md border border-border bg-surface-hover px-4 py-1.5 text-sm text-text-secondary hover:bg-surface-active"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-text-secondary mb-1">
+            Role *
+          </label>
+          <select
+            value={form.roleId}
+            onChange={(e) => setForm({ ...form, roleId: e.target.value })}
+            className={inputCls}
+            required
+          >
+            {roleOptions.length === 0 ? (
+              <option value={form.roleId}>{resource.roleName ?? "Loading roles…"}</option>
+            ) : (
+              <>
+                <option value="">— pick a role —</option>
+                {roleOptions.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.code})
+                  </option>
+                ))}
+              </>
+            )}
+          </select>
+          <p className="mt-1 text-xs text-text-muted">
+            Resource Role is required. Filtered to roles for this resource type.
+          </p>
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-text-secondary mb-1">
+            Rate Master
+          </label>
+          <SearchableSelect
+            options={[
+              { value: "", label: "— enter unit and default rate manually —" },
+              ...rateMasterOptions.map((r) => ({ value: r.id, label: r.label })),
+            ]}
+            value={form.rateMasterId}
+            onChange={(id) => {
+              const picked = rateMasterOptions.find((r) => r.id === id);
+              if (picked) {
+                setForm((f) => ({
+                  ...f,
+                  rateMasterId: picked.id,
+                  unit: picked.unit,
+                  costPerUnit: String(picked.rate),
+                }));
+              } else {
+                setForm((f) => ({ ...f, rateMasterId: "" }));
+              }
+            }}
+            placeholder={
+              rateMasterOptions.length === 0
+                ? "No rate master rows defined for this type"
+                : "— pick a rate master row —"
+            }
+          />
+          <p className="mt-1 text-xs text-text-muted">
+            Picking a rate master row auto-fills Unit and Default Rate, and cascades any future
+            rate revisions to this resource.
+          </p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">
+            Default Rate {linked && <span className="text-xs text-text-muted">(from rate master)</span>}
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            value={form.costPerUnit}
+            onChange={(e) => setForm({ ...form, costPerUnit: e.target.value })}
+            readOnly={linked}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">
+            Unit {linked && <span className="text-xs text-text-muted">(from rate master)</span>}
+          </label>
+          {linked ? (
+            <input type="text" value={form.unit} readOnly className={inputCls} />
+          ) : (
+            <select
+              value={form.unit}
+              onChange={(e) => setForm({ ...form, unit: e.target.value })}
+              className={inputCls}
+            >
+              <option value="">— pick a unit —</option>
+              {unitOptions.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">
+            Availability
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            value={form.availability}
+            onChange={(e) => setForm({ ...form, availability: e.target.value })}
+            placeholder="e.g. 100 or 8 hours/day"
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">Status</label>
+          <select
+            value={form.status}
+            onChange={(e) =>
+              setForm({ ...form, status: e.target.value as "ACTIVE" | "INACTIVE" })
+            }
+            className={inputCls}
+          >
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </select>
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-text-secondary mb-1">Name</label>
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className={inputCls}
+          />
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-text-secondary mb-1">
+            Description
+          </label>
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            rows={2}
+            className={inputCls}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReadOnlyRow({
+  label,
+  value,
+  colSpan,
+}: {
+  label: string;
+  value: string | number;
+  colSpan?: 1 | 2;
+}) {
+  return (
+    <div className={colSpan === 2 ? "md:col-span-2" : ""}>
+      <dt className="text-xs uppercase tracking-wide text-text-muted">{label}</dt>
+      <dd className="mt-1 text-sm text-text-primary">{value}</dd>
     </div>
   );
 }

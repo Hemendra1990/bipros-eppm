@@ -1,54 +1,186 @@
 package com.bipros.project.application.dto;
 
 import com.bipros.project.domain.model.DailyProgressReport;
+import com.bipros.project.domain.model.DprApprovalStatus;
+import com.bipros.project.domain.model.SafetyIncidentType;
+import com.bipros.project.domain.model.Shift;
+import com.bipros.project.domain.model.Side;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 
 public record DailyProgressReportResponse(
     UUID id,
     UUID projectId,
     LocalDate reportDate,
-    UUID supervisorResourceId,
+    UUID supervisorUserId,
     String supervisorName,
     Long chainageFromM,
     Long chainageToM,
+    UUID activityId,
     String activityName,
     UUID wbsNodeId,
+    UUID boqItemId,
     String boqItemNo,
+    String boqItemDescription,
     String unit,
     BigDecimal qtyExecuted,
     BigDecimal cumulativeQty,
     String weatherCondition,
-    String remarks
+    String remarks,
+
+    Side side,
+    String landmark,
+    LocalTime startTime,
+    LocalTime endTime,
+    Shift shift,
+    DprApprovalStatus approvalStatus,
+    String contractorName,
+    String delayReason,
+    String safetyObservation,
+    SafetyIncidentType safetyIncidentType,
+
+    // Approval-workflow fields
+    UUID assignedApproverUserId,
+    Instant submittedAt,
+    /** When the pending approval blew its SLA and was escalated (one-shot); null otherwise. */
+    Instant escalatedAt,
+    UUID submittedByUserId,
+    UUID approvedByUserId,
+    Instant approvedAt,
+    UUID rejectedByUserId,
+    Instant rejectedAt,
+    String rejectionReason,
+    // Resolved display names for the identity strip (read path only; null on write paths).
+    String submittedByName,
+    String approvedByName,
+    String assignedApproverName,
+    String rejectedByName,
+
+    List<DprManpowerRow> manpower,
+    List<DprEquipmentRow> equipment,
+    List<DprMaterialRow> materials,
+    List<DprSubContractorRow> subContractors,
+    List<DprAttachmentResponse> attachments,
+    List<DprVoiceNoteResponse> voiceNotes,
+    List<DprIssueRow> issues,
+    List<String> warnings
 ) {
   /**
-   * Convenience constructor for the legacy call sites (audit logging) that don't have a
-   * computed cumulative on hand. Sets cumulativeQty to the row's qtyExecuted as a placeholder
-   * — the list endpoint always computes the real cumulative via the service.
+   * Convenience constructor for legacy call sites (audit logging) that don't have computed
+   * cumulative, child rows, or attachments on hand. Sets cumulativeQty to the row's qtyExecuted
+   * as a placeholder; the list endpoint always computes the real cumulative via the service.
    */
   public static DailyProgressReportResponse from(DailyProgressReport r) {
-    return from(r, r.getQtyExecuted());
+    return from(r, r.getQtyExecuted(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
   }
 
   public static DailyProgressReportResponse from(DailyProgressReport r, BigDecimal cumulativeQty) {
+    return from(r, cumulativeQty, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+  }
+
+  /** Read-path overload — children + attachments + voice notes + issues, no warnings. */
+  public static DailyProgressReportResponse from(
+      DailyProgressReport r,
+      BigDecimal cumulativeQty,
+      List<DprManpowerRow> manpower,
+      List<DprEquipmentRow> equipment,
+      List<DprMaterialRow> materials,
+      List<DprSubContractorRow> subContractors,
+      List<DprAttachmentResponse> attachments,
+      List<DprVoiceNoteResponse> voiceNotes,
+      List<DprIssueRow> issues) {
+    return from(r, cumulativeQty, manpower, equipment, materials, subContractors, attachments, voiceNotes, issues, List.of());
+  }
+
+  public static DailyProgressReportResponse from(
+      DailyProgressReport r,
+      BigDecimal cumulativeQty,
+      List<DprManpowerRow> manpower,
+      List<DprEquipmentRow> equipment,
+      List<DprMaterialRow> materials,
+      List<DprSubContractorRow> subContractors,
+      List<DprAttachmentResponse> attachments,
+      List<DprVoiceNoteResponse> voiceNotes,
+      List<DprIssueRow> issues,
+      List<String> warnings) {
+    return from(r, cumulativeQty, manpower, equipment, materials, subContractors,
+        attachments, voiceNotes, issues, warnings, null, null, null, null, null);
+  }
+
+  /** Full read-path overload — additionally carries the linked BOQ item's description and the
+   *  resolved submitter / approver / assigned-approver display names (all resolved by the service).
+   *  These extras are null on write paths. */
+  public static DailyProgressReportResponse from(
+      DailyProgressReport r,
+      BigDecimal cumulativeQty,
+      List<DprManpowerRow> manpower,
+      List<DprEquipmentRow> equipment,
+      List<DprMaterialRow> materials,
+      List<DprSubContractorRow> subContractors,
+      List<DprAttachmentResponse> attachments,
+      List<DprVoiceNoteResponse> voiceNotes,
+      List<DprIssueRow> issues,
+      List<String> warnings,
+      String boqItemDescription,
+      String submittedByName,
+      String approvedByName,
+      String assignedApproverName,
+      String rejectedByName) {
     return new DailyProgressReportResponse(
         r.getId(),
         r.getProjectId(),
         r.getReportDate(),
-        r.getSupervisorResourceId(),
+        r.getSupervisorUserId(),
         r.getSupervisorName(),
         r.getChainageFromM(),
         r.getChainageToM(),
+        r.getActivityId(),
         r.getActivityName(),
         r.getWbsNodeId(),
+        r.getBoqItemId(),
         r.getBoqItemNo(),
+        boqItemDescription,
         r.getUnit(),
         r.getQtyExecuted(),
         cumulativeQty,
         r.getWeatherCondition(),
-        r.getRemarks()
+        r.getRemarks(),
+        r.getSide(),
+        r.getLandmark(),
+        r.getStartTime(),
+        r.getEndTime(),
+        r.getShift(),
+        r.getApprovalStatus(),
+        r.getContractorName(),
+        r.getDelayReason(),
+        r.getSafetyObservation(),
+        r.getSafetyIncidentType(),
+        r.getAssignedApproverUserId(),
+        r.getSubmittedAt(),
+        r.getEscalatedAt(),
+        r.getSubmittedByUserId(),
+        r.getApprovedByUserId(),
+        r.getApprovedAt(),
+        r.getRejectedByUserId(),
+        r.getRejectedAt(),
+        r.getRejectionReason(),
+        submittedByName,
+        approvedByName,
+        assignedApproverName,
+        rejectedByName,
+        manpower,
+        equipment,
+        materials,
+        subContractors,
+        attachments,
+        voiceNotes,
+        issues,
+        warnings
     );
   }
 }

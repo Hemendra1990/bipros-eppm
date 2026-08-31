@@ -3,32 +3,38 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { downloadCsv, toCsv } from "@/lib/utils/csvExport";
+import { useAuthStore } from "@/lib/state/store";
 import {
   varianceReportApi,
   type ActivityStatusName,
   type CostVarianceActivityRow,
+  type CostVarianceWbsRow,
 } from "@/lib/api/varianceReportApi";
+import { useProjectCurrencyOptional } from "@/lib/currency/ProjectCurrencyProvider";
+import { formatMoney } from "@/lib/currency/format";
 
 interface Props {
   projectId: string;
   baselineId?: string;
 }
 
-const ONE_CRORE = 10_000_000;
-
-function formatRupees(n: number | null | undefined, opts: { sign?: boolean } = {}): string {
+/**
+ * Per-currency compact money — INR uses ₹ k / Lakh / Crore (en-IN), every other
+ * currency uses K / M / B (en-US). Input is a RAW amount (already in the project
+ * currency). `sign` prepends "+" for positive values (e.g. variance display).
+ */
+function formatMoneyCompact(
+  n: number | null | undefined,
+  code: string,
+  opts: { sign?: boolean } = {},
+): string {
   if (n == null || !Number.isFinite(n)) return "—";
-  const abs = Math.abs(n);
-  let body: string;
-  if (abs >= ONE_CRORE) {
-    body = `₹${(n / ONE_CRORE).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cr`;
-  } else if (abs >= 100_000) {
-    body = `₹${(n / 100_000).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L`;
-  } else {
-    body = `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-  }
+  const body = formatMoney(n, { code }, { compact: true });
   if (opts.sign && n > 0) return `+${body}`;
   return body;
 }
@@ -65,6 +71,8 @@ function costToneClass(value: number | null | undefined): string {
 }
 
 export function CostVarianceSection({ projectId, baselineId }: Props) {
+  // Access-Output row 4: Engineer may view but not download — the CSV follows COST.EXPORT.
+  const canExportCsv = useAuthStore((st) => st.hasPermission)("COST.EXPORT");
   const { data, isLoading, error } = useQuery({
     queryKey: ["cost-variance", projectId, baselineId ?? null],
     queryFn: () => varianceReportApi.getCostVariance(projectId, baselineId),
@@ -75,6 +83,12 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
 
   const [showOnlyNonZero, setShowOnlyNonZero] = useState(false);
   const [overrunOnly, setOverrunOnly] = useState(false);
+
+  // Cost-variance amounts are RAW values; render them per-currency (₹ k/L/Cr for
+  // INR, K/M/B otherwise) instead of the old hardcoded rupee formatter. Optional
+  // hook + INR fallback so it is safe outside a project route. Display-only.
+  const cur = useProjectCurrencyOptional();
+  const moneyCode = cur?.code ?? "INR";
 
   const activityRows = useMemo(() => data?.data?.activityRows ?? [], [data]);
 
@@ -93,6 +107,188 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
     return r;
   }, [activityRows, showOnlyNonZero, overrunOnly]);
 
+  const wbsColumns = useMemo<ColumnDef<CostVarianceWbsRow>[]>(
+    () => [
+      {
+        accessorKey: "wbsCode",
+        header: "Code",
+        cell: (info) => (
+          <span className="font-medium text-charcoal">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "wbsName",
+        header: "Name",
+        cell: (info) => (
+          <span className="text-charcoal">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "budget",
+        header: "Budget",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatMoneyCompact(info.getValue() as number | null, moneyCode)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "earnedValue",
+        header: "Earned",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatMoneyCompact(info.getValue() as number | null, moneyCode)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "actualCost",
+        header: "Actual",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatMoneyCompact(info.getValue() as number | null, moneyCode)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "costVariance",
+        header: "CV",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span
+              className={`block text-right tabular-nums ${costToneClass(
+                val != null ? -val : null
+              )}`}
+            >
+              {formatMoneyCompact(val, moneyCode, { sign: true })}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "costPerformanceIndex",
+        header: "CPI",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            <CpiBadge value={info.getValue() as number | null} />
+          </span>
+        ),
+      },
+    ],
+    [moneyCode]
+  );
+
+  const activityColumns = useMemo<ColumnDef<CostVarianceActivityRow>[]>(
+    () => [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: (info) => (
+          <span className="font-medium text-charcoal whitespace-nowrap">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: (info) => (
+          <span className="max-w-[260px] truncate">
+            {String(info.getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <Badge variant={statusBadge(row.status)} withDot>
+              {row.status.replace(/_/g, " ").toLowerCase()}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "percentComplete",
+        header: "% complete",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {info.getValue() != null
+              ? `${Number(info.getValue()).toFixed(0)}%`
+              : "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "baselinePlannedCost",
+        header: "BL planned",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatMoneyCompact(info.getValue() as number | null, moneyCode)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "currentPlannedCost",
+        header: "Cur planned",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatMoneyCompact(info.getValue() as number | null, moneyCode)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "estimateVariance",
+        header: "Estimate var",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span
+              className={`block text-right tabular-nums ${costToneClass(
+                val
+              )}`}
+            >
+              {formatMoneyCompact(val, moneyCode, { sign: true })}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "actualCost",
+        header: "Actual",
+        cell: (info) => (
+          <span className="block text-right text-charcoal tabular-nums">
+            {formatMoneyCompact(info.getValue() as number | null, moneyCode)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "burnVariance",
+        header: "Burn var",
+        cell: (info) => {
+          const val = info.getValue() as number | null;
+          return (
+            <span
+              className={`block text-right tabular-nums ${costToneClass(
+                val
+              )}`}
+            >
+              {formatMoneyCompact(val, moneyCode, { sign: true })}
+            </span>
+          );
+        },
+      },
+    ],
+    [moneyCode]
+  );
+
   if (error) {
     return <ErrorState message="Could not load the cost variance report. The backend may be down or no baseline is set." />;
   }
@@ -110,11 +306,11 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
       { key: "activityType", header: "Type" },
       { key: "status", header: "Status" },
       { key: "percentComplete", header: "% complete" },
-      { key: "baselinePlannedCost", header: "BL planned (₹)" },
-      { key: "currentPlannedCost", header: "Cur planned (₹)" },
-      { key: "estimateVariance", header: "Estimate var (₹)" },
-      { key: "actualCost", header: "Actual (₹)" },
-      { key: "burnVariance", header: "Burn var (₹)" },
+      { key: "baselinePlannedCost", header: `BL planned (${moneyCode})` },
+      { key: "currentPlannedCost", header: `Cur planned (${moneyCode})` },
+      { key: "estimateVariance", header: `Estimate var (${moneyCode})` },
+      { key: "actualCost", header: `Actual (${moneyCode})` },
+      { key: "burnVariance", header: `Burn var (${moneyCode})` },
     ]);
     const projectCode = data.data.project.code.replace(/[^a-zA-Z0-9-]/g, "_");
     downloadCsv(`cost-variance-${projectCode}`, csv);
@@ -124,12 +320,12 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
     <div className="space-y-6">
       {/* Summary KPIs */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
-        <Kpi label="Budget at completion" value={formatRupees(summary.budgetAtCompletion)} accent="gold" />
-        <Kpi label="Earned value" value={formatRupees(summary.earnedValue)} accent="default" />
-        <Kpi label="Actual cost" value={formatRupees(summary.actualCost)} accent="default" />
+        <Kpi label="Budget at completion" value={formatMoneyCompact(summary.budgetAtCompletion, moneyCode)} accent="gold" />
+        <Kpi label="Earned value" value={formatMoneyCompact(summary.earnedValue, moneyCode)} accent="default" />
+        <Kpi label="Actual cost" value={formatMoneyCompact(summary.actualCost, moneyCode)} accent="default" />
         <Kpi
           label="Cost variance"
-          value={formatRupees(summary.costVariance, { sign: true })}
+          value={formatMoneyCompact(summary.costVariance, moneyCode, { sign: true })}
           accent={(summary.costVariance ?? 0) < 0 ? "burgundy" : "emerald"}
           hint={
             summary.costVariance != null
@@ -144,12 +340,12 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
         <CpiKpi label="SPI" value={summary.schedulePerformanceIndex} />
         <Kpi
           label="Estimate at completion"
-          value={formatRupees(summary.estimateAtCompletion)}
+          value={formatMoneyCompact(summary.estimateAtCompletion, moneyCode)}
           accent="default"
         />
         <Kpi
           label="Variance at completion"
-          value={formatRupees(summary.varianceAtCompletion, { sign: true })}
+          value={formatMoneyCompact(summary.varianceAtCompletion, moneyCode, { sign: true })}
           accent={(summary.varianceAtCompletion ?? 0) < 0 ? "burgundy" : "emerald"}
         />
       </div>
@@ -165,38 +361,12 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
               No EVM rollup found per WBS — the EVM module has not been calculated yet for this project.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead className="border-b border-hairline bg-ivory">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Code</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Name</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Budget</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Earned</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Actual</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">CV</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">CPI</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {wbsRows.map((row) => (
-                    <tr key={row.wbsNodeId} className="border-b border-hairline transition-colors last:border-b-0 hover:bg-ivory">
-                      <td className="px-3 py-2.5 font-medium text-charcoal">{row.wbsCode}</td>
-                      <td className="px-3 py-2.5 text-charcoal">{row.wbsName}</td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.budget)}</td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.earnedValue)}</td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.actualCost)}</td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${costToneClass(row.costVariance != null ? -row.costVariance : null)}`}>
-                        {formatRupees(row.costVariance, { sign: true })}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">
-                        <CpiBadge value={row.costPerformanceIndex} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <SimpleTable
+              columns={wbsColumns}
+              data={wbsRows}
+              sortable={false}
+              className="border-0 rounded-none"
+            />
           )}
         </div>
       </div>
@@ -213,6 +383,7 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
             <span className="text-xs text-slate tabular-nums">
               {filtered.length} of {activityRows.length}
             </span>
+            {canExportCsv && (
             <button
               type="button"
               onClick={onExport}
@@ -221,6 +392,7 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
               <Download size={12} />
               Export CSV
             </button>
+            )}
           </div>
         </div>
         <div className="overflow-hidden rounded-2xl border border-hairline bg-paper">
@@ -231,48 +403,14 @@ export function CostVarianceSection({ projectId, baselineId }: Props) {
                 : "No activities match the current filters."}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead className="border-b border-hairline bg-ivory">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Code</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Name</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Status</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">% complete</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">BL planned</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Cur planned</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Estimate var</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Actual</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-gold-deep">Burn var</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((row) => (
-                    <tr key={row.activityId} className="border-b border-hairline transition-colors last:border-b-0 hover:bg-ivory">
-                      <td className="px-3 py-2.5 font-medium text-charcoal whitespace-nowrap">{row.code}</td>
-                      <td className="px-3 py-2.5 text-charcoal max-w-[260px] truncate">{row.name}</td>
-                      <td className="px-3 py-2.5">
-                        <Badge variant={statusBadge(row.status)} withDot>
-                          {row.status.replace(/_/g, " ").toLowerCase()}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">
-                        {row.percentComplete != null ? `${row.percentComplete.toFixed(0)}%` : "—"}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.baselinePlannedCost)}</td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.currentPlannedCost)}</td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${costToneClass(row.estimateVariance)}`}>
-                        {formatRupees(row.estimateVariance, { sign: true })}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-charcoal tabular-nums">{formatRupees(row.actualCost)}</td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${costToneClass(row.burnVariance)}`}>
-                        {formatRupees(row.burnVariance, { sign: true })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <VirtualDataTable
+              columns={activityColumns}
+              data={filtered}
+              sortable
+              resizable
+              searchable={false}
+              className="border-0 rounded-none"
+            />
           )}
         </div>
       </div>

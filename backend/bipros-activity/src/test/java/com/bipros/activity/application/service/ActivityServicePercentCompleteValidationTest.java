@@ -1,6 +1,7 @@
 package com.bipros.activity.application.service;
 
 import com.bipros.activity.application.dto.UpdateActivityRequest;
+import com.bipros.activity.application.percent.BoqProgressGuard;
 import com.bipros.activity.application.percent.PercentCompleteCalculator;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.model.ActivityStatus;
@@ -8,6 +9,7 @@ import com.bipros.activity.domain.model.PercentCompleteType;
 import com.bipros.activity.domain.repository.ActivityRelationshipRepository;
 import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.activity.domain.repository.ActivityStepRepository;
+import com.bipros.activity.domain.repository.ActivitySupervisorRepository;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.security.ProjectAccessGuard;
 import com.bipros.common.util.AuditService;
@@ -25,9 +27,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.mockito.ArgumentCaptor;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,12 +41,14 @@ import static org.mockito.Mockito.when;
 class ActivityServicePercentCompleteValidationTest {
 
   @Mock private ActivityRepository activityRepository;
+  @Mock private ActivitySupervisorRepository activitySupervisorRepository;
   @Mock private ActivityRelationshipRepository relationshipRepository;
   @Mock private AuditService auditService;
   @Mock private ProjectAccessGuard projectAccess;
   @Mock private ProjectRepository projectRepository;
   @Mock private PercentCompleteCalculator percentCompleteCalculator;
   @Mock private ActivityStepRepository stepRepository;
+  @Mock private BoqProgressGuard boqProgressGuard;
 
   private ActivityService service;
   private UUID activityId;
@@ -48,8 +56,13 @@ class ActivityServicePercentCompleteValidationTest {
 
   @BeforeEach
   void setUp() {
-    service = new ActivityService(activityRepository, relationshipRepository, auditService,
-        projectAccess, projectRepository, percentCompleteCalculator, stepRepository);
+    service = new ActivityService(activityRepository, activitySupervisorRepository,
+        relationshipRepository, auditService, projectAccess, projectRepository,
+        percentCompleteCalculator,
+        new com.bipros.activity.application.percent.ParentRollupCalculator(), stepRepository,
+        org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
+        boqProgressGuard,
+        com.bipros.common.security.ScopeKeys::all);
 
     activityId = UUID.randomUUID();
     activity = new Activity();
@@ -80,7 +93,7 @@ class ActivityServicePercentCompleteValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           50.0, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       BusinessRuleException ex = assertThrows(BusinessRuleException.class,
           () -> service.updateActivity(activityId, req));
@@ -95,7 +108,7 @@ class ActivityServicePercentCompleteValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           50.0, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       BusinessRuleException ex = assertThrows(BusinessRuleException.class,
           () -> service.updateActivity(activityId, req));
@@ -111,7 +124,7 @@ class ActivityServicePercentCompleteValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           42.0, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(activityId, req));
     }
@@ -125,7 +138,7 @@ class ActivityServicePercentCompleteValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, null, null, null, null,
           42.0, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       BusinessRuleException ex = assertThrows(BusinessRuleException.class,
           () -> service.updateActivity(activityId, req));
@@ -141,7 +154,7 @@ class ActivityServicePercentCompleteValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, PercentCompleteType.PHYSICAL, null, null, null,
           42.0, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       when(stepRepository.countByActivityId(activityId)).thenReturn(0L);
 
@@ -158,7 +171,7 @@ class ActivityServicePercentCompleteValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           null, null, null, null, null, PercentCompleteType.DURATION, null, null, null,
           42.0, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       BusinessRuleException ex = assertThrows(BusinessRuleException.class,
           () -> service.updateActivity(activityId, req));
@@ -173,9 +186,29 @@ class ActivityServicePercentCompleteValidationTest {
       UpdateActivityRequest req = new UpdateActivityRequest(
           "New Name", null, null, null, null, null, null, null, null,
           null, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
       assertDoesNotThrow(() -> service.updateActivity(activityId, req));
+    }
+
+    @Test
+    @DisplayName("setting actualFinishDate forces 100% + COMPLETED for a DURATION activity")
+    void finishDateCompletesDurationActivity() {
+      activity.setPercentCompleteType(PercentCompleteType.DURATION);
+      activity.setActualStartDate(LocalDate.of(2026, 4, 1));
+      activity.setPercentComplete(30.0);
+
+      UpdateActivityRequest req = new UpdateActivityRequest(
+          null, null, null, null, null, null, null, null, null,
+          null, null, null, LocalDate.of(2026, 6, 1),
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+
+      service.updateActivity(activityId, req);
+
+      ArgumentCaptor<Activity> saved = ArgumentCaptor.forClass(Activity.class);
+      verify(activityRepository).save(saved.capture());
+      assertThat(saved.getValue().getPercentComplete()).isEqualTo(100.0);
+      assertThat(saved.getValue().getStatus()).isEqualTo(ActivityStatus.COMPLETED);
     }
   }
 

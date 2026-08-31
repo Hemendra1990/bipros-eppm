@@ -1,0 +1,42 @@
+databaseChangeLog:
+  - changeSet:
+      id: 147-manpower-trade-list-cleanup
+      author: claude
+      comment: >
+        Client workbook Web sheet row 4 (manpower trade list), 2026-08-17. Production still
+        carries manpower roles from retired demo seeders (OMN-*, BNK-ROLE-*, ROLE-*, LCH-*,
+        plain codes) that either duplicate the canonical client-rate-book trades or were
+        explicitly retired by the client ("No Concrete Finisher & General labour - to be
+        deleted"; "Change the name to Steel fixer from Rebar fixer"; "Site supervisor to be
+        changed as Site Superintendent"). Deactivate them - never delete, historical DPR and
+        plan rows keep rendering via the "(retired)" fallback, and the DPR picker filters on
+        role.active. The canonical replacements come from client-rate-book.json v2 (Steel
+        Fixer FIX already exists; Site Superintendent / Chainman / Lab Helper / AC Technician
+        arrive with 0/day placeholder rates on the next boot). Codes absent on a given
+        database simply match zero rows. Also retitles LVD "Drivers National(LVD)" to
+        "Light Duty Drivers (LDD)" per the same workbook row - name-only relabel, code and
+        the 750/26 daily rate untouched.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              UPDATE resource.resource_roles SET active = false
+               WHERE code IN ('REBAR', 'CONC-FIN', 'GEN-LAB', 'SITE-SUP',
+                              'OMN-STEEL-FIXER', 'BNK-ROLE-STEELFIXER', 'ROLE-STEELFIXER',
+                              'LCH-MP-STEEL-FIXER', 'STEEL_FIXER',
+                              'BNK-ROLE-LABHELPER', 'BNK-ROLE-CHAINMAN', 'ROLE-CHAINMAN',
+                              'BNK-ROLE-SITESUPERINTENDENT', 'BNK-ROLE-WATCHMAN');
+              UPDATE resource.resource_roles SET name = 'Light Duty Drivers (LDD)'
+               WHERE code = 'LVD';
+      rollback:
+        - sql:
+            splitStatements: true
+            sql: |
+              UPDATE resource.resource_roles SET active = true
+               WHERE code IN ('REBAR', 'CONC-FIN', 'GEN-LAB', 'SITE-SUP',
+                              'OMN-STEEL-FIXER', 'BNK-ROLE-STEELFIXER', 'ROLE-STEELFIXER',
+                              'LCH-MP-STEEL-FIXER', 'STEEL_FIXER',
+                              'BNK-ROLE-LABHELPER', 'BNK-ROLE-CHAINMAN', 'ROLE-CHAINMAN',
+                              'BNK-ROLE-SITESUPERINTENDENT', 'BNK-ROLE-WATCHMAN');
+              UPDATE resource.resource_roles SET name = 'Drivers National(LVD)'
+               WHERE code = 'LVD';

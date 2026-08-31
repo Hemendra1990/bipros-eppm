@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { ChevronRight, ChevronDown, List, FolderTree, Layers } from "lucide-react";
-import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
+import { ChevronRight, ChevronDown, List, FolderTree, Layers, UserCheck } from "lucide-react";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 
 export interface AssignmentRow {
   id: string;
@@ -27,6 +27,11 @@ export interface AssignmentRow {
   plannedCost: number;
   actualCost: number;
   remainingCost: number;
+  /** Supervisor on the parent activity — used by the "By Supervisor" view to group activities
+   * under their supervisor. Lives on Activity.responsibleResourceId; the tab populates it
+   * here so the tree builder doesn't need a second data source. Null when no supervisor set. */
+  activitySupervisorResourceId: string | null;
+  activitySupervisorName: string | null;
 }
 
 export interface ResourceTypeInfo {
@@ -42,6 +47,8 @@ interface RollupSums {
   plannedUnits: number | null;
   actualUnits: number | null;
   remainingUnits: number | null;
+  /** Common unit shared by all children, or null when mixed. Used to render "10 Day" on rollup rows. */
+  unit: string | null;
   budgetedCost: number;
   plannedCost: number;
   actualCost: number;
@@ -59,7 +66,7 @@ interface TreeNode {
 
 const UNASSIGNED_ROLE_KEY = "__unassigned__";
 
-function sumRows(rows: AssignmentRow[]): Omit<RollupSums, "childCount"> {
+function sumRows(rows: AssignmentRow[]): Omit<RollupSums, "childCount" | "unit"> {
   const acc = {
     budgetedUnits: 0,
     plannedUnits: 0,
@@ -91,9 +98,22 @@ function shareSameUnit(rows: AssignmentRow[]): boolean {
   return rows.every((r) => r.unit === first);
 }
 
+/** Returns the shared unit when {@link shareSameUnit} would be true, else null. */
+function commonUnit(rows: AssignmentRow[]): string | null {
+  return shareSameUnit(rows) ? rows[0].unit : null;
+}
+
+/** Format a number with its unit suffix (e.g. "10 Day"). Empty string for null/empty input. */
+function withUnit(n: number | null | undefined, unit: string | null | undefined): string {
+  if (n == null) return "";
+  const formatted = Number(n).toFixed(2);
+  if (!unit) return formatted;
+  return `${formatted} ${unit}`;
+}
+
 interface Props {
   assignments: AssignmentRow[];
-  viewMode: "activity" | "resourceType";
+  viewMode: "activity" | "resourceType" | "supervisor";
   resources: ResourceTypeInfo[];
   onRowClick?: (row: AssignmentRow) => void;
   selectedId?: string | null;
@@ -157,7 +177,7 @@ function buildActivityTree(assignments: AssignmentRow[]): TreeNode[] {
           id: `activity-${activityId}-role-${roleKey}`,
           code: roleName,
           name: roleName,
-          rollup: { childCount: roleRows.length, ...sums },
+          rollup: { childCount: roleRows.length, ...sums, unit: commonUnit(roleRows) },
           children: roleRows
             .slice()
             .sort((a, b) => a.resourceName.localeCompare(b.resourceName))
@@ -182,6 +202,7 @@ function buildActivityTree(assignments: AssignmentRow[]): TreeNode[] {
         plannedUnits: sameUnit ? activitySums.plannedUnits : null,
         actualUnits: sameUnit ? activitySums.actualUnits : null,
         remainingUnits: sameUnit ? activitySums.remainingUnits : null,
+        unit: sameUnit ? activityRows[0].unit : null,
         budgetedCost: activitySums.budgetedCost,
         plannedCost: activitySums.plannedCost,
         actualCost: activitySums.actualCost,
@@ -230,6 +251,7 @@ function buildResourceTypeTree(
         plannedUnits: sameUnit ? sums.plannedUnits : null,
         actualUnits: sameUnit ? sums.actualUnits : null,
         remainingUnits: sameUnit ? sums.remainingUnits : null,
+        unit: sameUnit ? rows[0].unit : null,
         budgetedCost: sums.budgetedCost,
         plannedCost: sums.plannedCost,
         actualCost: sums.actualCost,
@@ -244,6 +266,59 @@ function buildResourceTypeTree(
           name: row.resourceName,
           assignment: row,
         })),
+    };
+  });
+}
+
+/**
+ * Four-level tree: Supervisor → Activity → Role → Resource.
+ *
+ * Activities without a supervisor are NOT shown — this view is for organising work
+ * grouped by an actual supervisor. Un-supervised activities are visible elsewhere
+ * (Activities tab Supervisor column shows "—"; the Resources → Supervisor tab is the
+ * place to assign one). Reuses {@link buildActivityTree} for the per-supervisor
+ * sub-tree (Activity → Role → Resource).
+ */
+function buildSupervisorTree(assignments: AssignmentRow[]): TreeNode[] {
+  // Drop activities without a supervisor before bucketing.
+  const supervisedRows = assignments.filter((a) => a.activitySupervisorResourceId != null);
+
+  const bySupervisor = new Map<string, AssignmentRow[]>();
+  for (const a of supervisedRows) {
+    const key = a.activitySupervisorResourceId as string;
+    const list = bySupervisor.get(key) ?? [];
+    list.push(a);
+    bySupervisor.set(key, list);
+  }
+
+  const sorted = Array.from(bySupervisor.entries()).sort(([, rowsA], [, rowsB]) => {
+    const aName = rowsA[0].activitySupervisorName ?? "";
+    const bName = rowsB[0].activitySupervisorName ?? "";
+    return aName.localeCompare(bName);
+  });
+
+  return sorted.map(([supervisorKey, rows]) => {
+    const name = rows[0].activitySupervisorName ?? supervisorKey;
+    const sums = sumRows(rows);
+    const sameUnit = shareSameUnit(rows);
+    return {
+      id: `supervisor-${supervisorKey}`,
+      code: name,
+      name,
+      rollup: {
+        childCount: rows.length,
+        budgetedUnits: sameUnit ? sums.budgetedUnits : null,
+        plannedUnits: sameUnit ? sums.plannedUnits : null,
+        actualUnits: sameUnit ? sums.actualUnits : null,
+        remainingUnits: sameUnit ? sums.remainingUnits : null,
+        unit: sameUnit ? rows[0].unit : null,
+        budgetedCost: sums.budgetedCost,
+        plannedCost: sums.plannedCost,
+        actualCost: sums.actualCost,
+        remainingCost: sums.remainingCost,
+      },
+      // Reuse the existing Activity → Role → Resource builder for the sub-tree.
+      children: buildActivityTree(rows),
     };
   });
 }
@@ -268,10 +343,13 @@ function TreeRow({
   toggle: (id: string) => void;
   onRowClick?: (row: AssignmentRow) => void;
   selectedId?: string | null;
-  viewMode: "activity" | "resourceType";
+  viewMode: "activity" | "resourceType" | "supervisor";
 }) {
+  const { money } = useProjectCurrency();
   const isGroup = !!node.children && node.children.length > 0;
   const isSelected = !isGroup && node.assignment && node.assignment.id === selectedId;
+  // Indent the name column's content only — applying it to the grid container would shift every
+  // numeric column right by `indent`, breaking alignment with the (un-indented) header row.
   const indent = level * 20;
 
   // What to show in each numeric column. For a leaf, use the assignment row directly. For a
@@ -280,6 +358,7 @@ function TreeRow({
   const plannedUnits = node.assignment?.plannedUnits ?? node.rollup?.plannedUnits ?? null;
   const actualUnits = node.assignment?.actualUnits ?? node.rollup?.actualUnits ?? null;
   const remainingUnits = node.assignment?.remainingUnits ?? node.rollup?.remainingUnits ?? null;
+  const unit = node.assignment?.unit ?? node.rollup?.unit ?? null;
   const budgetedCost = node.assignment?.budgetedCost ?? node.rollup?.budgetedCost ?? null;
   const plannedCost = node.assignment?.plannedCost ?? node.rollup?.plannedCost ?? null;
   const actualCost = node.assignment?.actualCost ?? node.rollup?.actualCost ?? null;
@@ -295,7 +374,6 @@ function TreeRow({
               ? "hover:bg-surface-hover/30 cursor-pointer"
               : "hover:bg-surface-hover/20"
         }`}
-        style={{ paddingLeft: `${indent + 12}px` }}
         onClick={() => {
           if (!isGroup && node.assignment) {
             onRowClick?.(node.assignment);
@@ -303,7 +381,7 @@ function TreeRow({
         }}
       >
         {/* Name column */}
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0" style={{ paddingLeft: `${indent}px` }}>
           {isGroup ? (
             <button
               onClick={(e) => {
@@ -339,22 +417,22 @@ function TreeRow({
 
         {/* Budgeted Units (Phase 2) */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {num(budgetedUnits)}
+          {withUnit(budgetedUnits, unit)}
         </div>
 
         {/* Planned Units */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {num(plannedUnits)}
+          {withUnit(plannedUnits, unit)}
         </div>
 
         {/* Actual Units */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {num(actualUnits)}
+          {withUnit(actualUnits, unit)}
         </div>
 
         {/* Remaining Units */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {num(remainingUnits)}
+          {withUnit(remainingUnits, unit)}
         </div>
 
         {/* Rate Type */}
@@ -364,22 +442,22 @@ function TreeRow({
 
         {/* Budgeted Cost (Phase 2) */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {budgetedCost != null ? formatDefaultCurrency(budgetedCost) : ""}
+          {budgetedCost != null ? money(budgetedCost) : ""}
         </div>
 
         {/* Planned Cost */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {plannedCost != null ? formatDefaultCurrency(plannedCost) : ""}
+          {plannedCost != null ? money(plannedCost) : ""}
         </div>
 
         {/* Actual Cost */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {actualCost != null ? formatDefaultCurrency(actualCost) : ""}
+          {actualCost != null ? money(actualCost) : ""}
         </div>
 
         {/* Remaining Cost */}
         <div className={`text-right ${isGroup ? "font-medium text-text-primary" : "text-text-secondary"}`}>
-          {remainingCost != null ? formatDefaultCurrency(remainingCost) : ""}
+          {remainingCost != null ? money(remainingCost) : ""}
         </div>
       </div>
 
@@ -411,6 +489,9 @@ export function ResourceAssignmentTree({
   const tree = useMemo(() => {
     if (viewMode === "activity") {
       return buildActivityTree(assignments);
+    }
+    if (viewMode === "supervisor") {
+      return buildSupervisorTree(assignments);
     }
     return buildResourceTypeTree(assignments, resources);
   }, [assignments, viewMode, resources]);
@@ -449,40 +530,64 @@ export function ResourceAssignmentTree({
     );
   }
 
+  // Supervisor view filters out activities without a supervisor — if none qualify we
+  // show a tailored empty-state pointing the user to the bulk-assignment screen rather
+  // than the generic "No Assignments" copy.
+  if (viewMode === "supervisor" && tree.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border py-12 text-center">
+        <h3 className="text-lg font-medium text-text-primary">No supervisors set</h3>
+        <p className="mt-2 text-text-secondary max-w-md mx-auto">
+          No activities in this project have a supervisor assigned yet. Use the
+          <span className="text-accent"> Supervisor </span> sub-tab above to assign one
+          supervisor across many activities, or set per-activity from the activity edit form.
+        </p>
+      </div>
+    );
+  }
+
   const firstColLabel =
-    viewMode === "activity" ? "Activity / Role / Resource" : "Resource Type / Resource";
+    viewMode === "activity"
+      ? "Activity / Role / Resource"
+      : viewMode === "supervisor"
+        ? "Supervisor / Activity / Role / Resource"
+        : "Resource Type / Resource";
 
   return (
     <div className="rounded-xl border border-border bg-surface/50 shadow-xl overflow-hidden">
-      {/* Header */}
-      <div className="grid grid-cols-[minmax(220px,2fr)_minmax(180px,2fr)_90px_90px_90px_90px_80px_110px_110px_110px_110px] gap-2 items-center py-3 px-3 text-xs font-semibold uppercase tracking-wider text-text-secondary bg-surface/80 border-b border-border/50">
-        <div className="pl-3">{firstColLabel}</div>
-        <div>Activity</div>
-        <div className="text-right">Budgeted</div>
-        <div className="text-right">Planned</div>
-        <div className="text-right">Actual</div>
-        <div className="text-right">Remaining</div>
-        <div className="text-center">Rate</div>
-        <div className="text-right">Budgeted Cost</div>
-        <div className="text-right">Planned Cost</div>
-        <div className="text-right">Actual Cost</div>
-        <div className="text-right">Remaining Cost</div>
-      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[1360px]">
+          {/* Header */}
+          <div className="grid grid-cols-[minmax(220px,2fr)_minmax(180px,2fr)_90px_90px_90px_90px_80px_110px_110px_110px_110px] gap-2 items-center py-3 px-3 text-xs font-semibold uppercase tracking-wider text-text-secondary bg-surface/80 border-b border-border/50">
+            <div className="pl-3">{firstColLabel}</div>
+            <div>Activity</div>
+            <div className="text-right">Budgeted</div>
+            <div className="text-right">Planned</div>
+            <div className="text-right">Actual</div>
+            <div className="text-right">Remaining</div>
+            <div className="text-center">Rate</div>
+            <div className="text-right">Budgeted Cost</div>
+            <div className="text-right">Planned Cost</div>
+            <div className="text-right">Actual Cost</div>
+            <div className="text-right">Remaining Cost</div>
+          </div>
 
-      {/* Rows */}
-      <div>
-        {tree.map((node) => (
-          <TreeRow
-            key={node.id}
-            node={node}
-            level={0}
-            expanded={expanded}
-            toggle={toggle}
-            onRowClick={onRowClick}
-            selectedId={selectedId}
-            viewMode={viewMode}
-          />
-        ))}
+          {/* Rows */}
+          <div>
+            {tree.map((node) => (
+              <TreeRow
+                key={node.id}
+                node={node}
+                level={0}
+                expanded={expanded}
+                toggle={toggle}
+                onRowClick={onRowClick}
+                selectedId={selectedId}
+                viewMode={viewMode}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -492,13 +597,14 @@ export function ViewModeToggle({
   viewMode,
   onChange,
 }: {
-  viewMode: "flat" | "activity" | "resourceType";
-  onChange: (mode: "flat" | "activity" | "resourceType") => void;
+  viewMode: "flat" | "activity" | "resourceType" | "supervisor";
+  onChange: (mode: "flat" | "activity" | "resourceType" | "supervisor") => void;
 }) {
-  const modes: { key: "flat" | "activity" | "resourceType"; label: string; icon: React.ReactNode }[] = [
+  const modes: { key: "flat" | "activity" | "resourceType" | "supervisor"; label: string; icon: React.ReactNode }[] = [
     { key: "flat", label: "Flat List", icon: <List size={14} /> },
     { key: "activity", label: "By Activity", icon: <FolderTree size={14} /> },
     { key: "resourceType", label: "By Type", icon: <Layers size={14} /> },
+    { key: "supervisor", label: "By Supervisor", icon: <UserCheck size={14} /> },
   ];
 
   return (

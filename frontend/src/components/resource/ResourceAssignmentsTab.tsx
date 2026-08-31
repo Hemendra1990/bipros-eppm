@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { resourceApi, type ResourceAssignmentResponse } from "@/lib/api/resourceApi";
-import { resourceRoleApi, type ResourceRole } from "@/lib/api/resourceRoleApi";
 import { resourceHistogramApi } from "@/lib/api/resourceHistogramApi";
 import { activityApi, type ActivityResponse } from "@/lib/api/activityApi";
 import { projectResourceApi, type ProjectResourceResponse } from "@/lib/api/projectResourceApi";
@@ -12,9 +11,11 @@ import { DataTable, type ColumnDef } from "@/components/common/DataTable";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import { ResourceLevelingDialog } from "./ResourceLevelingDialog";
-import { formatDefaultCurrency } from "@/lib/hooks/useCurrency";
+import { ResourceAssignmentForm } from "./ResourceAssignmentForm";
+import { useProjectCurrency } from "@/lib/currency/ProjectCurrencyProvider";
 import { UdfSection } from "@/components/udf/UdfSection";
 import { ResourceAssignmentTree, ViewModeToggle, type AssignmentRow } from "./ResourceAssignmentTree";
+import { CHART_TOOLTIP_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_TOOLTIP_ITEM_STYLE } from "@/components/common/dashboard/primitives";
 
 interface ResourceAssignmentRow {
   id: string;
@@ -40,23 +41,19 @@ interface ResourceAssignmentRow {
   actualCost: number;
   remainingCost: number;
   staffed: boolean;
+  /** Supervisor on the parent activity — populates the "By Supervisor" view. */
+  activitySupervisorResourceId: string | null;
+  activitySupervisorName: string | null;
 }
 
 export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
+  const { money } = useProjectCurrency();
   const [showForm, setShowForm] = useState(false);
-  const [assignMode, setAssignMode] = useState<"ROLE" | "RESOURCE">("RESOURCE");
-  const [formData, setFormData] = useState({
-    activityId: "",
-    resourceId: "",
-    roleId: "",
-    plannedUnits: "",
-    rateType: "STANDARD",
-  });
   const [selectedResourceId, setSelectedResourceId] = useState<string>("");
   const [showLeveling, setShowLeveling] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<{ id: string; resourceName: string; activityName: string } | null>(null);
-  const [viewMode, setViewMode] = useState<"flat" | "activity" | "resourceType">("activity");
+  const [viewMode, setViewMode] = useState<"flat" | "activity" | "resourceType" | "supervisor">("activity");
 
   const { data: assignmentsData, isLoading: isLoadingAssignments } = useQuery({
     queryKey: ["resource-assignments", projectId],
@@ -66,11 +63,6 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
   const { data: poolData } = useQuery({
     queryKey: ["resource-pool", projectId],
     queryFn: () => projectResourceApi.listPool(projectId),
-  });
-
-  const { data: rolesData } = useQuery({
-    queryKey: ["resource-roles"],
-    queryFn: () => resourceRoleApi.list(),
   });
 
   const { data: activitiesData } = useQuery({
@@ -85,29 +77,6 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
         ? resourceHistogramApi.getHistogram(projectId, selectedResourceId)
         : Promise.resolve({ data: [], success: true } as unknown as ReturnType<typeof resourceHistogramApi.getHistogram>),
     enabled: !!selectedResourceId,
-  });
-
-  const assignMutation = useMutation({
-    mutationFn: () =>
-      resourceApi.createProjectResourceAssignment(projectId, {
-        activityId: formData.activityId,
-        resourceId: formData.resourceId || undefined,
-        roleId: formData.roleId || undefined,
-        projectId,
-        plannedUnits: parseFloat(formData.plannedUnits),
-        rateType: formData.rateType,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["resource-assignments", projectId] });
-      setShowForm(false);
-      setFormData({
-        activityId: "",
-        resourceId: "",
-        roleId: "",
-        plannedUnits: "",
-        rateType: "STANDARD",
-      });
-    },
   });
 
   const recomputeCostsMutation = useMutation({
@@ -138,13 +107,6 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
     return Array.isArray(raw) ? (raw as ProjectResourceResponse[]) : [];
   }, [poolData]);
 
-  const roles = useMemo<ResourceRole[]>(() => {
-    const raw = rolesData?.data as unknown;
-    return Array.isArray(raw)
-      ? (raw as ResourceRole[])
-      : ((raw as { content?: ResourceRole[] } | undefined)?.content ?? []);
-  }, [rolesData]);
-
   const activities = useMemo<ActivityResponse[]>(() => {
     const raw = activitiesData?.data as unknown;
     return Array.isArray(raw)
@@ -162,16 +124,33 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       const poolEntry = a.resourceId ? poolMap.get(a.resourceId) : undefined;
       const activity = activityMap.get(a.activityId);
       const anyA = a as unknown as Record<string, unknown>;
-      const plannedUnits = a.plannedUnits;
-      const actualUnits = a.actualUnits;
+      // Display rule, kept deliberately simple:
+      //   Planned   = headcount (or quantity for material)   — what was entered
+      //   Actual    = stored actualUnits                     — cumulative nos from DPRs
+      //   Remaining = max(Planned − Actual, 0)               — plain subtraction
+      // Hours never enter this math. Legacy rows (no headcount/quantity) keep stored values.
+      const storedActual = a.actualUnits ?? 0;
+      let plannedUnits: number;
+      let actualUnits: number;
+      let remainingUnits: number;
+      if (a.headcount != null) {
+        plannedUnits = a.headcount;
+        actualUnits = storedActual;
+        remainingUnits = Math.max(plannedUnits - actualUnits, 0);
+      } else if (a.quantity != null) {
+        plannedUnits = Number(a.quantity);
+        actualUnits = storedActual;
+        remainingUnits = Math.max(plannedUnits - actualUnits, 0);
+      } else {
+        plannedUnits = a.plannedUnits;
+        actualUnits = storedActual;
+        const storedRemaining = anyA.remainingUnits as number | null | undefined;
+        remainingUnits = storedRemaining != null
+          ? storedRemaining
+          : Math.max(plannedUnits - actualUnits, 0);
+      }
       const plannedCost = (anyA.plannedCost as number) ?? 0;
       const actualCost = (anyA.actualCost as number) ?? 0;
-      // Backend's daily-output rollup leaves remaining_units / remaining_cost null until the
-      // first daily output row exists. Derive from planned − actual so role rollups still tally.
-      const storedRemainingUnits = anyA.remainingUnits as number | null | undefined;
-      const remainingUnits = storedRemainingUnits != null
-        ? storedRemainingUnits
-        : Math.max((plannedUnits ?? 0) - (actualUnits ?? 0), 0);
       const storedRemainingCost = anyA.remainingCost as number | null | undefined;
       const remainingCost = storedRemainingCost != null
         ? storedRemainingCost
@@ -198,6 +177,8 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
         actualCost,
         remainingCost,
         staffed: a.staffed ?? a.resourceId != null,
+        activitySupervisorResourceId: activity?.responsibleResourceId ?? null,
+        activitySupervisorName: activity?.responsibleResourceName ?? null,
       };
     });
   }, [assignments, pool, activities, projectId]);
@@ -225,44 +206,57 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       key: "budgetedUnits",
       label: "Budgeted Units",
       sortable: true,
-      render: (value) => (value == null ? "—" : Number(value).toFixed(2)),
+      render: (value, row) => {
+        if (value == null) return "—";
+        const formatted = Number(value).toFixed(2);
+        return row.unit ? `${formatted} ${row.unit}` : formatted;
+      },
     },
     {
       key: "plannedUnits",
       label: "Planned Units",
       sortable: true,
-      render: (value) => Number(value).toFixed(2),
+      render: (value, row) => {
+        const formatted = Number(value).toFixed(2);
+        return row.unit ? `${formatted} ${row.unit}` : formatted;
+      },
     },
     {
       key: "actualUnits",
       label: "Actual Units",
       sortable: true,
-      render: (value) => Number(value).toFixed(2),
+      render: (value, row) => {
+        const formatted = Number(value).toFixed(2);
+        return row.unit ? `${formatted} ${row.unit}` : formatted;
+      },
     },
     {
       key: "remainingUnits",
       label: "Remaining Units",
       sortable: true,
-      render: (value) => Number(value).toFixed(2),
+      render: (value, row) => {
+        const formatted = Number(value).toFixed(2);
+        return row.unit ? `${formatted} ${row.unit}` : formatted;
+      },
     },
     { key: "rateType", label: "Rate Type", sortable: true },
     {
       key: "budgetedCost",
       label: "Budgeted Cost",
       sortable: true,
-      render: (value) => (value == null ? "—" : formatDefaultCurrency(Number(value))),
+      render: (value) => (value == null ? "—" : money(Number(value))),
     },
     {
       key: "plannedCost",
       label: "Planned Cost",
       sortable: true,
-      render: (value) => formatDefaultCurrency(Number(value)),
+      render: (value) => money(Number(value)),
     },
     {
       key: "actualCost",
       label: "Actual Cost",
       sortable: true,
-      render: (value) => formatDefaultCurrency(Number(value)),
+      render: (value) => money(Number(value)),
     },
   ];
 
@@ -283,11 +277,6 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       })),
     [pool]
   );
-
-  const canSubmit =
-    formData.activityId &&
-    formData.plannedUnits &&
-    (assignMode === "RESOURCE" ? formData.resourceId : formData.roleId);
 
   return (
     <div className="space-y-6">
@@ -320,132 +309,11 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
       </div>
 
       {showForm && (
-        <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
-          <h3 className="mb-4 text-lg font-semibold text-text-primary">Assign Resource to Activity</h3>
-
-          <div className="mb-4 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setAssignMode("RESOURCE")}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                assignMode === "RESOURCE"
-                  ? "bg-accent text-accent-foreground"
-                  : "border border-border text-text-secondary hover:bg-surface-hover"
-              }`}
-            >
-              Resource
-            </button>
-            <button
-              type="button"
-              onClick={() => setAssignMode("ROLE")}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                assignMode === "ROLE"
-                  ? "bg-accent text-accent-foreground"
-                  : "border border-border text-text-secondary hover:bg-surface-hover"
-              }`}
-            >
-              Plan with Role
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">Activity</label>
-              <SearchableSelect
-                value={formData.activityId}
-                onChange={(val) =>
-                  setFormData({ ...formData, activityId: val })
-                }
-                placeholder="Search activities..."
-                options={activities.map((activity) => ({
-                  value: activity.id,
-                  label: `${activity.code} - ${activity.name}`,
-                }))}
-              />
-            </div>
-
-            {assignMode === "RESOURCE" ? (
-              <div>
-                <label className="block text-sm font-medium text-text-secondary">Resource</label>
-                <SearchableSelect
-                  value={formData.resourceId}
-                  onChange={(val) =>
-                    setFormData({ ...formData, resourceId: val })
-                  }
-                  placeholder="Search pooled resources..."
-                  options={pool.map((p) => ({
-                    value: p.resourceId,
-                    label: `${p.resourceCode ?? p.resourceId} - ${p.resourceName ?? "Unknown"}`,
-                  }))}
-                />
-                {pool.length === 0 && (
-                  <p className="mt-1 text-xs text-amber-600">
-                    No resources in pool. Add resources to the project pool first.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div>
-                <label className="block text-sm font-medium text-text-secondary">Role</label>
-                <SearchableSelect
-                  value={formData.roleId}
-                  onChange={(val) =>
-                    setFormData({ ...formData, roleId: val })
-                  }
-                  placeholder="Search roles..."
-                  options={roles.map((role) => ({
-                    value: role.id,
-                    label: `${role.code} - ${role.name}`,
-                  }))}
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">Planned Units</label>
-              <input
-                type="number"
-                value={formData.plannedUnits}
-                onChange={(e) =>
-                  setFormData({ ...formData, plannedUnits: e.target.value })
-                }
-                step="0.01"
-                className="mt-1 block w-full rounded-md border-border px-3 py-2 border bg-surface/50 text-text-primary shadow-sm focus:border-accent focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">Rate Type</label>
-              <select
-                value={formData.rateType}
-                onChange={(e) =>
-                  setFormData({ ...formData, rateType: e.target.value })
-                }
-                className="mt-1 block w-full rounded-md border-border px-3 py-2 border bg-surface/50 text-text-primary shadow-sm focus:border-accent focus:outline-none"
-              >
-                <option value="STANDARD">Standard</option>
-                <option value="OVERTIME">Overtime</option>
-                <option value="CPWD_SOR">CPWD SOR</option>
-              </select>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => assignMutation.mutate()}
-                disabled={assignMutation.isPending || !canSubmit}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-surface-active"
-              >
-                {assignMutation.isPending ? "Assigning..." : "Assign"}
-              </button>
-              <button
-                onClick={() => setShowForm(false)}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-hover/50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+        <ResourceAssignmentForm
+          projectId={projectId}
+          onSuccess={() => setShowForm(false)}
+          onCancel={() => setShowForm(false)}
+        />
       )}
 
       <div className="rounded-lg border border-border bg-surface/50 p-6 shadow-sm">
@@ -540,12 +408,9 @@ export function ResourceAssignmentsTab({ projectId }: { projectId: string }) {
                   label={{ value: "Units", angle: -90, position: "insideLeft" }}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1e293b",
-                    border: "1px solid #475569",
-                    borderRadius: "0.375rem",
-                    color: "#e2e8f0",
-                  }}
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                  itemStyle={CHART_TOOLTIP_ITEM_STYLE}
                   formatter={(value) => (typeof value === "number" ? value.toFixed(2) : value)}
                 />
                 <Legend wrapperStyle={{ paddingTop: "16px" }} />

@@ -9,12 +9,14 @@ import com.bipros.project.application.dto.DailyActivityResourceOutputResponse;
 import com.bipros.project.domain.model.DailyActivityResourceOutput;
 import com.bipros.project.domain.repository.DailyActivityResourceOutputRepository;
 import com.bipros.project.domain.repository.ProjectRepository;
+import java.math.BigDecimal;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -130,8 +132,12 @@ public class DailyActivityResourceOutputService {
   }
 
   private void rejectDuplicate(UUID projectId, LocalDate outputDate, UUID activityId, UUID resourceId, UUID excludeId) {
+    // Only block when an existing MANUAL row matches the key. DPR-sourced rows are allowed to
+    // coexist (different DPRs, same activity/resource/day) and never collide with the MANUAL CRUD
+    // path because they always carry source='DPR'.
     repository
-        .findFirstByProjectIdAndOutputDateAndActivityIdAndResourceId(projectId, outputDate, activityId, resourceId)
+        .findFirstByProjectIdAndOutputDateAndActivityIdAndResourceIdAndSource(
+            projectId, outputDate, activityId, resourceId, "MANUAL")
         .filter(existing -> excludeId == null || !existing.getId().equals(excludeId))
         .ifPresent(existing -> {
           throw new BusinessRuleException("DUPLICATE_DAILY_OUTPUT",
@@ -182,6 +188,150 @@ public class DailyActivityResourceOutputService {
           updated, projectId, activityId, resourceId);
     }
   }
+
+  /**
+   * Public hook for the DPR write path. Replaces all DPR-sourced ledger rows for the given DPR
+   * with the supplied per-resource aggregates, then recomputes assignment rollup + publishes
+   * {@link DailyOutputChangedEvent} for each affected (activity, resource) pair so the existing
+   * cost-rollup + units-percent-complete chains pick up the change.
+   *
+   * <p>{@code aggregates} is a list of one row per {@code (activityId, resourceId)} touched by
+   * this DPR. Pass empty / null to reconcile a DPR with zero child rows (still triggers cleanup).
+   */
+  public void reconcileDprLedger(UUID projectId,
+                                  UUID dprId,
+                                  LocalDate reportDate,
+                                  List<DprResourceAggregate> aggregates) {
+    if (projectId == null || dprId == null || reportDate == null) {
+      throw new IllegalArgumentException("projectId, dprId, and reportDate are required");
+    }
+
+    List<DailyActivityResourceOutput> existing = repository.findByDprId(dprId);
+    java.util.Map<String, DailyActivityResourceOutput> existingByKey = new java.util.HashMap<>();
+    for (DailyActivityResourceOutput row : existing) {
+      existingByKey.put(row.getActivityId() + "::" + row.getResourceId(), row);
+    }
+
+    java.util.Set<String> seenKeys = new java.util.HashSet<>();
+    java.util.Set<java.util.Map.Entry<UUID, UUID>> affectedPairs = new java.util.HashSet<>();
+    java.util.Map<java.util.Map.Entry<UUID, UUID>, BigDecimal> qtyByPair = new java.util.HashMap<>();
+
+    if (aggregates != null) {
+      for (DprResourceAggregate agg : aggregates) {
+        if (agg.activityId() == null || agg.resourceId() == null) continue;
+        String key = agg.activityId() + "::" + agg.resourceId();
+        seenKeys.add(key);
+        DailyActivityResourceOutput row = existingByKey.get(key);
+        if (row == null) {
+          row = DailyActivityResourceOutput.builder()
+              .projectId(projectId)
+              .outputDate(reportDate)
+              .activityId(agg.activityId())
+              .resourceId(agg.resourceId())
+              .qtyExecuted(agg.qtyExecuted() != null ? agg.qtyExecuted() : BigDecimal.ZERO)
+              .unit(agg.unit() != null ? agg.unit() : "EA")
+              .hoursWorked(agg.hoursWorked())
+              .daysWorked(agg.hoursWorked() == null ? null : agg.hoursWorked() / DEFAULT_HOURS_PER_DAY)
+              .dprId(dprId)
+              .source("DPR")
+              .remarks(agg.remarks())
+              .build();
+        } else {
+          row.setOutputDate(reportDate);
+          row.setQtyExecuted(agg.qtyExecuted() != null ? agg.qtyExecuted() : BigDecimal.ZERO);
+          row.setUnit(agg.unit() != null ? agg.unit() : row.getUnit());
+          row.setHoursWorked(agg.hoursWorked());
+          row.setDaysWorked(agg.hoursWorked() == null ? null : agg.hoursWorked() / DEFAULT_HOURS_PER_DAY);
+          row.setRemarks(agg.remarks());
+          row.setSource("DPR");
+        }
+        repository.save(row);
+        affectedPairs.add(java.util.Map.entry(agg.activityId(), agg.resourceId()));
+        qtyByPair.put(java.util.Map.entry(agg.activityId(), agg.resourceId()),
+            row.getQtyExecuted());
+      }
+    }
+
+    // Drop any leftover ledger rows owned by this DPR that no longer correspond to a child row
+    // (e.g. resource removed in an update). Each such pair still needs a rollup to bring its
+    // ResourceAssignment.actualUnits down.
+    for (DailyActivityResourceOutput row : existing) {
+      String key = row.getActivityId() + "::" + row.getResourceId();
+      if (!seenKeys.contains(key)) {
+        repository.delete(row);
+        affectedPairs.add(java.util.Map.entry(row.getActivityId(), row.getResourceId()));
+      }
+    }
+
+    // Flush before the rollup query so the new/updated/deleted rows are visible to the SUM.
+    repository.flush();
+
+    for (java.util.Map.Entry<UUID, UUID> pair : affectedPairs) {
+      recomputeAssignmentRollup(projectId, pair.getKey(), pair.getValue());
+      BigDecimal qty = qtyByPair.getOrDefault(pair, BigDecimal.ZERO);
+      eventPublisher.publishEvent(new DailyOutputChangedEvent(
+          projectId, pair.getKey(), pair.getValue(), reportDate, qty));
+    }
+  }
+
+  /**
+   * AFTER_COMMIT-safe variant of {@link #reconcileDprLedger}. Forces a brand-new transaction so
+   * that {@code EntityManager} writes (esp. {@code repository.flush()} at line 266) succeed when
+   * the caller runs inside an AFTER_COMMIT listener — at that point the outer JpaTransactionManager
+   * has already triggered after-completion callbacks and the inherited TX state cannot accept
+   * further writes, even though the inner {@code @Transactional(REQUIRED)} interceptor thinks it
+   * has begun a new TX. {@code REQUIRES_NEW} explicitly suspends the (defunct) outer binding and
+   * starts a fresh EM, which is what {@link DprToDailyOutputListener} needs.
+   *
+   * <p>Inline callers in {@code DailyProgressReportService} keep using
+   * {@link #reconcileDprLedger} so they participate in the parent DPR-write TX (so a rollback of
+   * the DPR also rolls back the ledger write).
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void reconcileDprLedgerInNewTx(UUID projectId,
+                                         UUID dprId,
+                                         LocalDate reportDate,
+                                         List<DprResourceAggregate> aggregates) {
+    reconcileDprLedger(projectId, dprId, reportDate, aggregates);
+  }
+
+  /**
+   * AFTER_COMMIT-safe variant of {@link #deleteDprLedger}. See {@link #reconcileDprLedgerInNewTx}
+   * for rationale.
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void deleteDprLedgerInNewTx(UUID projectId, UUID dprId, LocalDate reportDate) {
+    deleteDprLedger(projectId, dprId, reportDate);
+  }
+
+  /**
+   * Public hook used by the DPR delete path. Removes every DPR-owned ledger row for the DPR,
+   * then runs the rollup + publishes the change event for each affected pair.
+   */
+  public void deleteDprLedger(UUID projectId, UUID dprId, LocalDate reportDate) {
+    List<DailyActivityResourceOutput> existing = repository.findByDprId(dprId);
+    if (existing.isEmpty()) return;
+    java.util.Set<java.util.Map.Entry<UUID, UUID>> affectedPairs = new java.util.HashSet<>();
+    for (DailyActivityResourceOutput row : existing) {
+      affectedPairs.add(java.util.Map.entry(row.getActivityId(), row.getResourceId()));
+    }
+    repository.deleteAll(existing);
+    repository.flush();
+    for (java.util.Map.Entry<UUID, UUID> pair : affectedPairs) {
+      recomputeAssignmentRollup(projectId, pair.getKey(), pair.getValue());
+      eventPublisher.publishEvent(new DailyOutputChangedEvent(
+          projectId, pair.getKey(), pair.getValue(), reportDate, BigDecimal.ZERO));
+    }
+  }
+
+  /** Aggregated per-resource units for one DPR — input to {@link #reconcileDprLedger}. */
+  public record DprResourceAggregate(
+      UUID activityId,
+      UUID resourceId,
+      BigDecimal qtyExecuted,
+      String unit,
+      Double hoursWorked,
+      String remarks) {}
 
   /**
    * Cross-schema lookup: {@code activity.activities.work_activity_id → resource.work_activities.default_unit}.

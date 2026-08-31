@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Link as LinkIcon } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import { riskApi, type RiskResponse, type RiskActivityAssignment } from "@/lib/api/riskApi";
 import { getErrorMessage } from "@/lib/utils/error";
 import { ActivityAssignmentModal } from "./ActivityAssignmentModal";
@@ -39,6 +41,54 @@ export function RiskActivitiesTab({ risk, projectId, riskId }: Props) {
     if (!dateStr) return "—";
     return new Date(dateStr).toLocaleDateString();
   };
+
+  const columns = useMemo<ColumnDef<RiskActivityAssignment>[]>(
+    () => [
+      {
+        header: "Code",
+        accessorKey: "activityCode",
+        cell: ({ getValue }) => (
+          <span className="font-mono text-xs">{String(getValue() || "—")}</span>
+        ),
+      },
+      {
+        header: "Name",
+        accessorKey: "activityName",
+        cell: ({ getValue }) => String(getValue() || "—"),
+      },
+      {
+        header: "Start Date",
+        accessorKey: "activityStartDate",
+        cell: ({ getValue }) => formatDate(getValue() as string | undefined),
+      },
+      {
+        header: "Finish Date",
+        accessorKey: "activityFinishDate",
+        cell: ({ getValue }) => formatDate(getValue() as string | undefined),
+      },
+      {
+        header: "Actions",
+        id: "actions",
+        meta: { align: "right" },
+        cell: ({ row }) => (
+          <div className="text-right">
+            <button
+              onClick={() => {
+                if (window.confirm("Remove this activity from the risk?")) {
+                  removeMutation.mutate(row.original.activityId);
+                }
+              }}
+              disabled={removeMutation.isPending}
+              className="text-danger hover:text-danger disabled:text-text-muted"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [removeMutation]
+  );
 
   return (
     <div className="space-y-6">
@@ -97,40 +147,12 @@ export function RiskActivitiesTab({ risk, projectId, riskId }: Props) {
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-surface/50 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-surface-hover/50">
-                <th className="px-4 py-3 text-left font-medium text-text-secondary">Code</th>
-                <th className="px-4 py-3 text-left font-medium text-text-secondary">Name</th>
-                <th className="px-4 py-3 text-left font-medium text-text-secondary">Start Date</th>
-                <th className="px-4 py-3 text-left font-medium text-text-secondary">Finish Date</th>
-                <th className="px-4 py-3 text-right font-medium text-text-secondary">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assignments.map((assignment) => (
-                <tr key={assignment.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 font-mono text-xs">{assignment.activityCode || "—"}</td>
-                  <td className="px-4 py-3">{assignment.activityName || "—"}</td>
-                  <td className="px-4 py-3">{formatDate(assignment.activityStartDate)}</td>
-                  <td className="px-4 py-3">{formatDate(assignment.activityFinishDate)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => {
-                        if (window.confirm("Remove this activity from the risk?")) {
-                          removeMutation.mutate(assignment.activityId);
-                        }
-                      }}
-                      disabled={removeMutation.isPending}
-                      className="text-danger hover:text-danger disabled:text-text-muted"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <SimpleTable
+            data={assignments}
+            columns={columns}
+            sortable={true}
+            className="rounded-xl border-0"
+          />
         </div>
       )}
 

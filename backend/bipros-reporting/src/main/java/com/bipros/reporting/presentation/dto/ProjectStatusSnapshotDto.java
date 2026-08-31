@@ -32,4 +32,6 @@ public record ProjectStatusSnapshotDto(
     long openHseIncidents,
     BigDecimal bacCrores,
     BigDecimal eacCrores,
-    Instant lastUpdatedAt) {}
+    BigDecimal acCrores,
+    Instant lastUpdatedAt,
+    LocalDate dataDate) {}

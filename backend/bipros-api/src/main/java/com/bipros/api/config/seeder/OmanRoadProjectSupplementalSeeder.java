@@ -163,7 +163,10 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
         seedActivityCodes(projectId);
         seedEvmCalculations(projectId);
         seedDailyActivityResourceOutput(projectId);
-        seedDailyActivityResourceOutputs(projectId);
+        // seedDailyActivityResourceOutputs(projectId): writes qty_executed = ProductivityNorm
+        // output (Cum/LS) to per-resource ledger rows, which the assignment rollup blindly sums
+        // as labor units — inflates ResourceAssignment.actualUnits. Disabled until the seeder
+        // is rewritten to emit semantically-correct labor day-equivalents.
         seedManpowerOperationalWiring(projectId);
 
         log.info("[BNK-SUPP] supplemental seeding completed");
@@ -225,15 +228,18 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
             rr.setResponseType(strategy);
             rr.setDescription(buildResponseText(strategy, owner, r));
             rr.setResponsibleId(null);
+            // Deterministic per-risk dates + costs from a stable hash of the risk id.
+            // Costs are critical and must reproduce; no RNG.
+            int rHash = Math.abs(r.getId().hashCode());
             LocalDate planned = r.getIdentifiedDate() != null
-                    ? r.getIdentifiedDate().plusDays(14L + (rng.nextInt(60)))
-                    : LocalDate.of(2025, 3, 1).plusDays(rng.nextInt(120));
+                    ? r.getIdentifiedDate().plusDays(14L + (rHash % 60L))
+                    : LocalDate.of(2025, 3, 1).plusDays(rHash % 120L);
             rr.setPlannedDate(planned);
             if ("COMPLETED".equals(status)) {
-                rr.setActualDate(planned.plusDays(rng.nextInt(20)));
-                rr.setActualCost(new BigDecimal(2000 + rng.nextInt(8000)));
+                rr.setActualDate(planned.plusDays((rHash / 7) % 20L));
+                rr.setActualCost(new BigDecimal(2000 + ((rHash / 11) % 8001)));
             }
-            rr.setEstimatedCost(new BigDecimal(1500 + rng.nextInt(15000)));
+            rr.setEstimatedCost(new BigDecimal(1500 + ((rHash / 13) % 15001)));
             rr.setStatus(status);
             riskResponseRepository.save(rr);
             respCount++;
@@ -857,11 +863,16 @@ public class OmanRoadProjectSupplementalSeeder implements CommandLineRunner {
             BigDecimal bac = node.getBudgetCrores() != null
                     ? node.getBudgetCrores().multiply(new BigDecimal("1000000"))
                     : new BigDecimal("5000000");
+            int nodeHash = Math.abs(node.getId().hashCode());
             for (int p = 0; p < periodDates.length; p++) {
-                double progressPct = Math.min(1.0, 0.15 + p * 0.20 + rng.nextDouble() * 0.1);
+                // Deterministic progress + cost-overrun factor — no RNG. EVM rows must
+                // reproduce so dashboards and reports stay consistent across reseeds.
+                double progressOffset = ((nodeHash + p * 13) % 11) / 100.0; // 0..0.10
+                double progressPct = Math.min(1.0, 0.15 + p * 0.20 + progressOffset);
                 BigDecimal pv = bac.multiply(BigDecimal.valueOf(Math.min(1.0, 0.20 + p * 0.22)));
                 BigDecimal ev = bac.multiply(BigDecimal.valueOf(progressPct));
-                BigDecimal ac = ev.multiply(BigDecimal.valueOf(1.03 + rng.nextDouble() * 0.05));
+                double overrun = 1.03 + ((nodeHash + p * 7) % 6) / 100.0; // 1.03..1.08
+                BigDecimal ac = ev.multiply(BigDecimal.valueOf(overrun));
                 BigDecimal sv = ev.subtract(pv);
                 BigDecimal cv = ev.subtract(ac);
                 double spi = pv.signum() > 0 ? ev.doubleValue() / pv.doubleValue() : 1.0;

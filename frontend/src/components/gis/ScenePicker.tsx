@@ -34,6 +34,18 @@ export function ScenePicker({
     ? sorted.findIndex((s) => s.id === selectedSceneId)
     : -1;
 
+  // Least-cloudy scene, for the "Clearest" quick-jump. Optical scenes over
+  // monsoon regions are often cloudy; this lets the user land on a clear frame.
+  const clearest = useMemo(() => {
+    const withCloud = sorted.filter(
+      (s) => typeof s.cloudCoverPercent === "number"
+    );
+    if (withCloud.length === 0) return null;
+    return withCloud.reduce((a, b) =>
+      (b.cloudCoverPercent as number) < (a.cloudCoverPercent as number) ? b : a
+    );
+  }, [sorted]);
+
   if (sorted.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-surface/50 px-4 py-3 text-sm text-text-muted">
@@ -53,13 +65,31 @@ export function ScenePicker({
         {sorted.map((s) => {
           const date = new Date(s.captureDate).toISOString().slice(0, 10);
           const source = s.source.replace(/_/g, " ");
+          const cloud =
+            typeof s.cloudCoverPercent === "number"
+              ? ` · ☁ ${Math.round(s.cloudCoverPercent)}%`
+              : "";
           return (
             <option key={s.id as string} value={s.id as string}>
-              {date} · {source} · {s.status}
+              {date} · {source}{cloud}
             </option>
           );
         })}
       </select>
+      {clearest && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={clearest.id === selectedSceneId}
+          title={`Jump to the least-cloudy scene (☁ ${Math.round(
+            clearest.cloudCoverPercent as number
+          )}%)`}
+          onClick={() => onChange(clearest.id as string)}
+        >
+          ☁ Clearest
+        </Button>
+      )}
       <Button
         type="button"
         variant="ghost"

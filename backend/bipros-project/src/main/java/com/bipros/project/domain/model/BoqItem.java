@@ -47,7 +47,10 @@ public class BoqItem extends BaseEntity {
   @Column(name = "item_no", nullable = false, length = 20)
   private String itemNo;
 
-  @Column(name = "description", nullable = false, length = 500)
+  // 2000: the client's BOQ has descriptions up to ~760 chars (4 of 553 rows exceed the
+  // old 500). Existing DBs are widened by Liquibase changeset 124 (prod) and
+  // DevSchemaFixupRunner fixup 124 (dev) — ddl-auto:update never alters a column type.
+  @Column(name = "description", nullable = false, length = 2000)
   private String description;
 
   @Column(name = "unit", nullable = false, length = 20)
@@ -84,7 +87,19 @@ public class BoqItem extends BaseEntity {
   @Column(name = "actual_rate", precision = 18, scale = 4)
   private BigDecimal actualRate;
 
-  /** Derived: qtyExecutedToDate × actualRate. */
+  /**
+   * Real incurred cost for this line, rolled up from approved DPRs by
+   * {@code BoqActualCostQuery.sumActualCost} — manpower + equipment + material + material
+   * consumption + sub-contractor. Independent of the measured quantity, so spend booked against a
+   * non-measurement operation of a split line is still reported.
+   *
+   * <p>Null on rows a DPR roll-up has never touched (seeded/manually rated lines), which keep the
+   * legacy {@code qtyExecutedToDate × actualRate} basis.
+   */
+  @Column(name = "actual_cost", precision = 19, scale = 2)
+  private BigDecimal actualCost;
+
+  /** Derived: actualCost when known, else qtyExecutedToDate × actualRate. */
   @Column(name = "actual_amount", precision = 19, scale = 2)
   private BigDecimal actualAmount;
 
@@ -112,4 +127,30 @@ public class BoqItem extends BaseEntity {
   @Enumerated(EnumType.STRING)
   @Column(name = "status", length = 20)
   private BoqStatus status;
+
+  /**
+   * When TRUE, the {@code actualRate} on this item was set explicitly via PATCH and must be
+   * preserved by the {@code BoqActualRateRecalcListener} (Workstream B2). Null/FALSE means the
+   * listener is free to overwrite {@code actualRate} from rolled-up DPR contributions. Nullable
+   * for ddl-auto:update compatibility with pre-Workstream-B rows.
+   */
+  @Column(name = "manual_override")
+  private Boolean manualOverride;
+
+  /**
+   * Split mode when the line is split into {@link BoqOperation}s (split design §4, D4):
+   * {@code WEIGHTED_OPERATIONS} or {@code QUANTITY_PARTITION}. Plain varchar, not an enum column.
+   * Null = unsplit — every consumer takes today's flat path unchanged.
+   */
+  @Column(name = "split_mode", length = 24)
+  private String splitMode;
+
+  /**
+   * Derived (split lines only): weighted completion fraction 0..1 from
+   * {@code BoqOperationProgressCalculator}. Drives {@code percentComplete}/EV, while the measured
+   * {@code qtyExecutedToDate} (measurement operation, raw) keeps driving billing/income/OVERRUN.
+   * Null = unsplit.
+   */
+  @Column(name = "earned_fraction", precision = 9, scale = 6)
+  private BigDecimal earnedFraction;
 }

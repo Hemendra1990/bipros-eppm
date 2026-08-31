@@ -5,9 +5,14 @@ import com.bipros.activity.domain.repository.ActivityRepository;
 import com.bipros.baseline.infrastructure.repository.BaselineActivityRepository;
 import com.bipros.baseline.infrastructure.repository.BaselineRepository;
 import com.bipros.common.exception.BusinessRuleException;
+import com.bipros.cost.domain.repository.ActivityExpenseRepository;
+import com.bipros.project.application.service.DprActualCostLookup;
+import com.bipros.resource.domain.repository.ActivitySubContractorAssignmentRepository;
+import com.bipros.resource.domain.repository.ResourceAssignmentRepository;
 import com.bipros.risk.application.simulation.MonteCarloEngine;
 import com.bipros.risk.application.simulation.MonteCarloInput;
 import com.bipros.risk.domain.repository.ActivityCorrelationRepository;
+import com.bipros.risk.domain.repository.RiskActivityAssignmentRepository;
 import com.bipros.risk.domain.repository.RiskRepository;
 import com.bipros.scheduling.domain.algorithm.CalendarCalculator;
 import com.bipros.scheduling.domain.repository.PertEstimateRepository;
@@ -29,14 +34,24 @@ class MonteCarloEngineBaselineRequiredTest {
         ActivityRelationshipRepository relRepo = Mockito.mock(ActivityRelationshipRepository.class);
         PertEstimateRepository pertRepo = Mockito.mock(PertEstimateRepository.class);
         RiskRepository riskRepo = Mockito.mock(RiskRepository.class);
+        RiskActivityAssignmentRepository riskAssignRepo = Mockito.mock(RiskActivityAssignmentRepository.class);
         ActivityCorrelationRepository corrRepo = Mockito.mock(ActivityCorrelationRepository.class);
         CalendarCalculator calendar = Mockito.mock(CalendarCalculator.class);
+        ActivityExpenseRepository expenseRepo = Mockito.mock(ActivityExpenseRepository.class);
+        ResourceAssignmentRepository assignmentRepo = Mockito.mock(ResourceAssignmentRepository.class);
+        ActivitySubContractorAssignmentRepository scAssignmentRepo =
+            Mockito.mock(ActivitySubContractorAssignmentRepository.class);
+        DprActualCostLookup dprActualCostLookup = Mockito.mock(DprActualCostLookup.class);
+        com.bipros.project.domain.repository.ProjectRepository projectRepo =
+            Mockito.mock(com.bipros.project.domain.repository.ProjectRepository.class);
 
         UUID projectId = UUID.randomUUID();
         Mockito.when(baselineRepo.findByProjectIdAndIsActiveTrue(projectId)).thenReturn(List.of());
 
         MonteCarloEngine engine = new MonteCarloEngine(
-            baselineRepo, baselineActivityRepo, activityRepo, relRepo, pertRepo, riskRepo, corrRepo, calendar);
+            baselineRepo, baselineActivityRepo, activityRepo, relRepo, pertRepo, riskRepo,
+            riskAssignRepo, corrRepo, calendar, expenseRepo, assignmentRepo, scAssignmentRepo,
+            dprActualCostLookup, projectRepo);
 
         MonteCarloInput input = MonteCarloInput.defaultsFor(projectId, 1000);
 

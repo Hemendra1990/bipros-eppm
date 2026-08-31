@@ -23,8 +23,10 @@ export interface ProjectStatusSnapshot {
   activeRisksCount: number;
   openHseIncidents: number;
   bacCrores: number;
+  acCrores: number;
   eacCrores: number;
   lastUpdatedAt: string;
+  dataDate: string | null; // project's data_date (ISO date); falls back to today when null
 }
 
 export interface CostVarianceRow {
@@ -82,6 +84,7 @@ export interface ActivityStatusRow {
   freeFloat: number | null;
   isCritical: boolean;
   pctComplete: number;
+  expectedProgressPct: number;
   daysDelay: number;
   daysRemaining: number;
 }
@@ -112,7 +115,7 @@ export interface ScheduleQuality {
   missingLogicCount: number;
   leadRelationshipsCount: number;
   lagsCount: number;
-  fsRelationshipPct: number;
+  fsRelationshipPct: number | null; // null when there are 0 relationships (N/A)
   hardConstraintsCount: number;
   highFloatCount: number;
   negativeFloatCount: number;
@@ -125,6 +128,19 @@ export interface ScheduleQuality {
   beiRequired: number;
   overallHealthPct: number;
   failingChecks: string[];
+}
+
+export interface SnapshotDeltas {
+  physicalPctDelta: number | null;
+  bacCroresDelta: number | null;
+  acCroresDelta: number | null;
+  activeRisksDelta: number | null;
+  tasksCompletedDelta: number | null;
+}
+
+export interface ProjectStatusSnapshotWithTrend {
+  current: ProjectStatusSnapshot;
+  deltas: SnapshotDeltas;
 }
 
 export interface MilestoneRow {
@@ -140,10 +156,36 @@ export interface MilestoneRow {
   ldExposureCrores: number;
 }
 
+/** One supervised activity on the "My Progress" card (client ask, 2026-08-20). */
+export interface MyProgressRow {
+  activityId: string;
+  activityName: string;
+  boqItemNo: string;
+  unit: string;
+  todayQty: number;
+  weekQty: number;
+  monthQty: number;
+  cumulativeQty: number;
+  percentComplete: number | null;
+}
+
 export const projectInsightsApi = {
+  /** Caller's supervised-activity progress — gated by MY_PROGRESS.READ. */
+  getMyProgress: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<MyProgressRow[]>>(`/v1/projects/${projectId}/reports/my-progress`)
+      .then((r) => r.data.data),
+
   getStatusSnapshot: (projectId: string) =>
     apiClient
       .get<ApiResponse<ProjectStatusSnapshot>>(`/v1/projects/${projectId}/status-snapshot`)
+      .then((r) => r.data.data),
+
+  getStatusSnapshotWithTrend: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<ProjectStatusSnapshotWithTrend>>(
+        `/v1/projects/${projectId}/status-snapshot-with-trend`,
+      )
       .then((r) => r.data.data),
 
   getCostVariance: (projectId: string) =>

@@ -15,14 +15,16 @@ import { portfolioReportApi } from "@/lib/api/portfolioReportApi";
 import {
   CHART_COLORS,
   CHART_TOOLTIP_STYLE,
+  CHART_TOOLTIP_LABEL_STYLE,
+  CHART_TOOLTIP_ITEM_STYLE,
   EmptyBlock,
   LoadingBlock,
   SectionCard,
-  formatCrore,
   truncate,
 } from "@/components/common/dashboard/primitives";
+import { formatMoney } from "@/lib/currency/format";
 
-export function CostOverrunChart() {
+export function CostOverrunChart({ currency }: { currency?: string } = {}) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["portfolio-cost-overrun"],
     queryFn: () => portfolioReportApi.getCostOverrunProjects(10),
@@ -42,12 +44,14 @@ export function CostOverrunChart() {
       </SectionCard>
     );
 
-  const rows = (data ?? []).filter((r) => Math.abs(r.varianceCrores ?? 0) > 0);
+  const rows = (data ?? [])
+    .filter((r) => Math.abs(r.varianceCrores ?? 0) > 0)
+    .filter((r) => !currency || (r.budgetCurrency ?? "USD") === currency);
   if (rows.length === 0) {
     return (
       <SectionCard
         title="Cost Overruns"
-        subtitle="Projects ranked by EAC − BAC variance"
+        subtitle="Projects ranked by % variance (|EAC − BAC| / BAC)"
       >
         <EmptyBlock label="No measurable cost variances yet (EVM snapshots pending)" />
       </SectionCard>
@@ -61,12 +65,19 @@ export function CostOverrunChart() {
     bac: r.bacCrores,
     eac: r.eacCrores,
     cpi: r.cpi,
+    budgetCurrency: r.budgetCurrency ?? "USD",
   }));
+
+  const chartCurrency = chartData[0]?.budgetCurrency ?? currency ?? "USD";
+  const variances = chartData.map((d) => d.variance ?? 0);
+  const lo = Math.min(0, ...variances);
+  const hi = Math.max(0, ...variances);
+  const pad = (hi - lo || Math.abs(hi) || 1) * 0.08;
 
   return (
     <SectionCard
       title="Cost Overruns"
-      subtitle="Forecast at completion vs budget. Red = overrun, green = underrun."
+      subtitle="Ranked by % variance (|EAC − BAC| / BAC). Red = overrun, green = underrun. Each bar in its own currency."
     >
       <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 40)}>
         <BarChart
@@ -74,12 +85,15 @@ export function CostOverrunChart() {
           layout="vertical"
           margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis
             type="number"
             stroke="#64748b"
             style={{ fontSize: "12px" }}
-            tickFormatter={(v: number) => `₹${v.toFixed(0)}Cr`}
+            domain={[lo - pad, hi + pad]}
+            tickFormatter={(v: number) =>
+              formatMoney(v, { code: chartCurrency }, { compact: true })
+            }
           />
           <YAxis
             type="category"
@@ -90,12 +104,13 @@ export function CostOverrunChart() {
           />
           <Tooltip
             contentStyle={CHART_TOOLTIP_STYLE}
+            labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+            itemStyle={CHART_TOOLTIP_ITEM_STYLE}
             formatter={(value, _name, props) => {
               const row = props.payload as (typeof chartData)[number];
-              return [
-                `${formatCrore(Number(value ?? 0))} (CPI ${row.cpi.toFixed(2)})`,
-                "Variance",
-              ];
+              const v = Number(value ?? 0);
+              const formatted = formatMoney(v, { code: row.budgetCurrency }, { compact: true });
+              return [`${formatted} (CPI ${row.cpi.toFixed(2)})`, "Variance"];
             }}
           />
           <Bar dataKey="variance" radius={[0, 4, 4, 0]}>

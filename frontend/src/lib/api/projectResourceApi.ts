@@ -37,9 +37,12 @@ export interface UpdatePoolEntryRequest {
 }
 
 export const projectResourceApi = {
-  listPool: (projectId: string) =>
+  listPool: (projectId: string, params?: { q?: string; typeCode?: string }) =>
     apiClient
-      .get<ApiResponse<ProjectResourceResponse[]>>(`/v1/projects/${projectId}/resource-pool`)
+      .get<ApiResponse<ProjectResourceResponse[]>>(
+        `/v1/projects/${projectId}/resource-pool`,
+        { params }
+      )
       .then((r) => r.data),
 
   listAvailable: (

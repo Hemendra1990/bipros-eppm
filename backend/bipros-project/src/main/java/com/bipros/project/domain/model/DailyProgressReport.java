@@ -3,6 +3,8 @@ package com.bipros.project.domain.model;
 import com.bipros.common.model.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -12,18 +14,21 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.UUID;
 
 /**
  * Supervisor Daily Progress Report row: one entry per (project, date, chainage range, activity).
  * Captures what was physically executed that day.
  *
- * <p>{@code supervisorResourceId} is a soft FK to the {@code resource} schema (Resources with
- * role.code in {@code SUPERVISOR}/{@code FOREMAN}); {@code supervisorName} stays as a
- * denormalised display snapshot, so legacy rows still render and resource renames don't
- * rewrite history. When the FK is set the service overwrites {@code supervisorName} from the
- * resource on save. Free-text entries (off-roster supervisors) leave the FK null.
+ * <p>{@code supervisorUserId} is a soft FK to {@code public.users.id} (Phase 4.1 cutover —
+ * the legacy {@code supervisor_resource_id} column was dropped by migration 091). The role-only
+ * model treats the supervisor as an application user, not a Resource. {@code supervisorName}
+ * stays as a denormalised display snapshot, so legacy rows still render and user renames don't
+ * rewrite history. The service overwrites {@code supervisorName} from the user on save when
+ * the FK is set; free-text entries (off-roster supervisors) leave the FK null.
  *
  * <p>Cumulative quantity per (project, activity) is computed on read (and on event publish)
  * — there is no stored {@code cumulative_qty} column on the entity. This makes back-dated
@@ -52,15 +57,16 @@ public class DailyProgressReport extends BaseEntity {
   @Column(name = "report_date", nullable = false)
   private LocalDate reportDate;
 
-  /**
-   * Soft FK to {@code resource.resources.id}. When set, the service snapshots the resource's
-   * name into {@link #supervisorName} on save. Null for free-text "Other" entries.
-   */
-  @Column(name = "supervisor_resource_id")
-  private UUID supervisorResourceId;
-
   @Column(name = "supervisor_name", nullable = false, length = 150)
   private String supervisorName;
+
+  /**
+   * Soft FK to {@code public.users.id}. Role-only model: the supervisor is an application user,
+   * not a Resource. The service overwrites {@link #supervisorName} from the user's display name
+   * on save when this is set. Null for free-text "Other" entries.
+   */
+  @Column(name = "supervisor_user_id")
+  private UUID supervisorUserId;
 
   @Column(name = "chainage_from_m")
   private Long chainageFromM;
@@ -68,15 +74,36 @@ public class DailyProgressReport extends BaseEntity {
   @Column(name = "chainage_to_m")
   private Long chainageToM;
 
+  /** Soft FK to {@code activity.activities.id}. Nullable during phase-1 migration. */
+  @Column(name = "activity_id")
+  private UUID activityId;
+
   @Column(name = "activity_name", nullable = false, length = 150)
   private String activityName;
 
   @Column(name = "wbs_node_id")
   private UUID wbsNodeId;
 
-  /** Optional back-link to the BOQ item — when set, DPR save updates that item's executed qty. */
+  /** Optional FK to {@code project.boq_items.id}. New canonical linkage (Workstream B1) —
+   *  prefer this over the legacy {@link #boqItemNo} string match. Nullable for legacy rows. */
+  @Column(name = "boq_item_id")
+  private UUID boqItemId;
+
+  /**
+   * Legacy back-link to the BOQ item by item-number string. Retained for backwards compatibility
+   * with rows seeded before {@link #boqItemId} existed; new write paths set {@code boqItemId}
+   * and leave this null.
+   * @deprecated use {@link #boqItemId} instead.
+   */
+  @Deprecated
   @Column(name = "boq_item_no", length = 20)
   private String boqItemNo;
+
+  /** Optional FK to {@code project.boq_operations.id} — stamped at save from the activity's
+   *  operation link when the referenced BOQ line is split (Stage 4). Null for unsplit lines and
+   *  pre-split rows (those resolve to the line's legacy operation at recompute time). */
+  @Column(name = "boq_operation_id")
+  private UUID boqOperationId;
 
   @Column(name = "unit", nullable = false, length = 20)
   private String unit;
@@ -93,4 +120,78 @@ public class DailyProgressReport extends BaseEntity {
 
   @Column(name = "remarks", length = 1000)
   private String remarks;
+
+  /** Carriageway side / corridor element for road / highway DPRs (see {@link Side}). Optional. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "side", length = 10)
+  private Side side;
+
+  /** Free-text location landmark, e.g. "near Main Road junction". Optional. */
+  @Column(name = "landmark", length = 255)
+  private String landmark;
+
+  @Column(name = "start_time")
+  private LocalTime startTime;
+
+  @Column(name = "end_time")
+  private LocalTime endTime;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "shift", length = 10)
+  private Shift shift;
+
+  /**
+   * Approval state for the row. Workflow transitions are not enforced server-side yet — the
+   * column is stored as the client sends it and surfaced for filtering / display.
+   */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "approval_status", length = 20)
+  private DprApprovalStatus approvalStatus;
+
+  /**
+   * Approval-workflow fields (DPR approval feature). Set by DailyProgressReportService
+   * submit/approve/reject/revoke transitions; null on legacy/backfilled rows.
+   */
+  @Column(name = "assigned_approver_user_id")
+  private UUID assignedApproverUserId;
+
+  @Column(name = "submitted_at")
+  private Instant submittedAt;
+
+  @Column(name = "submitted_by_user_id")
+  private UUID submittedByUserId;
+
+  @Column(name = "approved_by_user_id")
+  private UUID approvedByUserId;
+
+  @Column(name = "approved_at")
+  private Instant approvedAt;
+
+  @Column(name = "rejected_by_user_id")
+  private UUID rejectedByUserId;
+
+  @Column(name = "rejected_at")
+  private Instant rejectedAt;
+
+  @Column(name = "rejection_reason", length = 1000)
+  private String rejectionReason;
+
+  /** SLA escalation timestamp — set by the SLA scheduler when the DPR has been pending too long;
+   *  reset to null each time the DPR is (re)submitted so the SLA clock restarts. */
+  @Column(name = "escalated_at")
+  private Instant escalatedAt;
+
+  /** Top-level contractor name on the activity (subcontractor crews go on the manpower row). */
+  @Column(name = "contractor_name", length = 150)
+  private String contractorName;
+
+  @Column(name = "delay_reason", length = 500)
+  private String delayReason;
+
+  @Column(name = "safety_observation", length = 500)
+  private String safetyObservation;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "safety_incident_type", length = 20)
+  private SafetyIncidentType safetyIncidentType;
 }

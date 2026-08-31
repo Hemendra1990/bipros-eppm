@@ -221,7 +221,8 @@ class ResourceMaterialIntegrationTest {
                     com.bipros.resource.domain.model.ProductivityNormType.MANPOWER,
                     null, null, null,
                     "Earthwork", "M3",
-                    null, null, null, null, null, null, null, null);
+                    null, null, null, null, null, null, null, null,
+                    null, null, null, null, null);
             HttpEntity<CreateProductivityNormRequest> e = new HttpEntity<>(req, authJsonHeaders());
             ResponseEntity<ApiResponse> resp = restTemplate.exchange(
                     "/v1/productivity-norms", HttpMethod.POST, e, ApiResponse.class);
@@ -348,7 +349,8 @@ class ResourceMaterialIntegrationTest {
             CreateMaterialConsumptionLogRequest req = new CreateMaterialConsumptionLogRequest(
                     LocalDate.now(), null, "Cement", "Bags",
                     new BigDecimal("100"), new BigDecimal("20"),
-                    new BigDecimal("15"), null, null, null, null, null);
+                    new BigDecimal("15"), null, null, null, null, null,
+                    null, null, null, null);
             HttpEntity<CreateMaterialConsumptionLogRequest> e = new HttpEntity<>(req, authJsonHeaders());
             ResponseEntity<ApiResponse> resp = restTemplate.exchange(
                     "/v1/projects/" + projectId + "/material-consumption",

@@ -39,5 +39,7 @@ public record SatelliteImageRequest(
 
     Double westBound,
 
-    UUID layerId
+    UUID layerId,
+
+    UUID wbsPolygonId
 ) {}

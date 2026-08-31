@@ -1,5 +1,7 @@
 "use client";
 
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -107,6 +109,74 @@ export default function ResourceTypesAdminPage() {
       setError(getErrorMessage(err, "Failed to delete resource type"));
     }
   };
+
+  const columns = useMemo<ColumnDef<ResourceType>[]>(() => [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => <span className="font-mono text-sm">{row.original.code}</span>,
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => <span>{row.original.name}</span>,
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: ({ row }) => <span className="text-text-secondary">{row.original.description ?? "—"}</span>,
+    },
+    {
+      accessorKey: "sortOrder",
+      header: "Sort Order",
+      cell: ({ row }) => <span className="text-right block">{row.original.sortOrder ?? "—"}</span>,
+    },
+    {
+      accessorKey: "active",
+      header: "Status",
+      cell: ({ row }) =>
+        row.original.active ? (
+          <span className="text-emerald-700">Active</span>
+        ) : (
+          <span className="text-text-muted">Inactive</span>
+        ),
+    },
+    // {
+    //   accessorKey: "systemDefault",
+    //   header: "System",
+    //   cell: ({ row }) =>
+    //     row.original.systemDefault ? (
+    //       <span className="inline-flex rounded bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent ring-1 ring-accent/20">
+    //         system
+    //       </span>
+    //     ) : (
+    //       <span className="text-text-muted">—</span>
+    //     ),
+    // },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) =>
+        !row.original.systemDefault ? (
+          <div className="text-sm">
+            <button
+              onClick={() => openEdit(row.original)}
+              className="text-accent hover:underline mr-3"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => handleDelete(row.original)}
+              className="text-danger hover:underline"
+            >
+              Delete
+            </button>
+          </div>
+        ) : (
+          <span className="text-text-muted">Locked</span>
+        ),
+    },
+  ], []);
 
   return (
     <div className="p-6">
@@ -226,103 +296,16 @@ export default function ResourceTypesAdminPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse border border-border">
-          <thead>
-            <tr className="bg-surface/80">
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">Code</th>
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">Name</th>
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">
-                Description
-              </th>
-              <th className="border border-border px-4 py-2 text-right text-text-secondary">
-                Sort Order
-              </th>
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">
-                Status
-              </th>
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">
-                System
-              </th>
-              <th className="border border-border px-4 py-2 text-left text-text-secondary">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="border border-border px-4 py-6 text-center text-text-muted"
-                >
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {!isLoading && defs.length === 0 && (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="border border-border px-4 py-6 text-center text-text-muted"
-                >
-                  No resource types defined.
-                </td>
-              </tr>
-            )}
-            {defs.map((def) => (
-              <tr key={def.id} className="text-text-primary hover:bg-surface-hover/30">
-                <td className="border border-border px-4 py-2 font-mono text-sm">
-                  {def.code}
-                </td>
-                <td className="border border-border px-4 py-2">{def.name}</td>
-                <td className="border border-border px-4 py-2 text-text-secondary">
-                  {def.description ?? "—"}
-                </td>
-                <td className="border border-border px-4 py-2 text-right">
-                  {def.sortOrder ?? "—"}
-                </td>
-                <td className="border border-border px-4 py-2">
-                  {def.active ? (
-                    <span className="text-emerald-700">Active</span>
-                  ) : (
-                    <span className="text-text-muted">Inactive</span>
-                  )}
-                </td>
-                <td className="border border-border px-4 py-2">
-                  {def.systemDefault ? (
-                    <span className="inline-flex rounded bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent ring-1 ring-accent/20">
-                      system
-                    </span>
-                  ) : (
-                    <span className="text-text-muted">—</span>
-                  )}
-                </td>
-                <td className="border border-border px-4 py-2 text-sm">
-                  {!def.systemDefault ? (
-                    <>
-                      <button
-                        onClick={() => openEdit(def)}
-                        className="text-accent hover:underline mr-3"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(def)}
-                        className="text-danger hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </>
-                  ) : (
-                    <span className="text-text-muted">Locked</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+      <VirtualDataTable
+        columns={columns}
+        data={defs}
+        sortable
+        resizable
+        searchable={false}
+        isLoading={isLoading}
+        emptyMessage={isLoading ? "Loading…" : "No resource types defined."}
+      />
     </div>
   );
 }

@@ -3,6 +3,8 @@ package com.bipros.ai.tool.resource;
 import com.bipros.ai.context.AiContext;
 import com.bipros.ai.query.ResourceContextFacade;
 import com.bipros.ai.query.ResourceProfile;
+import com.bipros.ai.resolver.EffectiveRate;
+import com.bipros.ai.resolver.EffectiveRateResolver;
 import com.bipros.ai.tool.Tool;
 import com.bipros.ai.tool.ToolResult;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -39,6 +41,7 @@ import java.util.UUID;
 public class GetResourceProfileTool implements Tool {
 
   private final ResourceContextFacade facade;
+  private final EffectiveRateResolver rateResolver;
   private final ObjectMapper objectMapper;
 
   @Override
@@ -55,7 +58,9 @@ public class GetResourceProfileTool implements Tool {
         + "employee_code (the employee_code from manpower_master). Use the include array to "
         + "narrow the response to specific blocks. Use this for: \"What skills does Resource X "
         + "have?\", \"Show me Foreman John's profile\", \"What's the budgeted vs actual rate "
-        + "for the crane operator?\".";
+        + "for the crane operator?\". Also returns effective_rate (project pool override → "
+        + "resource base), unit_basis, rate_source, and override_applied so the AI can disclose "
+        + "project-specific rate overrides when a project is in scope.";
   }
 
   @Override
@@ -119,6 +124,23 @@ public class GetResourceProfileTool implements Tool {
     wrapper.put("resource_type_code", p.resourceTypeCode());
     wrapper.put("resource_type_name", p.resourceTypeName());
     wrapper.put("resource_type_category", p.resourceTypeCategory());
+
+    // Effective rate (project pool override → resource base). When no project is
+    // in scope, the resolver returns the base rate with override_applied=false.
+    EffectiveRate er = rateResolver.resolve(ctx.projectId(), p.resourceId());
+    wrapper.put("effective_rate", er.rate() == null ? null : er.rate().doubleValue());
+    wrapper.put("effective_unit", er.unit());
+    wrapper.put("unit_basis", er.basis());
+    wrapper.put("rate_source", er.source().name());
+    wrapper.put("override_applied", er.overrideApplied());
+    wrapper.put("base_cost_per_unit", p.costPerUnit() == null ? null : p.costPerUnit().doubleValue());
+    ArrayNode rateNotes = objectMapper.createArrayNode();
+    if (er.overrideApplied()) {
+      rateNotes.add("rate_overridden_per_project");
+    } else if (ctx.projectId() == null) {
+      rateNotes.add("profile_view_no_project_override_applied");
+    }
+    wrapper.set("formula_overrides", rateNotes);
 
     if (p.parentId() != null) {
       ObjectNode parentNode = objectMapper.createObjectNode();

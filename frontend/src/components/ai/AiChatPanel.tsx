@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { useAiStore } from "@/lib/state/store";
-import { useAppStore } from "@/lib/state/store";
 import { aiApi, type SseEvent } from "@/lib/api/aiApi";
+import { projectApi } from "@/lib/api/projectApi";
+import { ScopeToggle, type ScopeMode } from "@/components/ai/ScopeToggle";
 import { Bot, X, Send, Loader2, PanelRightClose, PanelRightOpen, Mic, Image as ImageIcon, Square, Check, Copy, Maximize2, Minimize2, Plus, History, Download, FileText, FileSpreadsheet, Sheet } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -12,11 +14,31 @@ import type { Components } from "react-markdown";
 import { Children, isValidElement, type ReactElement } from "react";
 import { ChatChart } from "@/components/ai/charts/chatChart";
 import { AiHistoryView } from "@/components/ai/AiHistoryView";
+import HdsScopeChip from "@/components/ai/HdsScopeChip";
+import HdsScopeSelectorModal, { type HdsVersionLike } from "@/components/ai/HdsScopeSelectorModal";
+import HdsCitationCard from "@/components/ai/HdsCitationCard";
 import {
   exportConversationCsv,
   exportConversationPdf,
   exportConversationXlsx,
 } from "@/lib/utils/conversationExport";
+
+/**
+ * HDS citation payload as emitted by the backend's `search_hds_standards`
+ * tool result (snake_case JSON, mapped to camelCase here). Tracked locally so
+ * the chat panel does not have to depend on Track C's component file before
+ * it lands — Track C's `HdsCitationCard` accepts the same structural shape.
+ */
+export interface HdsCitationData {
+  marker: string;
+  chunkId: string;
+  versionId: string;
+  versionLabel: string;
+  sectionPath: string;
+  pageStart: number;
+  pageEnd: number;
+  excerpt: string;
+}
 
 interface ChatMessage {
   id: string;
@@ -24,6 +46,12 @@ interface ChatMessage {
   content: string;
   imageUrl?: string;
   meta?: Record<string, unknown>;
+  /**
+   * Citations attached to an assistant message when the answer came from the
+   * HDS retrieval tool. Populated when a `tool_result` event for
+   * `search_hds_standards` arrives during streaming.
+   */
+  hdsCitations?: HdsCitationData[];
 }
 
 const markdownComponents: Components = {
@@ -67,7 +95,7 @@ const markdownComponents: Components = {
 
 // Friendly progress labels — keep tool-name plumbing out of the UI while still
 // telling the user what's underway. Unknown tools fall back to "Working".
-const TOOL_PROGRESS_LABELS: Record<string, string> = {
+export const TOOL_PROGRESS_LABELS: Record<string, string> = {
   list_projects: "Looking up projects",
   list_activities: "Checking activities",
   list_activity_resources: "Checking activity resources",
@@ -81,9 +109,96 @@ const TOOL_PROGRESS_LABELS: Record<string, string> = {
   read_dpr_summary: "Reading daily progress",
   query_clickhouse: "Querying analytics",
   describe_schema: "Inspecting data shape",
+  // Site Manager
+  analyze_labour_utilization: "Reading crew utilization",
+  analyze_machine_idle_time: "Checking machine idle time",
+  analyze_material_wastage: "Reading material wastage",
+  check_stockpile_vs_plan: "Comparing stockpile vs plan",
+  // Project Engineer
+  analyze_productivity_factor: "Reading productivity vs norm",
+  analyze_yield_variance: "Reading yield variance",
+  analyze_equipment_cycle_time: "Reading equipment cycle times",
+  // QC Manager
+  analyze_ncr_trends: "Reading NCR trends",
+  audit_traceability: "Auditing traceability",
+  analyze_quality_data_gaps: "Looking for quality data gaps",
+  // Project Manager
+  analyze_labour_cost_per_unit: "Reading labour cost per unit",
+  analyze_material_burn_rate: "Reading material burn rate",
+  analyze_equipment_utilization_cost: "Reading equipment utilization cost",
+  // BIM / Data Coordinator
+  audit_dpr_data_quality: "Auditing DPR data quality",
+  report_data_lag: "Reading data entry lag",
+  // HDS retrieval (deterministic branch — keep aliases for phase strings the
+  // tool may emit if it ever switches to progress events).
+  search_hds_standards: "Searching HDS standards",
+  "search_hds_standards: planning": "Planning HDS retrieval…",
+  "search_hds_standards: retrieving (round 1 of 2)": "Searching HDS standards…",
+  "search_hds_standards: retrieving (round 2 of 2)": "Searching HDS standards (deeper)…",
+  "search_hds_standards: drafting answer": "Drafting answer…",
+  "search_hds_standards: verifying grounding": "Verifying citations…",
 };
-function friendlyToolLabel(name: string): string {
+export function friendlyToolLabel(name: string): string {
   return TOOL_PROGRESS_LABELS[name] ?? "Working";
+}
+
+/**
+ * Parses the `data` payload of a `tool_result` event for the HDS retrieval
+ * tool. The backend (see `SearchHdsStandardsTool#execute`) emits citations as
+ * a snake_case JSON array; we normalise to the camelCase {@link HdsCitationData}
+ * shape used by `HdsCitationCard`. Tolerant of missing / malformed entries so
+ * a single bad row does not lose the rest of the list.
+ */
+export function extractHdsCitations(raw: unknown): HdsCitationData[] {
+  if (!raw || typeof raw !== "object") return [];
+  const root = raw as Record<string, unknown>;
+  const list = Array.isArray(root.citations) ? (root.citations as unknown[]) : [];
+  const out: HdsCitationData[] = [];
+  for (const entry of list) {
+    if (!entry || typeof entry !== "object") continue;
+    const c = entry as Record<string, unknown>;
+    const marker = typeof c.marker === "string" ? c.marker : "";
+    const chunkId =
+      typeof c.chunk_id === "string"
+        ? c.chunk_id
+        : typeof c.chunkId === "string"
+          ? c.chunkId
+          : "";
+    const versionId =
+      typeof c.version_id === "string"
+        ? c.version_id
+        : typeof c.versionId === "string"
+          ? c.versionId
+          : "";
+    const versionLabel =
+      typeof c.version_label === "string"
+        ? c.version_label
+        : typeof c.versionLabel === "string"
+          ? c.versionLabel
+          : "";
+    const sectionPath =
+      typeof c.section_path === "string"
+        ? c.section_path
+        : typeof c.sectionPath === "string"
+          ? c.sectionPath
+          : "";
+    const pageStart =
+      typeof c.page_start === "number"
+        ? c.page_start
+        : typeof c.pageStart === "number"
+          ? c.pageStart
+          : 0;
+    const pageEnd =
+      typeof c.page_end === "number"
+        ? c.page_end
+        : typeof c.pageEnd === "number"
+          ? c.pageEnd
+          : pageStart;
+    const excerpt = typeof c.excerpt === "string" ? c.excerpt : "";
+    if (!marker || !chunkId) continue;
+    out.push({ marker, chunkId, versionId, versionLabel, sectionPath, pageStart, pageEnd, excerpt });
+  }
+  return out;
 }
 
 function inferModule(pathname: string): string {
@@ -96,9 +211,10 @@ function inferModule(pathname: string): string {
   return "general";
 }
 
-// Pull a project UUID out of /projects/<uuid>/... so the AI panel can scope to
-// the project the user is currently viewing, even on pages that haven't called
-// setCurrentProjectId(). Fallback only — useAppStore wins when set.
+// Pull a project UUID out of /projects/<uuid>/... — the sole source of truth
+// for the chat's "current project" scope. We deliberately do NOT consult
+// `useAppStore.currentProjectId`: labour-master sets that store and never
+// clears it, so it leaked into the chat scope on every other page.
 const PROJECT_PATH_RE = /\/projects\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i;
 function inferProjectIdFromPath(pathname: string): string | null {
   const m = pathname.match(PROJECT_PATH_RE);
@@ -169,18 +285,73 @@ export function AiChatPanel() {
   const setOpen = useAiStore((s) => s.setOpen);
   const conversationId = useAiStore((s) => s.currentConversationId);
   const setConversationId = useAiStore((s) => s.setConversationId);
-  const storeProjectId = useAppStore((s) => s.currentProjectId);
   const pathname = usePathname();
   const activeModule = inferModule(pathname);
-  // Prefer the store's currentProjectId; fall back to the URL when the user
-  // landed on a project page directly (most pages don't set the store).
-  const projectId = storeProjectId ?? inferProjectIdFromPath(pathname);
+  // URL is now the sole "current project" signal for the chat. We deliberately
+  // do NOT read `useAppStore.currentProjectId` any more: labour-master sets it
+  // and never clears it, so it leaks into every other page and silently
+  // re-scopes the chat. The store is still owned by the labour-master nav
+  // helper — we just stop the chat from peeking at it.
+  const pathProjectId = inferProjectIdFromPath(pathname);
+
+  // User-controlled override for the URL-derived scope. "auto" pins to the
+  // current project page; "general" forces portfolio mode even on a project
+  // page. Off a project page (pathProjectId == null) the toggle is hidden and
+  // the chat is always general regardless of this value.
+  const [scopeMode, setScopeMode] = useState<ScopeMode>("auto");
+
+  // When the user reloads a stored conversation from History we keep the
+  // conversation's own original scope (decision: avoid silent broadening of an
+  // old scoped chat just because the user is now browsing a different page).
+  // Cleared whenever the user starts a new chat or flips the toggle, since
+  // those are explicit "new intent" signals.
+  const [historyScope, setHistoryScope] = useState<{
+    projectId: string | null;
+    module: string;
+  } | null>(null);
+
+  const effectiveProjectId = historyScope
+    ? historyScope.projectId
+    : scopeMode === "general"
+      ? null
+      : pathProjectId;
+  const effectiveModule = historyScope ? historyScope.module : activeModule;
+
+  // Resolve the in-scope project to a human label (code — name) so the chat
+  // header makes the active scope obvious. Without this users sometimes ask
+  // "for project X" while browsing a different project's page, which causes
+  // tool calls to mismatch the AI's stated project.
+  const { data: activeProject } = useQuery({
+    queryKey: ["ai-chat-active-project", effectiveProjectId],
+    queryFn: () =>
+      effectiveProjectId ? projectApi.getProject(effectiveProjectId) : Promise.resolve(null),
+    enabled: !!effectiveProjectId,
+    staleTime: 60_000,
+  });
+  const activeProjectLabel = activeProject?.data
+    ? `${activeProject.data.code} — ${activeProject.data.name}`
+    : null;
+
+  // Portfolio-mode banner shows "All accessible projects (N)". Fetched once
+  // and cached for the panel's lifetime so the count is steady across renders.
+  const { data: accessibleProjects } = useQuery({
+    queryKey: ["ai-chat-accessible-projects"],
+    queryFn: () => projectApi.listAccessible(),
+    staleTime: 5 * 60_000,
+    enabled: effectiveProjectId == null,
+  });
+  const accessibleProjectCount = accessibleProjects?.data?.length ?? null;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
   const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
+  // Selected HDS document versions for grounded retrieval. When non-empty
+  // the backend routes the chat through `runHdsDeterministic` instead of the
+  // normal agentic loop and the answer carries citation chunks.
+  const [hdsScope, setHdsScope] = useState<HdsVersionLike[]>([]);
+  const [scopeModalOpen, setScopeModalOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [maximized, setMaximized] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -272,8 +443,21 @@ export function AiChatPanel() {
     setStreamingStatus(null);
     setStreamingAssistantId(null);
     setIsStreaming(false);
+    setHistoryScope(null);
+    // Drop the HDS scope too — starting a fresh chat is an explicit "clean
+    // slate" signal, and keeping a stale HDS pin would silently re-ground
+    // the next question in unrelated documents.
+    setHdsScope([]);
+    setScopeModalOpen(false);
     setView("chat");
   }, [setConversationId]);
+
+  // Flipping the scope toggle is an explicit "new intent" signal — drop any
+  // historyScope so the toggle (not the stored conversation) wins from here.
+  const handleScopeChange = useCallback((next: ScopeMode) => {
+    setScopeMode(next);
+    setHistoryScope(null);
+  }, []);
 
   const loadConversation = useCallback(
     (id: string) => {
@@ -290,6 +474,34 @@ export function AiChatPanel() {
       setPendingImage(null);
       setConversationId(id);
       setView("chat");
+
+      // Reloaded conversation keeps its original scope (decision: don't let
+      // browsing a different page silently broaden an old scoped chat). The
+      // backend currently returns title + messages only; once the detail DTO
+      // is extended with projectId/module (Phase 1a backend work) those
+      // fields flow through automatically. Until then we default to the
+      // module the History list already gave us via the summary (no public
+      // way to thread that through the existing onSelect signature without
+      // changing AiHistoryView — out of scope here), so we issue an extra
+      // detail fetch and read fields defensively.
+      aiApi
+        .getConversation(id)
+        .then((res) => {
+          // The backend DTO may grow `projectId` / `module` fields; read them
+          // optionally so we light up automatically once that lands.
+          const detail = res.data as
+            | (typeof res.data & { projectId?: string | null; module?: string | null })
+            | null;
+          if (!detail) return;
+          setHistoryScope({
+            projectId: detail.projectId ?? null,
+            module: detail.module ?? "general",
+          });
+        })
+        .catch(() => {
+          // 404 / network — the rehydration effect handles cleanup. Leave
+          // historyScope unset so the chat falls back to URL-derived scope.
+        });
     },
     [conversationId, setConversationId],
   );
@@ -300,7 +512,7 @@ export function AiChatPanel() {
       const single = firstUser.content.replace(/\s+/g, " ").trim();
       return single.length <= 60 ? single : `${single.slice(0, 57)}...`;
     }
-    return "Bipros AI Conversation";
+    return "Sarooj AI Conversation";
   }, [messages]);
 
   const runExport = useCallback(
@@ -372,10 +584,14 @@ export function AiChatPanel() {
     try {
       const chatReq: import("@/lib/api/aiApi").ChatRequest = {
         conversationId: conversationId ?? null,
-        projectId: projectId ?? null,
-        module: activeModule,
+        projectId: effectiveProjectId,
+        module: effectiveModule,
         message: userMsg,
         imageUrl: pendingImage,
+        // Empty array is fine — the backend treats null and [] the same and
+        // falls back to the normal agentic loop. Sending the list explicitly
+        // makes the wire payload self-describing for debugging.
+        hdsVersionIds: hdsScope.map((v) => v.id),
       };
       for await (const ev of aiApi.streamChat(
         chatReq,
@@ -402,7 +618,7 @@ export function AiChatPanel() {
       );
       abortRef.current = null;
     }
-  }, [input, isStreaming, projectId, activeModule, pendingImage, conversationId]);
+  }, [input, isStreaming, effectiveProjectId, effectiveModule, pendingImage, conversationId, hdsScope]);
 
   const handleEvent = (ev: SseEvent, assistantId: string) => {
     if (ev.event === "conversation_started") {
@@ -425,6 +641,26 @@ export function AiChatPanel() {
       // Keep the last tool_call's label visible until the next tool_call or
       // the final answer arrives — gives a steady "still working" signal
       // without flickering between rounds.
+      //
+      // Special case: the HDS retrieval tool emits its citations inside the
+      // `data` payload of the result. We surface them as structured cards
+      // attached to the streaming assistant message so the user sees
+      // grounding sources alongside the final answer.
+      const toolName = (ev.data.name as string) || "";
+      if (toolName === "search_hds_standards" && ev.data.success !== false) {
+        const cites = extractHdsCitations(ev.data.data);
+        if (cites.length > 0) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId ? { ...m, hdsCitations: cites } : m,
+            ),
+          );
+        }
+      }
+    } else if (ev.event === "verifying") {
+      // Server-side verification pass — the orchestrator is asking the model
+      // to re-check its draft before showing it to the user.
+      setStreamingStatus("Cross-checking the answer…");
     } else if (ev.event === "done" || ev.event === "final_answer") {
       const text = (ev.data.text as string) || "";
       setStreamingStatus(null);
@@ -535,7 +771,7 @@ export function AiChatPanel() {
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !projectId) return;
+    if (!file || !effectiveProjectId) return;
     try {
       const convId = "temp-conv"; // Will be replaced with actual conversation ID
       const result = await aiApi.uploadImage(convId, file);
@@ -550,11 +786,14 @@ export function AiChatPanel() {
     return (
       <button
         onClick={toggle}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-accent px-4 py-3 text-sm font-medium text-accent-foreground shadow-lg hover:bg-accent-hover transition-colors"
+        // ai-chat-fab class is hidden via globals.css when the activity detail drawer
+        // sets body[data-activity-drawer-open="true"]. Avoids the FAB overlapping the
+        // drawer footer (Create DPR) without a global store.
+        className="ai-chat-fab fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-accent px-4 py-3 text-sm font-medium text-accent-foreground shadow-lg hover:bg-accent-hover transition-colors"
         title="Open AI chat (Ctrl+Shift+K)"
       >
         <Bot size={18} />
-        <span className="hidden sm:inline">Ask AI</span>
+        <span className="hidden sm:inline">Sarooj AI</span>
       </button>
     );
   }
@@ -572,18 +811,24 @@ export function AiChatPanel() {
         className={`relative flex flex-col bg-surface border-l border-border shadow-xl transition-all duration-200 ${widthClass}`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          {!collapsed && (
-            <div className="flex items-center gap-2">
-              <Bot size={18} className="text-accent" />
-              <span className="text-sm font-semibold text-text-primary">Bipros AI</span>
-              {projectId && (
-                <span className="text-xs text-text-muted bg-surface-hover px-2 py-0.5 rounded">
-                  {activeModule}
+        <div className="flex flex-col border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between">
+            {!collapsed && (
+              <div className="flex items-center gap-2 min-w-0">
+                <Bot size={18} className="text-accent shrink-0" />
+                <span className="text-sm font-semibold text-text-primary shrink-0">Sarooj AI</span>
+                <span className="text-xs text-text-muted bg-surface-hover px-2 py-0.5 rounded shrink-0">
+                  {effectiveModule}
                 </span>
-              )}
-            </div>
-          )}
+                {/* Scope toggle is only meaningful on a project page — off a
+                    project page the chat is forced general anyway. Flipping
+                    the toggle while a history-scoped chat is loaded clears
+                    historyScope (treated as a "new intent" signal). */}
+                {pathProjectId != null && (
+                  <ScopeToggle mode={scopeMode} onChange={handleScopeChange} />
+                )}
+              </div>
+            )}
           <div className="flex items-center gap-1 ml-auto">
             {!collapsed && (
               <>
@@ -676,6 +921,39 @@ export function AiChatPanel() {
               </button>
             )}
           </div>
+          </div>
+          {!collapsed && (
+            <div className="mt-1.5 text-[11px] text-text-muted flex items-center gap-1.5">
+              <span className="font-medium uppercase tracking-wide text-text-secondary">Scope:</span>
+              {effectiveProjectId == null ? (
+                // Portfolio mode — show the count of accessible projects so
+                // the user knows the AI has cross-project visibility.
+                <span className="truncate">
+                  🌐 All accessible projects
+                  {accessibleProjectCount != null ? ` (${accessibleProjectCount})` : ""}
+                </span>
+              ) : activeProjectLabel ? (
+                <span className="truncate" title={activeProjectLabel}>
+                  📌 {activeProjectLabel}
+                  {historyScope ? " (from history)" : ""}
+                </span>
+              ) : (
+                <span className="italic">loading project…</span>
+              )}
+            </div>
+          )}
+          {/* HDS retrieval scope. Selecting one or more versions flips the
+              backend into deterministic retrieval mode for the next message;
+              the chip itself acts as both indicator and CTA. */}
+          {!collapsed && view === "chat" && (
+            <div className="mt-2">
+              <HdsScopeChip
+                selected={hdsScope}
+                onEdit={() => setScopeModalOpen(true)}
+                onClear={() => setHdsScope([])}
+              />
+            </div>
+          )}
         </div>
 
         {!collapsed && view === "history" && (
@@ -693,9 +971,9 @@ export function AiChatPanel() {
                 <div className="text-center text-text-muted py-12">
                   <Bot size={32} className="mx-auto mb-3 opacity-50" />
                   <p className="text-sm">Ask me about cost variance, schedule health, DPR summaries, or EVM forecasts.</p>
-                  {!projectId && (
+                  {!effectiveProjectId && (
                     <p className="text-xs mt-3 text-text-muted/80">
-                      No project selected — try portfolio questions like
+                      Portfolio mode — try cross-project questions like
                       <span className="block italic mt-1">
                         &ldquo;Which projects have the worst CPI this month?&rdquo;
                       </span>
@@ -780,6 +1058,38 @@ export function AiChatPanel() {
                         ) : (
                           <div className="whitespace-pre-wrap">{msg.content}</div>
                         )}
+                        {/* HDS source cards. Rendered whenever the assistant
+                            message has citations attached (whether the answer
+                            is still streaming or finished). Each card is the
+                            structured grounding for a [cN] marker in the
+                            answer text. */}
+                        {msg.role === "assistant" &&
+                          msg.hdsCitations &&
+                          msg.hdsCitations.length > 0 && (
+                            <div className="mt-4 space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  aria-hidden
+                                  className="h-px flex-1 bg-gradient-to-r from-gold/0 via-gold/40 to-gold/0"
+                                />
+                                <span className="font-display text-[10px] font-medium uppercase tracking-[0.32em] text-slate">
+                                  Sources
+                                </span>
+                                <span className="font-mono text-[10px] tabular-nums text-gold-ink/70">
+                                  {msg.hdsCitations.length}
+                                </span>
+                                <span
+                                  aria-hidden
+                                  className="h-px flex-1 bg-gradient-to-r from-gold/40 via-gold/0 to-gold/0"
+                                />
+                              </div>
+                              <div className="space-y-2 pt-1">
+                                {msg.hdsCitations.map((c) => (
+                                  <HdsCitationCard key={c.marker} citation={c} />
+                                ))}
+                              </div>
+                            </div>
+                          )}
                       </div>
                     )}
                   </div>
@@ -828,7 +1138,7 @@ export function AiChatPanel() {
               <div className="flex items-end gap-2">
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={!projectId || isStreaming}
+                  disabled={!effectiveProjectId || isStreaming}
                   className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
                   title="Attach image"
                 >
@@ -862,7 +1172,7 @@ export function AiChatPanel() {
                       sendMessage();
                     }
                   }}
-                  placeholder={projectId ? "Ask anything..." : "Ask anything (portfolio mode)..."}
+                  placeholder={effectiveProjectId ? "Ask anything..." : "Ask anything (portfolio mode)..."}
                   disabled={isStreaming}
                   rows={1}
                   className="flex-1 resize-none rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent min-h-[40px] max-h-[120px]"
@@ -879,6 +1189,18 @@ export function AiChatPanel() {
           </>
         )}
       </div>
+      {/* Lives at the panel root so the dialog overlays everything (its own
+          backdrop handles outside-click). The modal short-circuits to null
+          when `scopeModalOpen` is false, so this costs nothing when idle. */}
+      <HdsScopeSelectorModal
+        open={scopeModalOpen}
+        initiallySelectedIds={hdsScope.map((v) => v.id)}
+        onCancel={() => setScopeModalOpen(false)}
+        onConfirm={(vs) => {
+          setHdsScope(vs);
+          setScopeModalOpen(false);
+        }}
+      />
     </div>
   );
 }

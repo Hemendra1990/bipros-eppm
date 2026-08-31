@@ -5,11 +5,15 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Play, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { monteCarloApi, type MonteCarloRunRequest, type DistributionType } from "@/lib/api/monteCarloApi";
+import { baselineApi } from "@/lib/api/baselineApi";
 import { PageHeader } from "@/components/common/PageHeader";
 import { TabTip } from "@/components/common/TabTip";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { CHART_TOOLTIP_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_TOOLTIP_ITEM_STYLE } from "@/components/common/dashboard/primitives";
 
 const TABS = ["overview", "criticality", "tornado", "milestones", "cashflow", "drivers"] as const;
 type Tab = typeof TABS[number];
@@ -95,6 +99,22 @@ export default function RiskAnalysisPage() {
     retry: false,
   });
 
+  // Monte Carlo resolves the project's active (PRIMARY) baseline server-side and fails with
+  // BASELINE_REQUIRED / BASELINE_EMPTY when there isn't one. Pre-flight that here so the user is
+  // told up front and gets a link to the Baselines tab, instead of triggering a FAILED run blind.
+  const { data: baselinesResp } = useQuery({
+    queryKey: ["baselines", projectId],
+    queryFn: () => baselineApi.listBaselines(projectId),
+    retry: false,
+  });
+  const activeBaseline = (baselinesResp?.data ?? []).find(
+    (b) => b.isActive && b.totalActivities > 0
+  );
+  const hasActiveBaseline = !!activeBaseline;
+  /** The simulation stores only the baseline id; show the baseline's name, not a raw id fragment. */
+  const baselineNameById = (id: string) =>
+    (baselinesResp?.data ?? []).find((b) => b.id === id)?.name;
+
   const runMutation = useMutation({
     mutationFn: (req: MonteCarloRunRequest) => monteCarloApi.runSimulation(projectId, req),
     onSuccess: () => {
@@ -147,13 +167,29 @@ export default function RiskAnalysisPage() {
           <h2 className="text-lg font-semibold text-text-primary">Monte Carlo Simulation</h2>
           <Button
             onClick={() => setShowRunDialog(!showRunDialog)}
-            disabled={runMutation.isPending}
+            disabled={runMutation.isPending || !hasActiveBaseline}
             className="flex items-center gap-2"
           >
             <Play className="w-4 h-4" />
             {runMutation.isPending ? "Running…" : "Run Simulation"}
           </Button>
         </div>
+
+        {!hasActiveBaseline && (
+          <div className="mb-4 flex items-start gap-2 p-3 rounded-md bg-warning/10 border border-warning/30 text-sm">
+            <AlertCircle className="w-4 h-4 mt-0.5 text-warning shrink-0" />
+            <span className="text-text-primary">
+              An active project baseline is required before running Monte Carlo. The simulation is
+              anchored to the project&apos;s PRIMARY baseline.{" "}
+              <a
+                href={`/projects/${projectId}?tab=baselines`}
+                className="underline font-medium text-accent hover:opacity-80"
+              >
+                Create or activate a baseline →
+              </a>
+            </span>
+          </div>
+        )}
 
         {showRunDialog && (
           <div className="mb-2 p-4 bg-accent/10 border border-accent/30 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -223,7 +259,7 @@ export default function RiskAnalysisPage() {
             <div className="md:col-span-2 flex gap-2">
               <Button
                 onClick={() => runMutation.mutate(runRequest)}
-                disabled={runMutation.isPending}
+                disabled={runMutation.isPending || !hasActiveBaseline}
               >
                 {runMutation.isPending ? "Running…" : "Start Simulation"}
               </Button>
@@ -281,7 +317,9 @@ export default function RiskAnalysisPage() {
                   <p className="text-sm font-medium text-text-secondary mb-2">Baseline Duration</p>
                   <p className="text-2xl font-bold text-accent">{Math.round(sim.baselineDuration)} days</p>
                   {sim.baselineId && (
-                    <p className="text-xs text-text-muted mt-1">baseline {sim.baselineId.slice(0, 8)}</p>
+                    <p className="text-xs text-text-muted mt-1">
+                      {baselineNameById(sim.baselineId) ?? `baseline ${sim.baselineId.slice(0, 8)}`}
+                    </p>
                   )}
                 </div>
 
@@ -298,6 +336,18 @@ export default function RiskAnalysisPage() {
                   {sim.dataDate && <p className="text-xs text-text-muted mt-1">data date {sim.dataDate}</p>}
                 </div>
               </div>
+
+              {!!sim.activitiesNotInBaseline && sim.activitiesNotInBaseline > 0 && (
+                <div className="flex items-start gap-2 p-3 rounded-md bg-warning/10 border border-warning/30 text-sm">
+                  <AlertCircle className="w-4 h-4 mt-0.5 text-warning shrink-0" />
+                  <span className="text-text-primary">
+                    {sim.activitiesNotInBaseline} activit{sim.activitiesNotInBaseline === 1 ? "y" : "ies"} in
+                    the current schedule {sim.activitiesNotInBaseline === 1 ? "is" : "are"} not in the active
+                    baseline — costed from current approved values, not the baseline. The baseline is the
+                    comparison reference only; re-capture it to fold this scope into variance reporting.
+                  </span>
+                </div>
+              )}
 
               {/* Duration percentiles table */}
               <div className="bg-surface/50 rounded-lg border border-border p-6">
@@ -334,7 +384,12 @@ export default function RiskAnalysisPage() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="range" angle={-45} textAnchor="end" height={80} tick={{ fontSize: 11 }} />
                         <YAxis />
-                        <Tooltip formatter={(v) => `${v} iterations`} />
+                        <Tooltip
+                          formatter={(v) => `${v} iterations`}
+                          contentStyle={CHART_TOOLTIP_STYLE}
+                          labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                          itemStyle={CHART_TOOLTIP_ITEM_STYLE}
+                        />
                         <ReferenceLine
                           x={durationHistogram.reduce((best, b) =>
                             Math.abs(b.mid - sim.baselineDuration) < Math.abs(best.mid - sim.baselineDuration) ? b : best
@@ -383,7 +438,12 @@ export default function RiskAnalysisPage() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="range" angle={-45} textAnchor="end" height={80} tick={{ fontSize: 11 }} />
                         <YAxis />
-                        <Tooltip formatter={(v) => `${v} iterations`} />
+                        <Tooltip
+                          formatter={(v) => `${v} iterations`}
+                          contentStyle={CHART_TOOLTIP_STYLE}
+                          labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                          itemStyle={CHART_TOOLTIP_ITEM_STYLE}
+                        />
                         <Bar dataKey="count" fill="#a855f7" />
                       </BarChart>
                     </ResponsiveContainer>
@@ -404,45 +464,46 @@ export default function RiskAnalysisPage() {
                 <p className="text-sm text-text-muted">No activity stats available.</p>
               )}
               {activityStats?.data?.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-text-secondary">
-                        <th className="text-left py-2 px-3">Activity</th>
-                        <th className="text-right py-2 px-3">Criticality</th>
-                        <th className="text-right py-2 px-3">Sensitivity</th>
-                        <th className="text-right py-2 px-3">Cruciality</th>
-                        <th className="text-right py-2 px-3">Mean dur.</th>
-                        <th className="text-right py-2 px-3">σ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activityStats.data.map((s) => (
-                        <tr key={s.id} className="border-b border-border/50">
-                          <td className="py-2 px-3">
-                            <span className="text-text-primary">{s.activityCode ?? s.activityId.slice(0, 8)}</span>
-                            <span className="text-text-muted ml-2">{s.activityName}</span>
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {(s.criticalityIndex * 100).toFixed(1)}%
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {s.durationSensitivity != null ? s.durationSensitivity.toFixed(2) : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {s.cruciality != null ? s.cruciality.toFixed(2) : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {s.durationMean != null ? s.durationMean.toFixed(1) : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {s.durationStddev != null ? s.durationStddev.toFixed(2) : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable
+                  columns={[
+                    {
+                      accessorKey: "activityCode",
+                      header: "Activity",
+                      cell: ({ row }) => (
+                        <span>
+                          <span className="text-text-primary">{row.original.activityCode ?? row.original.activityId.slice(0, 8)}</span>
+                          <span className="text-text-muted ml-2">{row.original.activityName}</span>
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "criticalityIndex",
+                      header: "Criticality",
+                      cell: ({ row }) => <span className="text-right">{(row.original.criticalityIndex * 100).toFixed(1)}%</span>,
+                    },
+                    {
+                      accessorKey: "durationSensitivity",
+                      header: "Sensitivity",
+                      cell: ({ row }) => <span className="text-right">{row.original.durationSensitivity != null ? row.original.durationSensitivity.toFixed(2) : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "cruciality",
+                      header: "Cruciality",
+                      cell: ({ row }) => <span className="text-right">{row.original.cruciality != null ? row.original.cruciality.toFixed(2) : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "durationMean",
+                      header: "Mean dur.",
+                      cell: ({ row }) => <span className="text-right">{row.original.durationMean != null ? row.original.durationMean.toFixed(1) : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "durationStddev",
+                      header: "σ",
+                      cell: ({ row }) => <span className="text-right">{row.original.durationStddev != null ? row.original.durationStddev.toFixed(2) : "—"}</span>,
+                    },
+                  ]}
+                  data={activityStats.data}
+                />
               ) : null}
             </div>
           )}
@@ -509,33 +570,25 @@ export default function RiskAnalysisPage() {
                 <p className="text-sm text-text-muted">No milestones in the project&apos;s activity list.</p>
               )}
               {milestones?.data?.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-text-secondary">
-                        <th className="text-left py-2 px-3">Milestone</th>
-                        <th className="text-left py-2 px-3">Planned</th>
-                        <th className="text-left py-2 px-3">P50 finish</th>
-                        <th className="text-left py-2 px-3">P80 finish</th>
-                        <th className="text-left py-2 px-3">P90 finish</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {milestones.data.map((m) => (
-                        <tr key={m.id} className="border-b border-border/50">
-                          <td className="py-2 px-3">
-                            <span className="text-text-primary">{m.activityCode ?? m.activityId.slice(0, 8)}</span>
-                            <span className="text-text-muted ml-2">{m.activityName}</span>
-                          </td>
-                          <td className="py-2 px-3">{m.plannedFinishDate ?? "—"}</td>
-                          <td className="py-2 px-3">{m.p50FinishDate ?? "—"}</td>
-                          <td className="py-2 px-3">{m.p80FinishDate ?? "—"}</td>
-                          <td className="py-2 px-3">{m.p90FinishDate ?? "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable
+                  columns={[
+                    {
+                      accessorKey: "activityCode",
+                      header: "Milestone",
+                      cell: ({ row }) => (
+                        <span>
+                          <span className="text-text-primary">{row.original.activityCode ?? row.original.activityId.slice(0, 8)}</span>
+                          <span className="text-text-muted ml-2">{row.original.activityName}</span>
+                        </span>
+                      ),
+                    },
+                    { accessorKey: "plannedFinishDate", header: "Planned", cell: ({ row }) => row.original.plannedFinishDate ?? "—" },
+                    { accessorKey: "p50FinishDate", header: "P50 finish", cell: ({ row }) => row.original.p50FinishDate ?? "—" },
+                    { accessorKey: "p80FinishDate", header: "P80 finish", cell: ({ row }) => row.original.p80FinishDate ?? "—" },
+                    { accessorKey: "p90FinishDate", header: "P90 finish", cell: ({ row }) => row.original.p90FinishDate ?? "—" },
+                  ]}
+                  data={milestones.data}
+                />
               ) : null}
             </div>
           )}
@@ -549,96 +602,112 @@ export default function RiskAnalysisPage() {
               </p>
               {!cashflow?.data?.length && <p className="text-sm text-text-muted">No cash-flow data available.</p>}
               {cashflow?.data?.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-text-secondary">
-                        <th className="text-left py-2 px-3">Period end</th>
-                        <th className="text-right py-2 px-3">P10 cumulative</th>
-                        <th className="text-right py-2 px-3">P50 cumulative</th>
-                        <th className="text-right py-2 px-3">P80 cumulative</th>
-                        <th className="text-right py-2 px-3">P90 cumulative</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cashflow.data.map((b) => (
-                        <tr key={b.id} className="border-b border-border/50">
-                          <td className="py-2 px-3">{b.periodEndDate}</td>
-                          <td className="py-2 px-3 text-right">
-                            {b.p10Cumulative != null ? Math.round(parseFloat(b.p10Cumulative)).toLocaleString() : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {b.p50Cumulative != null ? Math.round(parseFloat(b.p50Cumulative)).toLocaleString() : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {b.p80Cumulative != null ? Math.round(parseFloat(b.p80Cumulative)).toLocaleString() : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {b.p90Cumulative != null ? Math.round(parseFloat(b.p90Cumulative)).toLocaleString() : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable
+                  columns={[
+                    { accessorKey: "periodEndDate", header: "Period end" },
+                    {
+                      accessorKey: "p10Cumulative",
+                      header: "P10 cumulative",
+                      cell: ({ row }) => <span className="text-right">{row.original.p10Cumulative != null ? Math.round(parseFloat(row.original.p10Cumulative)).toLocaleString() : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "p50Cumulative",
+                      header: "P50 cumulative",
+                      cell: ({ row }) => <span className="text-right">{row.original.p50Cumulative != null ? Math.round(parseFloat(row.original.p50Cumulative)).toLocaleString() : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "p80Cumulative",
+                      header: "P80 cumulative",
+                      cell: ({ row }) => <span className="text-right">{row.original.p80Cumulative != null ? Math.round(parseFloat(row.original.p80Cumulative)).toLocaleString() : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "p90Cumulative",
+                      header: "P90 cumulative",
+                      cell: ({ row }) => <span className="text-right">{row.original.p90Cumulative != null ? Math.round(parseFloat(row.original.p90Cumulative)).toLocaleString() : "—"}</span>,
+                    },
+                  ]}
+                  data={cashflow.data}
+                />
               ) : null}
             </div>
           )}
 
           {tab === "drivers" && (
             <div className="bg-surface/50 rounded-lg border border-border p-6">
-              <h3 className="text-lg font-semibold text-text-primary mb-2">Risk-register contributions</h3>
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-lg font-semibold text-text-primary">Risk-register contributions</h3>
+                <span
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                    sim.risksEnabled
+                      ? "bg-success/10 border-success/30 text-success"
+                      : "bg-surface-hover/50 border-border text-text-muted"
+                  }`}
+                >
+                  {sim.risksEnabled ? "risks ON" : "risks OFF"}
+                </span>
+              </div>
               <p className="text-sm text-text-secondary mb-4">
                 Per risk: how often the Bernoulli draw fired across iterations (<em>Rate</em>), mean schedule and
                 cost impact when it did, and the activities it was wired to. Risks only contribute when the run
                 had &quot;Enable risk drivers&quot; on and the risk has a non-zero probability + affected activities.
               </p>
-              {!drivers?.data?.length && (
+              {sim.risksEnabled === false && (
+                <div className="mb-4 flex items-start gap-2 p-3 rounded-md bg-warning/10 border border-warning/30 text-sm">
+                  <AlertCircle className="w-4 h-4 mt-0.5 text-warning shrink-0" />
+                  <span className="text-text-primary">
+                    This run was executed with risk drivers <strong>disabled</strong>, so the register was
+                    excluded and the percentiles reflect schedule uncertainty only. Re-run with{" "}
+                    <strong>Enable risk drivers</strong> checked to fold the risk register into the forecast.
+                  </span>
+                </div>
+              )}
+              {!drivers?.data?.length && sim.risksEnabled !== false && (
                 <p className="text-sm text-text-muted">
-                  No drivers recorded. Enable risk drivers on the Run dialog and ensure risks have probability,
-                  affected activities, and a non-zero schedule/cost impact.
+                  No drivers recorded. Ensure risks have probability, affected activities, and a non-zero
+                  schedule/cost impact.
                 </p>
               )}
               {drivers?.data?.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-text-secondary">
-                        <th className="text-left py-2 px-3">Risk</th>
-                        <th className="text-right py-2 px-3">Rate</th>
-                        <th className="text-right py-2 px-3">Hits</th>
-                        <th className="text-right py-2 px-3">Mean Δ days</th>
-                        <th className="text-right py-2 px-3">Mean Δ cost</th>
-                        <th className="text-left py-2 px-3">Activities</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {drivers.data.map((c) => (
-                        <tr key={c.id} className="border-b border-border/50">
-                          <td className="py-2 px-3">
-                            <span className="text-text-primary">{c.riskCode ?? c.riskId.slice(0, 8)}</span>
-                            <span className="text-text-muted ml-2">{c.riskTitle}</span>
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {c.occurrenceRate != null ? `${(c.occurrenceRate * 100).toFixed(1)}%` : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">{c.occurrences ?? 0}</td>
-                          <td className="py-2 px-3 text-right">
-                            {c.meanDurationImpact != null ? c.meanDurationImpact.toFixed(1) : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {c.meanCostImpact != null
-                              ? Math.round(parseFloat(c.meanCostImpact)).toLocaleString()
-                              : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-xs text-text-secondary truncate max-w-xs">
-                            {c.affectedActivityIds ?? ""}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SimpleTable
+                  columns={[
+                    {
+                      accessorKey: "riskCode",
+                      header: "Risk",
+                      cell: ({ row }) => (
+                        <span>
+                          <span className="text-text-primary">{row.original.riskCode ?? row.original.riskId.slice(0, 8)}</span>
+                          <span className="text-text-muted ml-2">{row.original.riskTitle}</span>
+                        </span>
+                      ),
+                    },
+                    {
+                      accessorKey: "occurrenceRate",
+                      header: "Rate",
+                      cell: ({ row }) => <span className="text-right">{row.original.occurrenceRate != null ? `${(row.original.occurrenceRate * 100).toFixed(1)}%` : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "occurrences",
+                      header: "Hits",
+                      cell: ({ row }) => <span className="text-right">{row.original.occurrences ?? 0}</span>,
+                    },
+                    {
+                      accessorKey: "meanDurationImpact",
+                      header: "Mean Δ days",
+                      cell: ({ row }) => <span className="text-right">{row.original.meanDurationImpact != null ? row.original.meanDurationImpact.toFixed(1) : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "meanCostImpact",
+                      header: "Mean Δ cost",
+                      cell: ({ row }) => <span className="text-right">{row.original.meanCostImpact != null ? Math.round(parseFloat(row.original.meanCostImpact)).toLocaleString() : "—"}</span>,
+                    },
+                    {
+                      accessorKey: "affectedActivityIds",
+                      header: "Activities",
+                      cell: ({ row }) => <span className="text-xs text-text-secondary truncate max-w-xs">{row.original.affectedActivityIds ?? ""}</span>,
+                    },
+                  ]}
+                  data={drivers.data}
+                />
               ) : null}
             </div>
           )}

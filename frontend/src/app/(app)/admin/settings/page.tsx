@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { settingsApi, type SettingResponse, type CurrencyResponse } from "@/lib/api/settingsApi";
 import { PageHeader } from "@/components/common/PageHeader";
+import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { TabTip } from "@/components/common/TabTip";
 import { Save, Plus, Trash2, Settings2, DollarSign, Bot, Palette } from "lucide-react";
 import toast from "react-hot-toast";
@@ -81,6 +82,247 @@ export default function SettingsPage() {
   );
 }
 
+// Human-readable labels for the raw setting keys shown in Admin → Settings. Display only —
+// the key itself is untouched and still sent verbatim in the update payload.
+const SETTING_LABELS: Record<string, string> = {
+  "default.scheduling.option": "Scheduling option",
+  "default.evm.technique": "EVM technique",
+  dpr_sla_hours: "DPR approval SLA (hours)",
+  dpr_report_enabled: "Enable scheduled DPR report",
+  dpr_report_cadence: "Report frequency",
+  dpr_report_window: "Analysis window",
+  dpr_report_recipients_override: "Report recipients (override)",
+  dpr_report_send_time: "Report send time",
+  dpr_report_timezone: "Report timezone",
+  dpr_alert_channel: "Alert delivery channel",
+  dpr_missing_alert_enabled: "Enable missing-DPR alert",
+  dpr_missing_alert_time: "Missing-DPR check time",
+  issue_digest_enabled: "Enable weekly issues digest",
+  issue_digest_day: "Digest day of week",
+  issue_digest_time: "Digest send time",
+  material_shortage_enabled: "Enable weekly short-supply digest",
+  material_shortage_day: "Digest day of week",
+  material_shortage_time: "Digest send time",
+  material_shortage_days_cover: "Days-of-cover threshold",
+  material_idle_enabled: "Enable idle-material alert",
+  material_idle_percent_trigger: "Activity % trigger",
+  material_idle_excess_pct: "Minimum excess (% of issued)",
+  material_idle_value_floor: "Minimum excess value",
+  material_idle_grace_days: "Grace period (days)",
+  material_idle_max_reminders: "Maximum reminders",
+};
+
+/**
+ * Settings whose value must be one of a fixed set. The backend parses each of these with a
+ * tolerant `valueOf(...)` and silently falls back to a default when the text does not match
+ * (see DprReportConfig / DprAlertConfig), so a typo used to change behaviour with no warning.
+ * Offering the exact accepted values as a dropdown removes that whole class of mistake.
+ * Values are stored EXACTLY as before — this is an input control change only.
+ */
+const DAYS_OF_WEEK = [
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
+  "SUNDAY",
+];
+
+const SETTING_OPTIONS: Record<string, string[]> = {
+  dpr_report_cadence: ["DAILY", "WEEKLY"],
+  dpr_report_window: [
+    "LAST_1_DAY",
+    "LAST_7_DAYS",
+    "LAST_30_DAYS",
+    "THIS_MONTH",
+    "PROJECT_TO_DATE",
+  ],
+  issue_digest_day: DAYS_OF_WEEK,
+  material_shortage_day: DAYS_OF_WEEK,
+};
+
+/** Keys rendered as a timezone picker (any IANA zone the browser knows). */
+const TIMEZONE_KEYS = new Set(["dpr_report_timezone"]);
+
+/** Keys rendered as a clock picker. Stored as HH:mm, which the backend parses first. */
+const TIME_KEYS = new Set([
+  "dpr_report_send_time",
+  "dpr_missing_alert_time",
+  "issue_digest_time",
+  "material_shortage_time",
+]);
+
+/** on/off settings — the backend treats anything that is not exactly "true" as off. */
+const isBooleanKey = (key: string) => key.endsWith("_enabled");
+
+/**
+ * Keeps the saved value selectable even when it is not one of the offered options, so an
+ * unexpected stored value is never silently swapped for something else just by opening the page.
+ */
+function withCurrent(options: string[], current: string): string[] {
+  return current && !options.includes(current) ? [current, ...options] : options;
+}
+
+/**
+ * Stored time → the "HH:mm" a clock input needs. Returns null when the stored text is not a
+ * time this can represent (e.g. "7:30 PM" is converted, but "0800" is not) — the caller then
+ * falls back to a plain text box rather than showing an empty picker over a real value.
+ */
+function toTimeValue(raw: string): string | null {
+  const v = (raw ?? "").trim();
+  let m = v.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (m) {
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (h <= 23 && min <= 59) return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+    return null;
+  }
+  m = v.match(/^(\d{1,2})(?::(\d{2}))?\s*([AaPp])\.?[Mm]\.?$/);
+  if (m) {
+    let h = Number(m[1]) % 12;
+    const min = m[2] ? Number(m[2]) : 0;
+    if (h > 11 || min > 59) return null;
+    if (m[3].toLowerCase() === "p") h += 12;
+    return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+/**
+ * Clearer wording for a few fields whose stored description is written for developers. The
+ * timezone in particular governs EVERY scheduled email on this page, not just the DPR report,
+ * which the raw description does not make obvious.
+ */
+const SETTING_NOTES: Record<string, string> = {
+  dpr_report_timezone:
+    "Applies to every scheduled email on this page — the daily report, the issues digest and the material digests. All send times below are local times in this zone.",
+  dpr_report_send_time:
+    "Local time in the report timezone. Both formats are accepted: 24-hour (08:00, 19:30) or 12-hour (7:30 PM, 8 am).",
+  issue_digest_time:
+    "Local time in the report timezone. Both formats are accepted: 24-hour (08:00, 19:30) or 12-hour (7:30 PM, 8 am).",
+  material_shortage_time:
+    "Local time in the report timezone. Both formats are accepted: 24-hour (08:00, 19:30) or 12-hour (7:30 PM, 8 am).",
+};
+
+/**
+ * Every IANA zone the browser knows, newest browsers first. Falls back to a short list of the
+ * zones this deployment actually cares about if the runtime does not expose the full set, so
+ * the field never turns into an empty dropdown.
+ */
+function timezoneOptions(current: string): string[] {
+  let zones: string[] = [];
+  try {
+    const supported = (
+      Intl as unknown as { supportedValuesOf?: (k: string) => string[] }
+    ).supportedValuesOf;
+    if (typeof supported === "function") zones = supported("timeZone");
+  } catch {
+    zones = [];
+  }
+  if (zones.length === 0) {
+    zones = ["Asia/Muscat", "Asia/Kolkata", "Asia/Dubai", "Asia/Riyadh", "Europe/London", "UTC"];
+  }
+  // Keep whatever is already saved selectable even if this browser does not list it.
+  return zones.includes(current) && current ? zones : [current, ...zones].filter(Boolean);
+}
+
+const INPUT_CLASS =
+  "mt-2 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";
+
+/**
+ * One settings field. A fixed-choice setting renders as a dropdown of exactly the values the
+ * backend accepts; a timezone renders as the browser's full IANA list; everything else keeps
+ * the free-text box it has always had.
+ */
+function SettingInput({
+  settingKey,
+  value,
+  onChange,
+}: {
+  settingKey: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  // Timezone: type-to-filter, because the full IANA list is far too long to scroll.
+  if (TIMEZONE_KEYS.has(settingKey)) {
+    return (
+      <div className="mt-2">
+        <SearchableSelect
+          value={value}
+          onChange={onChange}
+          placeholder="Type to find a timezone, e.g. Muscat"
+          options={timezoneOptions(value).map((z) => ({ value: z, label: z }))}
+        />
+      </div>
+    );
+  }
+
+  // Clock picker. Falls back to text when the stored value is not a time it can show, so an
+  // odd existing entry stays visible and editable instead of appearing blank.
+  if (TIME_KEYS.has(settingKey)) {
+    const timeValue = toTimeValue(value);
+    if (timeValue !== null) {
+      return (
+        <input
+          type="time"
+          value={timeValue}
+          onChange={(e) => onChange(e.target.value)}
+          className={INPUT_CLASS}
+        />
+      );
+    }
+  }
+
+  const options = isBooleanKey(settingKey)
+    ? withCurrent(["true", "false"], value)
+    : SETTING_OPTIONS[settingKey]
+      ? withCurrent(SETTING_OPTIONS[settingKey], value)
+      : undefined;
+
+  if (!options) {
+    return (
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={INPUT_CLASS}
+      />
+    );
+  }
+
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={INPUT_CLASS}>
+      {options.map((opt) => (
+        <option key={opt} value={opt}>
+          {isBooleanKey(settingKey) ? BOOLEAN_LABELS[opt] ?? opt : opt}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+const BOOLEAN_LABELS: Record<string, string> = { true: "On (true)", false: "Off (false)" };
+
+function settingLabel(key: string): string {
+  const mapped = SETTING_LABELS[key];
+  if (mapped) return mapped;
+  // Fallback for keys added later: strip the "default." prefix, break on dots/underscores,
+  // sentence-case, and uppercase the domain acronyms.
+  const text = key.replace(/^default\./, "").replace(/[._]/g, " ");
+  return (text.charAt(0).toUpperCase() + text.slice(1)).replace(
+    /\b(dpr|evm|sla|ai|boq|dbs)\b/gi,
+    (m) => m.toUpperCase(),
+  );
+}
+
+// Category headings come from the DB in mixed casing ("scheduling", "evm", "OPERATIONS").
+const CATEGORY_LABELS: Record<string, string> = {
+  scheduling: "Scheduling",
+  evm: "EVM",
+  OPERATIONS: "Operations",
+};
+
 function GlobalSettingsSection() {
   const queryClient = useQueryClient();
   const { data: settingsData, isLoading } = useQuery({
@@ -115,9 +357,10 @@ function GlobalSettingsSection() {
     return <div className="text-center text-text-muted py-12">Loading settings...</div>;
   }
 
-  // Group settings by category (exclude THEME keys — they have their own tab)
+  // Group settings by category (exclude THEME keys — they have their own tab — and SEEDER
+  // markers, which are internal bookkeeping the seeders manage themselves)
   const grouped = settings
-    .filter((s) => s.category !== "THEME")
+    .filter((s) => s.category !== "THEME" && s.category !== "SEEDER")
     .reduce((acc: Record<string, SettingResponse[]>, s: SettingResponse) => {
       const cat = s.category || "general";
       if (!acc[cat]) acc[cat] = [];
@@ -137,22 +380,25 @@ function GlobalSettingsSection() {
     <div className="space-y-6">
       {Object.entries(grouped).map(([category, categorySettings]) => (
         <div key={category} className="rounded-xl border border-border bg-surface/50 p-6 shadow-lg">
-          <h2 className="mb-4 text-lg font-semibold text-text-primary capitalize">{category}</h2>
+          <h2 className="mb-4 text-lg font-semibold text-text-primary capitalize">
+            {CATEGORY_LABELS[category] ?? category}
+          </h2>
           <div className="space-y-4">
             {categorySettings.map((setting) => (
               <div key={setting.id} className="flex items-end gap-4">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-text-secondary">
-                    {setting.settingKey.replace(/\./g, " ").replace(/default /i, "")}
+                    {settingLabel(setting.settingKey)}
                   </label>
                   {setting.description && (
-                    <p className="mt-0.5 text-xs text-text-muted">{setting.description}</p>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      {SETTING_NOTES[setting.settingKey] ?? setting.description}
+                    </p>
                   )}
-                  <input
-                    type="text"
+                  <SettingInput
+                    settingKey={setting.settingKey}
                     value={editValues[setting.id] ?? setting.settingValue}
-                    onChange={(e) => setEditValues((prev) => ({ ...prev, [setting.id]: e.target.value }))}
-                    className="mt-2 block w-full rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    onChange={(v) => setEditValues((prev) => ({ ...prev, [setting.id]: v }))}
                   />
                 </div>
                 {editValues[setting.id] !== undefined && editValues[setting.id] !== setting.settingValue && (
@@ -283,7 +529,7 @@ function CurrenciesSection() {
           <div className="mt-4 flex gap-2">
             <button
               onClick={() => createMutation.mutate()}
-              disabled={!formData.code || !formData.name || !formData.symbol || createMutation.isPending}
+              disabled={!formData.code.trim() || !formData.name.trim() || !formData.symbol.trim() || createMutation.isPending}
               className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-border"
             >
               {createMutation.isPending ? "Adding..." : "Add Currency"}

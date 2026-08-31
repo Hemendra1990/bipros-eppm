@@ -6,6 +6,7 @@ import { ChevronRight, ChevronDown, FolderOpen } from "lucide-react";
 import type { WbsNodeResponse } from "@/lib/types";
 import type { ActivityResponse } from "@/lib/api/activityApi";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { ActivityMasterStatusIndicator } from "@/components/activity/ActivityMasterStatusIndicator";
 
 interface TreeNode {
   id: string;
@@ -28,6 +29,45 @@ interface ActivityWbsTreeViewProps {
   onSaveProgress: (activity: ActivityResponse) => void;
   onStartActivity: (activity: ActivityResponse) => void;
   onCompleteActivity: (activity: ActivityResponse) => void;
+  selectedActivityId?: string | null;
+  onRowClick?: (activity: ActivityResponse) => void;
+  onRowContextMenu?: (activity: ActivityResponse, x: number, y: number) => void;
+}
+
+/**
+ * Nest activities by their containment parent (hierarchy D10) within each WBS group.
+ * A child whose parent lives under a different WBS node (or isn't loaded) stays at the
+ * top level of its own WBS group — never silently hidden.
+ */
+function buildActivityNodes(list: ActivityResponse[]): TreeNode[] {
+  const byId = new Map(list.map((a) => [a.id, a]));
+  const childrenOf = new Map<string, ActivityResponse[]>();
+  const roots: ActivityResponse[] = [];
+  for (const a of list) {
+    const pid = a.parentActivityId ?? null;
+    if (pid && byId.has(pid)) {
+      const arr = childrenOf.get(pid) ?? [];
+      arr.push(a);
+      childrenOf.set(pid, arr);
+    } else {
+      roots.push(a);
+    }
+  }
+  const toNode = (a: ActivityResponse): TreeNode => {
+    const kids = (childrenOf.get(a.id) ?? []).slice().sort((x, y) => x.code.localeCompare(y.code));
+    return {
+      id: `activity-${a.id}`,
+      code: a.code,
+      name: a.name,
+      type: "activity",
+      activity: a,
+      children: kids.length ? kids.map(toNode) : undefined,
+    };
+  };
+  return roots
+    .slice()
+    .sort((x, y) => x.code.localeCompare(y.code))
+    .map(toNode);
 }
 
 function buildTree(wbsNodes: WbsNodeResponse[], activities: ActivityResponse[]): TreeNode[] {
@@ -40,17 +80,7 @@ function buildTree(wbsNodes: WbsNodeResponse[], activities: ActivityResponse[]):
 
   function mapWbsNode(wbs: WbsNodeResponse): TreeNode {
     const childWbsNodes = wbs.children?.map(mapWbsNode) ?? [];
-    const childActivities = (activityMap.get(wbs.id) ?? [])
-      .slice()
-      .sort((a, b) => a.code.localeCompare(b.code));
-
-    const activityNodes: TreeNode[] = childActivities.map((activity) => ({
-      id: `activity-${activity.id}`,
-      code: activity.code,
-      name: activity.name,
-      type: "activity",
-      activity,
-    }));
+    const activityNodes = buildActivityNodes(activityMap.get(wbs.id) ?? []);
 
     return {
       id: `wbs-${wbs.id}`,
@@ -96,6 +126,9 @@ function TreeRow({
   onSaveProgress,
   onStartActivity,
   onCompleteActivity,
+  selectedActivityId,
+  onRowClick,
+  onRowContextMenu,
 }: {
   node: TreeNode;
   depth: number;
@@ -110,6 +143,9 @@ function TreeRow({
   onSaveProgress: (activity: ActivityResponse) => void;
   onStartActivity: (activity: ActivityResponse) => void;
   onCompleteActivity: (activity: ActivityResponse) => void;
+  selectedActivityId?: string | null;
+  onRowClick?: (activity: ActivityResponse) => void;
+  onRowContextMenu?: (activity: ActivityResponse, x: number, y: number) => void;
 }) {
   const isWbs = node.type === "wbs";
   const hasChildren = node.children && node.children.length > 0;
@@ -164,20 +200,25 @@ function TreeRow({
               onSaveProgress={onSaveProgress}
               onStartActivity={onStartActivity}
               onCompleteActivity={onCompleteActivity}
+              selectedActivityId={selectedActivityId}
+              onRowClick={onRowClick}
+              onRowContextMenu={onRowContextMenu}
             />
           ))}
       </>
     );
   }
 
-  // Activity row
+  // Activity row. A node with children is a PARENT (hierarchy D10): grouping + rollup only —
+  // its % is derived, it takes no Start/Complete, and its children nest beneath it.
   const activity = node.activity!;
+  const isParentActivity = !!hasChildren;
   const editing = progressEdit[activity.id] !== undefined;
   const busy = pendingId === activity.id && progressMutationIsPending;
 
   const canStart = (a: ActivityResponse) =>
     a.status === "NOT_STARTED" || (a.percentComplete ?? 0) === 0;
-  const canComplete = (a: ActivityResponse) => (a.percentComplete ?? 0) < 100;
+  const canComplete = (a: ActivityResponse) => a.status !== "COMPLETED";
 
   const predCountMap = new Map<string, number>();
   const succCountMap = new Map<string, number>();
@@ -194,17 +235,62 @@ function TreeRow({
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
 
+  const isSelected = selectedActivityId === activity.id;
   return (
-    <tr className="hover:bg-surface/80">
+    <>
+    <tr
+      className={`cursor-pointer hover:bg-surface/80 ${isSelected ? "bg-surface-active/40" : ""}`}
+      onClick={() => onRowClick?.(activity)}
+      onContextMenu={(e) => {
+        if (!onRowContextMenu) return;
+        e.preventDefault();
+        onRowContextMenu(activity, e.clientX, e.clientY);
+      }}
+    >
       <td className="px-4 py-4 text-sm whitespace-nowrap">
-        <div className="flex items-center" style={{ paddingLeft: `${depth * 24 + 24}px` }}>
+        <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 24 + (isParentActivity ? 0 : 24)}px` }}>
+          {isParentActivity && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggle(node.id);
+              }}
+              className="p-0.5 hover:bg-surface-hover rounded shrink-0"
+            >
+              {isExpanded ? (
+                <ChevronDown size={16} className="text-text-muted" />
+              ) : (
+                <ChevronRight size={16} className="text-text-muted" />
+              )}
+            </button>
+          )}
           <span className="font-medium text-text-primary">{activity.code}</span>
+          {isParentActivity && (
+            <span className="ml-1 text-xs text-text-muted bg-surface-hover px-1.5 py-0.5 rounded-full">
+              {node.children?.length ?? 0}
+            </span>
+          )}
         </div>
       </td>
-      <td className="px-4 py-4 text-sm text-text-primary whitespace-nowrap">{activity.name}</td>
+      <td className="px-4 py-4 text-sm text-text-primary whitespace-nowrap">
+        <span className="inline-flex items-center gap-2">
+          <span>{activity.name}</span>
+          <ActivityMasterStatusIndicator workActivityId={activity.workActivityId} />
+        </span>
+      </td>
       <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{activity.originalDuration ?? activity.duration ?? "—"}</td>
-      <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">
-        {editing ? (
+      <td
+        className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {isParentActivity ? (
+          <span
+            className="rounded-md border border-transparent px-2 py-0.5 text-xs text-text-secondary"
+            title={`Rolled up from ${node.children?.length ?? 0} child activities (cost-weighted)`}
+          >
+            {(activity.percentComplete ?? 0).toFixed(1)}% ⤴
+          </span>
+        ) : editing ? (
           <div className="flex items-center gap-1">
             <input
               type="number"
@@ -292,9 +378,12 @@ function TreeRow({
       <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(activity.earlyFinishDate)}</td>
       <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(activity.lateStartDate)}</td>
       <td className="px-4 py-4 text-sm text-text-secondary whitespace-nowrap">{formatDate(activity.lateFinishDate)}</td>
-      <td className="px-4 py-4 text-sm whitespace-nowrap">
+      <td
+        className="px-4 py-4 text-sm whitespace-nowrap"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex gap-2">
-          {canStart(activity) && (
+          {!isParentActivity && canStart(activity) && (
             <button
               type="button"
               onClick={() => onStartActivity(activity)}
@@ -305,7 +394,7 @@ function TreeRow({
               Start
             </button>
           )}
-          {canComplete(activity) && (
+          {!isParentActivity && canComplete(activity) && (
             <button
               type="button"
               onClick={() => onCompleteActivity(activity)}
@@ -336,6 +425,30 @@ function TreeRow({
         )}
       </td>
     </tr>
+    {isExpanded &&
+      hasChildren &&
+      node.children?.map((child) => (
+        <TreeRow
+          key={child.id}
+          node={child}
+          depth={depth + 1}
+          expanded={expanded}
+          toggle={toggle}
+          relationships={relationships}
+          projectId={projectId}
+          progressEdit={progressEdit}
+          setProgressEdit={setProgressEdit}
+          pendingId={pendingId}
+          progressMutationIsPending={progressMutationIsPending}
+          onSaveProgress={onSaveProgress}
+          onStartActivity={onStartActivity}
+          onCompleteActivity={onCompleteActivity}
+          selectedActivityId={selectedActivityId}
+          onRowClick={onRowClick}
+          onRowContextMenu={onRowContextMenu}
+        />
+      ))}
+    </>
   );
 }
 
@@ -351,6 +464,9 @@ export function ActivityWbsTreeView({
   onSaveProgress,
   onStartActivity,
   onCompleteActivity,
+  selectedActivityId,
+  onRowClick,
+  onRowContextMenu,
 }: ActivityWbsTreeViewProps) {
   const tree = useMemo(() => {
     const rawTree = buildTree(wbsNodes, activities);
@@ -425,6 +541,9 @@ export function ActivityWbsTreeView({
                 onSaveProgress={onSaveProgress}
                 onStartActivity={onStartActivity}
                 onCompleteActivity={onCompleteActivity}
+                selectedActivityId={selectedActivityId}
+                onRowClick={onRowClick}
+                onRowContextMenu={onRowContextMenu}
               />
             ))}
           </tbody>

@@ -73,7 +73,8 @@ class ActivityIntegrationTest {
         CreateProjectRequest projReq = new CreateProjectRequest(
                 "PRJ-ACT-" + suffix, "Project Activity " + suffix, "desc",
                 epsId, null, LocalDate.now(), LocalDate.now().plusMonths(12),
-                5, null, null, null, null, null, null, null, null, null);
+                5, null, null, null, null, null, null, null, null, null,
+                null);
         HttpEntity<CreateProjectRequest> projE = new HttpEntity<>(projReq, h);
         ResponseEntity<ApiResponse> projR = restTemplate.exchange("/v1/projects", HttpMethod.POST, projE, ApiResponse.class);
         Map<String, Object> projD = (Map<String, Object>) projR.getBody().data();
@@ -109,7 +110,7 @@ class ActivityIntegrationTest {
                     "ACT-" + suffix, "Activity " + suffix, "Test activity",
                     projectId, wbsNodeId, null, null, null,
                     10.0, LocalDate.now(), LocalDate.now().plusDays(10),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
 
             HttpEntity<CreateActivityRequest> e = new HttpEntity<>(req, authJsonHeaders());
             ResponseEntity<ApiResponse> resp = restTemplate.exchange(
@@ -125,7 +126,7 @@ class ActivityIntegrationTest {
                     "", "No Code", null, projectId, wbsNodeId,
                     null, null, null, 10.0,
                     LocalDate.now(), LocalDate.now().plusDays(10),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
 
             HttpEntity<CreateActivityRequest> e = new HttpEntity<>(req, authJsonHeaders());
             ResponseEntity<ApiResponse> resp = restTemplate.exchange(
@@ -163,7 +164,7 @@ class ActivityIntegrationTest {
                     "ACT-G-" + suffix, "Get Activity " + suffix, null,
                     projectId, wbsNodeId, null, null, null,
                     10.0, LocalDate.now(), LocalDate.now().plusDays(10),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
             HttpEntity<CreateActivityRequest> createE = new HttpEntity<>(req, h);
             ResponseEntity<ApiResponse> createR = restTemplate.exchange(
                     "/v1/projects/" + projectId + "/activities",
@@ -192,7 +193,7 @@ class ActivityIntegrationTest {
                     "ACT-U-" + suffix, "Update Activity " + suffix, null,
                     projectId, wbsNodeId, null, null, null,
                     10.0, LocalDate.now(), LocalDate.now().plusDays(10),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
             HttpEntity<CreateActivityRequest> createE = new HttpEntity<>(req, h);
             ResponseEntity<ApiResponse> createR = restTemplate.exchange(
                     "/v1/projects/" + projectId + "/activities",
@@ -218,7 +219,7 @@ class ActivityIntegrationTest {
                     "ACT-PCT-" + suffix, "PercentCompleteType " + suffix, null,
                     projectId, wbsNodeId, null, null, null,
                     10.0, LocalDate.now(), LocalDate.now().plusDays(10),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
             HttpEntity<CreateActivityRequest> createE = new HttpEntity<>(req, h);
             ResponseEntity<ApiResponse> createR = restTemplate.exchange(
                     "/v1/projects/" + projectId + "/activities",
@@ -268,7 +269,7 @@ class ActivityIntegrationTest {
                     "ACT-D-" + suffix, "Delete Activity " + suffix, null,
                     projectId, wbsNodeId, null, null, null,
                     10.0, LocalDate.now(), LocalDate.now().plusDays(10),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
             HttpEntity<CreateActivityRequest> createE = new HttpEntity<>(req, h);
             ResponseEntity<ApiResponse> createR = restTemplate.exchange(
                     "/v1/projects/" + projectId + "/activities",
@@ -295,7 +296,7 @@ class ActivityIntegrationTest {
                     code, name, null, projectId, wbsNodeId,
                     null, null, null, 10.0,
                     LocalDate.now(), LocalDate.now().plusDays(10),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
             HttpEntity<CreateActivityRequest> e = new HttpEntity<>(req, authJsonHeaders());
             ResponseEntity<ApiResponse> resp = restTemplate.exchange(
                     "/v1/projects/" + projectId + "/activities",
@@ -418,7 +419,7 @@ class ActivityIntegrationTest {
                     "ACT-AS-" + suffix, "Step Activity " + suffix, null,
                     projectId, wbsNodeId, null, null, null,
                     10.0, LocalDate.now(), LocalDate.now().plusDays(10),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
             HttpHeaders h = authJsonHeaders();
             HttpEntity<CreateActivityRequest> actE = new HttpEntity<>(actReq, h);
             ResponseEntity<ApiResponse> actR = restTemplate.exchange(
@@ -444,7 +445,7 @@ class ActivityIntegrationTest {
                     "ACT-AL-" + suffix, "List Steps " + suffix, null,
                     projectId, wbsNodeId, null, null, null,
                     10.0, LocalDate.now(), LocalDate.now().plusDays(10),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
             HttpHeaders h = authJsonHeaders();
             HttpEntity<CreateActivityRequest> actE = new HttpEntity<>(actReq, h);
             ResponseEntity<ApiResponse> actR = restTemplate.exchange(
@@ -469,7 +470,7 @@ class ActivityIntegrationTest {
                     "ACT-AUP-" + suffix, "Up Step " + suffix, null,
                     projectId, wbsNodeId, null, null, null,
                     10.0, LocalDate.now(), LocalDate.now().plusDays(10),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
             HttpEntity<CreateActivityRequest> actE = new HttpEntity<>(actReq, h);
             ResponseEntity<ApiResponse> actR = restTemplate.exchange(
                     "/v1/projects/" + projectId + "/activities",
@@ -503,7 +504,7 @@ class ActivityIntegrationTest {
                     "ACT-AD-" + suffix, "Del Step " + suffix, null,
                     projectId, wbsNodeId, null, null, null,
                     10.0, LocalDate.now(), LocalDate.now().plusDays(10),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null);
             HttpEntity<CreateActivityRequest> actE = new HttpEntity<>(actReq, h);
             ResponseEntity<ApiResponse> actR = restTemplate.exchange(
                     "/v1/projects/" + projectId + "/activities",

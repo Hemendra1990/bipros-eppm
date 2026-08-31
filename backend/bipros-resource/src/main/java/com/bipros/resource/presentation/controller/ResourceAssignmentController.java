@@ -1,6 +1,7 @@
 package com.bipros.resource.presentation.controller;
 
 import com.bipros.common.dto.ApiResponse;
+import com.bipros.resource.application.dto.AssignedResourcePickerOption;
 import com.bipros.resource.application.dto.CreateResourceAssignmentRequest;
 import com.bipros.resource.application.dto.ResourceAssignmentResponse;
 import com.bipros.resource.application.dto.ResourceLevelingRequest;
@@ -36,7 +37,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/projects/{projectId}/resource-assignments")
-@PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'VIEWER')")
+@PreAuthorize("hasPermission(null, 'RESOURCE.READ')")
 @RequiredArgsConstructor
 @Slf4j
 public class ResourceAssignmentController {
@@ -44,7 +45,7 @@ public class ResourceAssignmentController {
   private final ResourceAssignmentService assignmentService;
   private final ResourceLevelingService levelingService;
 
-  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
   @PostMapping
   public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> assignResource(
       @PathVariable UUID projectId,
@@ -55,7 +56,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.canRead(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.READ')")
   @GetMapping("/{id}")
   public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> getAssignment(
       @PathVariable UUID projectId,
@@ -65,7 +66,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.canRead(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.READ')")
   @GetMapping
   public ResponseEntity<ApiResponse<List<ResourceAssignmentResponse>>> listAssignments(
       @PathVariable UUID projectId) {
@@ -74,7 +75,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.canRead(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.READ')")
   @GetMapping("/activity/{activityId}")
   public ResponseEntity<ApiResponse<List<ResourceAssignmentResponse>>> listAssignmentsByActivity(
       @PathVariable UUID projectId,
@@ -85,7 +86,26 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.canRead(#projectId)")
+  /**
+   * Picker-mode lookup powering the DPR drawer's Manpower / Equipment / Material searchable
+   * dropdowns. Returns leaner {@link AssignedResourcePickerOption} rows enriched with a unit-rate
+   * snapshot resolved at {@code reportDate}; filter the result client-side or via {@code kind}.
+   */
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.READ')")
+  @GetMapping("/activity/{activityId}/picker")
+  public ResponseEntity<ApiResponse<List<AssignedResourcePickerOption>>> listPickerOptionsByActivity(
+      @PathVariable UUID projectId,
+      @PathVariable UUID activityId,
+      @RequestParam(required = false) String kind,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate reportDate) {
+    log.info("GET /v1/projects/{}/resource-assignments/activity/{}/picker kind={} reportDate={}",
+        projectId, activityId, kind, reportDate);
+    List<AssignedResourcePickerOption> response = assignmentService.getPickerOptionsByActivity(
+        activityId, kind, reportDate);
+    return ResponseEntity.ok(ApiResponse.ok(response));
+  }
+
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.READ')")
   @GetMapping("/resource/{resourceId}")
   public ResponseEntity<ApiResponse<List<ResourceAssignmentResponse>>> listAssignmentsByResource(
       @PathVariable UUID projectId,
@@ -96,7 +116,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.canRead(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.READ')")
   @GetMapping("/resource/{resourceId}/usage-profile")
   public ResponseEntity<ApiResponse<List<ResourceUsageEntry>>> getResourceUsageProfile(
       @PathVariable UUID projectId,
@@ -111,7 +131,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
   @PostMapping("/{id}/staff")
   public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> staffAssignment(
       @PathVariable UUID projectId,
@@ -124,7 +144,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
   @PostMapping("/{id}/swap")
   public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> swapResource(
       @PathVariable UUID projectId,
@@ -137,7 +157,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
   @PutMapping("/{id}")
   public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> updateAssignment(
       @PathVariable UUID projectId,
@@ -148,7 +168,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
   @DeleteMapping("/{id}")
   public ResponseEntity<ApiResponse<Void>> removeAssignment(
       @PathVariable UUID projectId,
@@ -158,7 +178,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(null));
   }
 
-  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
   @PostMapping("/recompute-costs")
   public ResponseEntity<ApiResponse<java.util.Map<String, Integer>>> recomputeCosts(
       @PathVariable UUID projectId) {
@@ -172,7 +192,7 @@ public class ResourceAssignmentController {
    * Used when the planner deliberately re-baselines the resource commitment (e.g. after a Variation
    * Order). Plan edits do not auto-update budgeted values; this endpoint is the only path.
    */
-  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
   @PostMapping("/{id}/rebudget")
   public ResponseEntity<ApiResponse<ResourceAssignmentResponse>> rebudget(
       @PathVariable UUID projectId,
@@ -182,7 +202,7 @@ public class ResourceAssignmentController {
     return ResponseEntity.ok(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.canEdit(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
   @PostMapping("/level-resources")
   public ResponseEntity<ApiResponse<LevelingResult>> levelResources(
       @PathVariable UUID projectId) {
@@ -193,7 +213,7 @@ public class ResourceAssignmentController {
   }
 
   @PostMapping("/level")
-  @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'SCHEDULER')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
   public ResponseEntity<ApiResponse<ResourceLevelingResponse>> levelResourcesWithMode(
       @PathVariable UUID projectId,
       @Valid @RequestBody ResourceLevelingRequest request) {
@@ -209,7 +229,7 @@ public class ResourceAssignmentController {
    * commits via {@code POST /level}.
    */
   @PostMapping("/level/preview")
-  @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'SCHEDULER')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.UPDATE')")
   public ResponseEntity<ApiResponse<ResourceLevelingResponse>> previewLeveling(
       @PathVariable UUID projectId,
       @Valid @RequestBody ResourceLevelingRequest request) {
@@ -220,7 +240,7 @@ public class ResourceAssignmentController {
   }
 
   @GetMapping("/utilization-profile")
-  @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER', 'SCHEDULER')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'RESOURCE.READ')")
   public ResponseEntity<ApiResponse<List<UtilizationProfileEntry>>> getUtilizationProfile(
       @PathVariable UUID projectId) {
     log.info("GET /v1/projects/{}/resource-assignments/utilization-profile", projectId);

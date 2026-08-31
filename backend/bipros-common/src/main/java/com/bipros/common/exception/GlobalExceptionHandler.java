@@ -11,13 +11,18 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.transaction.TransactionException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.List;
 
 @Slf4j
@@ -51,6 +56,22 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(error));
     }
 
+    /** Duplicate-code / already-exists guard (e.g. LabourDesignationService). Returns 409 Conflict. */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex) {
+        log.warn("Conflict: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("DUPLICATE_RESOURCE", ex.getMessage()));
+    }
+
+    /** Validation guard (e.g. code-prefix / category mismatch). Returns 400 Bad Request. */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("Bad request: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("VALIDATION_ERROR", ex.getMessage()));
+    }
+
     @ExceptionHandler(BusinessRuleException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessRule(BusinessRuleException ex) {
         log.warn("Business rule violation [{}]: {}", ex.getRuleCode(), ex.getMessage());
@@ -69,6 +90,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleConcurrency(ConcurrencyException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("CONFLICT", ex.getMessage()));
+    }
+
+    /**
+     * Transaction was rolled back — typically {@link org.springframework.transaction.UnexpectedRollbackException}
+     * thrown when an earlier statement in the same transaction (e.g. a poisoned row during an
+     * import) already marked it rollback-only. Nothing was persisted.
+     */
+    @ExceptionHandler(TransactionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTransactionRolledBack(TransactionException ex) {
+        log.warn("Transaction rolled back: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("TRANSACTION_ROLLED_BACK",
+                        "The operation could not be completed and was rolled back — no changes were saved. "
+                                + "Please fix any flagged issues and try again."));
     }
 
     @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
@@ -148,6 +183,33 @@ public class GlobalExceptionHandler {
                         "Required parameter '" + ex.getParameterName() + "' is missing"));
     }
 
+    /** Uploaded file or request body could not be read (e.g. client disconnect mid-upload). */
+    @ExceptionHandler(IOException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIoError(IOException ex, HttpServletResponse response) {
+        // A broken pipe / aborted connection during an SSE or async stream surfaces here as an
+        // IOException on a response whose headers are already committed (text/event-stream). We can't
+        // write a JSON ApiResponse body onto that — it fails with HttpMessageNotWritableException and
+        // logs a second stack trace per disconnect. Bail quietly; the client is already gone.
+        if (response.isCommitted()) {
+            if (log.isDebugEnabled()) {
+                log.debug("IO error after response committed (client disconnect, suppressing body): {}", ex.getMessage());
+            }
+            return null;
+        }
+        log.warn("IO error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("IO_ERROR",
+                        "The uploaded file or request could not be read. Please try again."));
+    }
+
+    /** Multipart endpoint expected a file part that the client didn't send. */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingFile(MissingServletRequestPartException ex) {
+        log.warn("Missing file part: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("MISSING_FILE", "A required file was not provided."));
+    }
+
     /**
      * Database constraint violation (unique, FK, check). Unique violations are reported as
      * DUPLICATE_RESOURCE so callers can distinguish duplicate-code errors from other integrity
@@ -185,8 +247,38 @@ public class GlobalExceptionHandler {
                 "HTTP method '" + ex.getMethod() + "' is not supported for this endpoint"));
     }
 
+    /**
+     * Client closed the SSE / async response mid-stream (browser tab closed,
+     * Playwright killed, network drop, server-side timeout). Spring wraps the
+     * underlying Tomcat ClientAbortException in AsyncRequestNotUsableException
+     * and re-enters the dispatcher; if we let that propagate to {@link
+     * #handleGeneral} it tries to write an {@code ApiResponse} JSON body to a
+     * response whose Content-Type is already {@code text/event-stream}, which
+     * fails with {@code HttpMessageNotWritableException} and pollutes the log
+     * with two stack traces per disconnect.
+     *
+     * Returning {@code void} from a handler skips response-body negotiation
+     * entirely. The TCP connection is gone — there is no client to write to.
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleAsyncResponseClosed(AsyncRequestNotUsableException ex) {
+        if (log.isDebugEnabled()) {
+            log.debug("SSE/async client disconnected before stream completed: {}", ex.getMessage());
+        }
+    }
+
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex) {
+    public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex, HttpServletResponse response) {
+        // If the response is already committed (e.g. SSE has flushed
+        // headers + some events) we can't change the status or write a JSON
+        // body — the underlying socket has half-written content. Trying
+        // would produce "HttpMessageNotWritableException: No converter for
+        // [class ApiResponse] with preset Content-Type 'text/event-stream'".
+        // Log once and bail.
+        if (response.isCommitted()) {
+            log.warn("Unexpected error after response committed (suppressing body write): {}", ex.toString());
+            return null;
+        }
         log.error("Unexpected error", ex);
         String message = "An unexpected error occurred";
         if (includeExceptionDetail) {

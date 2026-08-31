@@ -6,7 +6,7 @@ description: Corridor-level strategic view with top risks and portfolio KPIs
 
 # Executive Dashboard
 
-The **Executive Dashboard** provides a high-level strategic overview designed for CXOs, Directors, and Secretary-level officials. It aggregates data across all projects and corridors to present a single view of the entire infrastructure programme.
+The **Executive Dashboard** provides a high-level strategic overview designed for **CXOs, Directors, and Secretary-level officials**. It aggregates data across all projects and corridors to present a single view of the entire infrastructure programme. KPIs surfaced here are portfolio-level rollups (Portfolio CPI, Portfolio SPI, Budget Utilisation, On-Time Delivery) — operational Manpower and Equipment KPI cards live on the lower tiers.
 
 ![Executive Dashboard](/img/screenshots/11-dashboard-executive.png)
 

@@ -64,6 +64,15 @@ export interface UserResponse {
   lastName: string;
   enabled: boolean;
   roles: string[];
+  /**
+   * Fine-grained permission codes (e.g. {@code "PROJECT.READ"}, {@code "ADMIN_USER.UPDATE"})
+   * resolved server-side from the user's profile/legacy role. Populated by
+   * {@code /v1/auth/me} (Phase 2 — backend commit {@code e6385bf}). Empty array for users
+   * with no profile mapping; ADMIN role short-circuits all gates regardless.
+   */
+  permissions?: string[];
+  /** Row-visibility level (gate 3): OWN | PROJECT | ALL. ALL for admins. */
+  dataScope?: DataScope;
   profileId?: string | null;
   profileName?: string | null;
   // IC-PMS fields (nullable for legacy users)
@@ -90,6 +99,8 @@ export interface PermissionDescriptor {
   label: string;
 }
 
+export type DataScope = "OWN" | "TEAM" | "PROJECT" | "ALL";
+
 export interface ProfileResponse {
   id: string;
   code: string;
@@ -98,6 +109,8 @@ export interface ProfileResponse {
   systemDefault: boolean;
   legacyRoleName: string;
   permissions: string[];
+  /** Row-visibility level (gate 3): which rows the permissions apply to. */
+  dataScope: DataScope;
 }
 
 export interface CreateProfileRequest {
@@ -106,6 +119,7 @@ export interface CreateProfileRequest {
   description?: string;
   legacyRoleName: string;
   permissions: string[];
+  dataScope?: DataScope;
 }
 
 export interface UpdateProfileRequest {
@@ -113,6 +127,7 @@ export interface UpdateProfileRequest {
   description?: string;
   legacyRoleName?: string;
   permissions?: string[];
+  dataScope?: DataScope;
 }
 
 // === Project Structure ===
@@ -170,6 +185,16 @@ export interface ProjectResponse {
   fromLocation: string | null;
   toLocation: string | null;
   totalLengthKm: number | null;
+  // Site location for real-weather monitoring (set by admin on the Location card)
+  siteLatitude: number | null;
+  siteLongitude: number | null;
+  sitePlaceLabel: string | null;
+  siteCountry: string | null;
+  siteCountryCode: string | null;
+  siteRegion: string | null;
+  siteCity: string | null;
+  siteTimezone: string | null;
+  weatherMonitoringEnabled: boolean;
   calendarId: string | null;
   /** Deprecated: read-only mirror of {@link primaryBaselineId}. */
   activeBaselineId: string | null;
@@ -240,6 +265,13 @@ export interface CreateProjectRequest {
   plannedStartDate: string;
   plannedFinishDate?: string;
   priority?: number;
+  /**
+   * ISO-4217 currency code for the project budget (e.g. "INR", "OMR", "USD").
+   * Required so AI data-honesty gates can label money correctly. Backend
+   * defaults to "INR" on the entity if absent; payload is forwarded so the
+   * server can honour it once {@code CreateProjectRequest} accepts the field.
+   */
+  budgetCurrency?: string;
   // PMS MasterData Screen 01 enrichment
   category?: ProjectCategory | null;
   morthCode?: string | null;
@@ -269,8 +301,24 @@ export interface UpdateProjectRequest {
   fromLocation?: string | null;
   toLocation?: string | null;
   totalLengthKm?: number | null;
+  // Site location for weather monitoring
+  siteLatitude?: number | null;
+  siteLongitude?: number | null;
+  sitePlaceLabel?: string | null;
+  siteCountry?: string | null;
+  siteCountryCode?: string | null;
+  siteRegion?: string | null;
+  siteCity?: string | null;
+  siteTimezone?: string | null;
+  weatherMonitoringEnabled?: boolean | null;
   calendarId?: string | null;
   contract?: ContractSummaryInput | null;
+  /**
+   * ISO-4217 currency code (e.g. "INR", "OMR"). Changing it RELABELS money
+   * across the project; stored values are not converted. Leave undefined to
+   * keep the existing currency.
+   */
+  budgetCurrency?: string | null;
 }
 
 export interface CreateEpsNodeRequest {
@@ -289,6 +337,12 @@ export interface ActivityResponse {
   projectId: string;
   wbsNodeId: string;
   status: string;
+  /**
+   * Two-stage edit lifecycle. {@code DRAFT} = inputs editable, DPRs blocked;
+   * {@code LOCKED} = inputs read-only, DPRs flow. Mirror of the field on the
+   * canonical {@link import("@/lib/api/activityApi").ActivityResponse}.
+   */
+  editStatus: "DRAFT" | "LOCKED";
   plannedStartDate: string | null;
   plannedFinishDate: string | null;
   earlyStartDate?: string | null;
@@ -587,6 +641,7 @@ export interface BaselineVarianceRow {
   finishVarianceDays: number;
   durationVariance: number;
   costVariance: number;
+  comparable: boolean;
 }
 
 // === Portfolio ===
@@ -1101,13 +1156,19 @@ export interface WbsAiJobView {
 
 // === AI Activity Generation ===
 
+export interface AiPredecessor {
+  code: string;
+  lagDays: number;
+  type?: string | null;
+}
+
 export interface ActivityAiNode {
   code: string;
   name: string;
   description?: string | null;
   wbsNodeCode: string;
   originalDurationDays: number;
-  predecessorCodes: string[];
+  predecessors: AiPredecessor[];
 }
 
 export interface ActivityAiGenerateRequest {
@@ -1144,6 +1205,12 @@ export interface ActivityAiApplyRequest {
    * Default false: skip-and-report (current behavior).
    */
   strictWbs?: boolean;
+  /**
+   * When true (from-scratch generation), the backend compresses the computed
+   * schedule to fit inside the project's planned window. Omit/false for the
+   * from-document path (current behavior).
+   */
+  fromScratch?: boolean;
 }
 
 export interface ActivityAiApplyResponse {
@@ -1619,3 +1686,6 @@ export interface InsightsResponse {
   /** Chart specs built deterministically server-side. Always present in fresh responses. */
   charts?: ChartSpec[] | null;
 }
+
+// === Multi-agent AI platform (Track D) ===
+export * from "./agent";

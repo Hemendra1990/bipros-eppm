@@ -1,11 +1,53 @@
 "use client";
 
+import { useMemo } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import type { LabourGradeReference } from "@/lib/api/labourMasterApi";
+import { SimpleTable } from "@/components/common/SimpleTable";
 import { GRADE_BADGE } from "./labourMasterTokens";
 
 type Props = { rows: LabourGradeReference[]; regulatoryNotes: string[] };
 
 export function GradeReferenceTable({ rows, regulatoryNotes }: Props) {
+  const columns = useMemo<ColumnDef<LabourGradeReference>[]>(() => [
+    {
+      accessorKey: "grade",
+      header: "Grade",
+      cell: ({ row }) => (
+        <span
+          className={`inline-flex items-center justify-center rounded-md border w-9 py-1 text-[12px] font-bold ${GRADE_BADGE[row.original.grade]}`}
+        >
+          {row.original.grade}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "classification",
+      header: "Classification",
+      cell: ({ row }) => (
+        <span className="font-medium text-charcoal">
+          {row.original.classification}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "dailyRateRange",
+      header: "Daily rate",
+      cell: ({ row }) => (
+        <span className="font-display text-[14px] text-gold-deep whitespace-nowrap">
+          {row.original.dailyRateRange}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: ({ row }) => (
+        <span className="text-slate">{row.original.description}</span>
+      ),
+    },
+  ], []);
+
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-xl border border-hairline bg-paper">
@@ -19,36 +61,12 @@ export function GradeReferenceTable({ rows, regulatoryNotes }: Props) {
             </h3>
           </div>
         </header>
-        <div className="overflow-auto">
-          <table className="min-w-full text-[13px]">
-            <thead className="bg-ivory">
-              <tr className="text-left">
-                {["Grade", "Classification", "Daily rate", "Description"].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-[0.10em] text-slate whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-hairline">
-              {rows.map((g) => (
-                <tr key={g.grade} className="hover:bg-ivory/40 transition align-top">
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center justify-center rounded-md border w-9 py-1 text-[12px] font-bold ${GRADE_BADGE[g.grade]}`}>
-                      {g.grade}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-medium text-charcoal">{g.classification}</td>
-                  <td className="px-4 py-3 font-display text-[14px] text-gold-deep whitespace-nowrap">{g.dailyRateRange}</td>
-                  <td className="px-4 py-3 text-slate">{g.description}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <SimpleTable
+          data={rows}
+          columns={columns}
+          sortable={false}
+          className="border-0 rounded-none"
+        />
       </section>
 
       <section className="rounded-xl border border-hairline bg-paper p-5">
@@ -62,7 +80,10 @@ export function GradeReferenceTable({ rows, regulatoryNotes }: Props) {
         </header>
         <ul className="space-y-2">
           {regulatoryNotes.map((n, i) => (
-            <li key={i} className="flex items-start gap-3 text-[13px] text-charcoal">
+            <li
+              key={i}
+              className="flex items-start gap-3 text-[13px] text-charcoal"
+            >
               <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-gold" />
               <span className="leading-relaxed text-slate">{n}</span>
             </li>

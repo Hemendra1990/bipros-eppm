@@ -6,7 +6,8 @@ import com.bipros.udf.application.dto.CreateUserDefinedFieldRequest;
 import com.bipros.udf.application.dto.SetUdfValueRequest;
 import com.bipros.udf.application.dto.UdfValueResponse;
 import com.bipros.udf.application.dto.UserDefinedFieldDto;
-import com.bipros.udf.domain.engine.FormulaEvaluator;
+import com.bipros.udf.domain.engine.FormulaAstCache;
+import com.bipros.udf.domain.engine.ObjectFormulaVisitor;
 import com.bipros.udf.domain.model.UdfDataType;
 import com.bipros.udf.domain.model.UdfScope;
 import com.bipros.udf.domain.model.UdfSubject;
@@ -14,9 +15,13 @@ import com.bipros.udf.domain.model.UserDefinedField;
 import com.bipros.udf.domain.model.UdfValue;
 import com.bipros.udf.domain.repository.UserDefinedFieldRepository;
 import com.bipros.udf.domain.repository.UdfValueRepository;
+import com.bipros.udf.domain.engine.FormulaParseException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import org.antlr.v4.runtime.tree.ParseTree;
 
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +29,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -31,6 +37,7 @@ public class UdfService {
 
     private final UserDefinedFieldRepository userDefinedFieldRepository;
     private final UdfValueRepository udfValueRepository;
+    private final FormulaAstCache formulaAstCache;
 
     private static final int MAX_FIELDS_PER_TYPE_SUBJECT = 100;
     private static final int MAX_INDICATOR_FIELDS = 20;
@@ -146,7 +153,7 @@ public class UdfService {
         UserDefinedField field = userDefinedFieldRepository.findById(fieldId)
             .orElseThrow(() -> new ResourceNotFoundException("UserDefinedField", fieldId));
 
-        if (!field.getIsFormula()) {
+        if (!Boolean.TRUE.equals(field.getIsFormula())) {
             throw new BusinessRuleException("FIELD_NOT_FORMULA", "Field is not a formula");
         }
 
@@ -156,8 +163,18 @@ public class UdfService {
         }
 
         Map<String, Object> context = buildContext(entityId);
-        FormulaEvaluator evaluator = new FormulaEvaluator(expression, context);
-        return evaluator.evaluate();
+        try {
+            ParseTree tree = formulaAstCache.get(expression);
+            if (tree == null) {
+                return "";
+            }
+            ObjectFormulaVisitor visitor = new ObjectFormulaVisitor(context);
+            Object result = visitor.visit(tree);
+            return result != null ? String.valueOf(result) : "";
+        } catch (FormulaParseException e) {
+            log.warn("Formula parse error for field {}: {}", fieldId, e.getMessage());
+            return "";
+        }
     }
 
     private Map<String, Object> buildContext(UUID entityId) {
@@ -240,17 +257,6 @@ public class UdfService {
         value.setIndicatorValue(null);
         value.setCodeValue(null);
     }
-
-    private String extractValueAsString(UdfValue value) {
-        if (value.getTextValue() != null) return value.getTextValue();
-        if (value.getNumberValue() != null) return String.valueOf(value.getNumberValue());
-        if (value.getCostValue() != null) return value.getCostValue().toPlainString();
-        if (value.getDateValue() != null) return value.getDateValue().toString();
-        if (value.getIndicatorValue() != null) return value.getIndicatorValue().name();
-        if (value.getCodeValue() != null) return value.getCodeValue();
-        return "";
-    }
-
 
     private UserDefinedFieldDto mapToDto(UserDefinedField field) {
         return UserDefinedFieldDto.builder()

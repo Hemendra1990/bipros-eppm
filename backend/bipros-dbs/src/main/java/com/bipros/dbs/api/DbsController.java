@@ -1,0 +1,465 @@
+package com.bipros.dbs.api;
+
+import com.bipros.common.dto.ApiResponse;
+import com.bipros.dbs.api.dto.BoqExecutedSummaryDto;
+import com.bipros.dbs.api.dto.CumulativeDaysResponse;
+import com.bipros.dbs.api.dto.DbsCmDayResponse;
+import com.bipros.dbs.api.dto.DbsCmSummaryDto;
+import com.bipros.dbs.api.dto.DbsEngineerDayResponse;
+import com.bipros.dbs.api.dto.DbsEngineerPeriodResponse;
+import com.bipros.dbs.api.dto.DbsProjectDayResponse;
+import com.bipros.dbs.api.dto.DbsProjectPeriodResponse;
+import com.bipros.dbs.api.dto.DbsRecomputeJobDto;
+import com.bipros.dbs.api.dto.DbsSupervisorDayResponse;
+import com.bipros.dbs.api.dto.DbsSupervisorPeriodResponse;
+import com.bipros.dbs.api.dto.DbsSupervisorSummaryDto;
+import com.bipros.dbs.api.dto.EquipmentRegisterResponse;
+import com.bipros.dbs.api.dto.ManpowerRegisterResponse;
+import com.bipros.dbs.domain.model.DbsDailyProject;
+import com.bipros.dbs.export.DbsExcelWriter;
+import com.bipros.dbs.export.DbsPdfWriter;
+import com.bipros.dbs.service.DbsAggregationService;
+import com.bipros.dbs.service.DbsQueryService;
+import com.bipros.dbs.service.RegisterAggregationService;
+import com.bipros.dbs.service.recompute.DbsRecomputeJob;
+import com.bipros.dbs.service.recompute.DbsRecomputeJobService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+
+/**
+ * Read API + admin recompute endpoints for the Daily Balance Sheet aggregates.
+ *
+ * <p>Each GET accepts an optional {@code periodType} of {@code DAY | WEEK | MONTH}:
+ * omit it (or pass DAY) for the single-day response shape, pass WEEK/MONTH for the
+ * period envelope with totals + zero-filled daily rows. ISO Mon–Sun week, calendar
+ * month bounds.
+ *
+ * <p>Access-control round (2026-08-11): every GET requires DBS.READ on the project, the
+ * two exports DBS.EXPORT, and the three person pages additionally pass the OWN-scope
+ * downline guard ({@link DbsPersonAccessGuard}) — previously all 16 GETs were unguarded.
+ */
+@Slf4j
+@RestController
+@RequestMapping("/v1/projects/{projectId}/dbs")
+@RequiredArgsConstructor
+public class DbsController {
+
+    private static final MediaType XLSX_MEDIA_TYPE =
+        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+    private final DbsQueryService queryService;
+    private final DbsAggregationService aggregationService;
+    private final DbsExcelWriter excelWriter;
+    private final DbsPdfWriter pdfWriter;
+    private final RegisterAggregationService registerAggregationService;
+    private final DbsRecomputeJobService jobService;
+    private final DbsPersonAccessGuard dbsPersonAccess;
+
+    // ── supervisor ──────────────────────────────────────────────────────────────
+
+    @GetMapping("/supervisor/{supervisorUserId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') and @dbsPersonAccess.canViewPerson(#projectId, #supervisorUserId)")
+    public ResponseEntity<ApiResponse<?>> getSupervisor(
+        @PathVariable UUID projectId,
+        @PathVariable UUID supervisorUserId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false) String periodType) {
+
+        if (isPeriod(periodType)) {
+            DbsSupervisorPeriodResponse body = queryService
+                .getSupervisorPeriod(projectId, supervisorUserId, periodType, date);
+            return ResponseEntity.ok(ApiResponse.ok(body));
+        }
+        DbsSupervisorDayResponse body = queryService.getSupervisorDay(projectId, supervisorUserId, date);
+        return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
+    // ── engineer ────────────────────────────────────────────────────────────────
+
+    @GetMapping("/engineer/{engineerUserId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') and @dbsPersonAccess.canViewPerson(#projectId, #engineerUserId)")
+    public ResponseEntity<ApiResponse<?>> getEngineer(
+        @PathVariable UUID projectId,
+        @PathVariable UUID engineerUserId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false) String periodType) {
+
+        if (isPeriod(periodType)) {
+            DbsEngineerPeriodResponse body = queryService
+                .getEngineerPeriod(projectId, engineerUserId, periodType, date);
+            return ResponseEntity.ok(ApiResponse.ok(body));
+        }
+        DbsEngineerDayResponse body = queryService.getEngineerDay(projectId, engineerUserId, date);
+        return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
+    // ── construction manager (CM) ───────────────────────────────────────────────
+
+    /**
+     * Single-day or period DBS payload for one Construction Manager.
+     *
+     * <p>{@code periodType=DAY} (default) returns the {@code dbs_daily_cm} row directly;
+     * {@code WEEK} / {@code MONTH} return the summed rollup over the ISO Mon–Sun week or
+     * calendar month containing {@code date}.
+     */
+    @GetMapping("/cm/{cmUserId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') and @dbsPersonAccess.canViewPerson(#projectId, #cmUserId)")
+    public ResponseEntity<ApiResponse<DbsCmDayResponse>> getCmDay(
+        @PathVariable UUID projectId,
+        @PathVariable UUID cmUserId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false, defaultValue = "DAY") String periodType) {
+
+        DbsCmDayResponse body = isPeriod(periodType)
+            ? queryService.getCmPeriod(projectId, cmUserId, periodType, date)
+            : queryService.getCmDay(projectId, cmUserId, date);
+        return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
+    /**
+     * Compact per-CM summary list for the date. Powers the PM tab's CM drill-down menu.
+     */
+    @GetMapping("/cms")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
+    public ResponseEntity<ApiResponse<List<DbsCmSummaryDto>>> listCms(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false) String periodType) {
+
+        // periodType optional — omit / DAY keeps the single-day roster; WEEK / MONTH expand to
+        // the period bounds so the CM picker matches the period scope (same rationale as
+        // listSupervisors above).
+        // Gate 3: same roster narrowing as /supervisors.
+        return ResponseEntity.ok(ApiResponse.ok(
+            queryService.listCmsForScope(projectId, date, periodType).stream()
+                .filter(cm -> dbsPersonAccess.canViewRosterRow(projectId, cm.cmUserId(), cm.cmName()))
+                .toList()));
+    }
+
+    // ── project (PM tab) ────────────────────────────────────────────────────────
+
+    @GetMapping("/project")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
+    public ResponseEntity<ApiResponse<?>> getProject(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false) String periodType) {
+
+        if (isPeriod(periodType)) {
+            DbsProjectPeriodResponse body = queryService.getProjectPeriod(projectId, periodType, date);
+            return ResponseEntity.ok(ApiResponse.ok(body));
+        }
+        DbsProjectDayResponse body = queryService.getProjectDay(projectId, date);
+        return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
+    /**
+     * "BOQ level performance supervisor wise — Cost" (AI Agent sheet, DBS row): per
+     * (BOQ item × supervisor) qty / income / cost / contribution over the period window.
+     */
+    @GetMapping("/boq-supervisor-comparison")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
+    public ResponseEntity<ApiResponse<List<com.bipros.dbs.api.dto.BoqSupervisorPerformanceRow>>> boqSupervisorComparison(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false) String periodType) {
+
+        // Review round 2: per-person P&L rows — OWN callers see self + downline only.
+        return ResponseEntity.ok(
+            ApiResponse.ok(queryService.boqSupervisorComparison(projectId, periodType, date).stream()
+                .filter(row -> dbsPersonAccess.canViewRosterRow(projectId,
+                    row.supervisorUserId(), row.supervisorName()))
+                .toList()));
+    }
+
+    @GetMapping("/supervisors")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
+    public ResponseEntity<ApiResponse<List<DbsSupervisorSummaryDto>>> listSupervisors(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false) String periodType) {
+
+        // periodType is optional — omit / DAY = single-day list (legacy behaviour);
+        // WEEK / MONTH expands to the period bounds so the Supervisor tab roster matches
+        // the period scope. Previously the roster was empty whenever the focal date had
+        // no DPRs but the surrounding week/month did, hiding all data on the Supervisor tab.
+        // Gate 3: an OWN-scoped caller's roster shows only themself + their downline.
+        return ResponseEntity.ok(
+            ApiResponse.ok(queryService.listSupervisorsForScope(projectId, date, periodType).stream()
+                .filter(sup -> dbsPersonAccess.canViewRosterRow(projectId,
+                    sup.supervisorUserId(), sup.supervisorName()))
+                .toList()));
+    }
+
+    /**
+     * Returns soft health-check alert codes (e.g. NEGATIVE_CONTRIBUTION, RUNAWAY_FUEL)
+     * for the project rollup on a given date. Alerts are also embedded on the
+     * project-day response, but a dedicated endpoint keeps the UI banner queryable
+     * cheaply and independently of the full DBS payload.
+     */
+    @GetMapping("/alerts")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
+    public ResponseEntity<ApiResponse<List<String>>> getAlerts(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+
+        return ResponseEntity.ok(ApiResponse.ok(queryService.getAlertsForProjectDay(projectId, date)));
+    }
+
+    // ── BOQ execution summary ───────────────────────────────────────────────────
+
+    /**
+     * Count of distinct BOQ items executed and total qty_executed over a period window,
+     * scoped to an optional supervisor. Used by both the Supervisor tab (with a
+     * supervisorUserId) and the PM tab (without) to render the BOQ KPI tiles.
+     */
+    @GetMapping("/boq-executed-summary")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') "
+        + "and @dbsPersonAccess.canViewPersonOrNull(#projectId, #supervisorUserId)")
+    public ResponseEntity<ApiResponse<BoqExecutedSummaryDto>> boqExecutedSummary(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(defaultValue = "DAY") String period,
+        @RequestParam(required = false) UUID supervisorUserId) {
+
+        return ResponseEntity.ok(ApiResponse.ok(
+            queryService.boqExecutedSummary(projectId, supervisorUserId, period, date)));
+    }
+
+    // ── equipment & manpower register (Phase 5) ─────────────────────────────────
+
+    /**
+     * Equipment Deployment Register pivoted for the UI: one row per equipment type,
+     * each broken down by CM × shift. Optionally filtered to a single CM.
+     */
+    @GetMapping("/register/equipment")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') "
+        + "and @dbsPersonAccess.canViewRegister(#projectId, #cmUserId)")
+    public ResponseEntity<ApiResponse<EquipmentRegisterResponse>> getEquipmentRegister(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false) UUID cmUserId) {
+
+        EquipmentRegisterResponse body = registerAggregationService
+            .getEquipmentRegister(projectId, date, cmUserId);
+        return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
+    /**
+     * Manpower Deployment Register pivoted for the UI: one row per trade, each broken
+     * down by CM × shift. Optionally filtered to a single CM.
+     */
+    @GetMapping("/register/manpower")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') "
+        + "and @dbsPersonAccess.canViewRegister(#projectId, #cmUserId)")
+    public ResponseEntity<ApiResponse<ManpowerRegisterResponse>> getManpowerRegister(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false) UUID cmUserId) {
+
+        ManpowerRegisterResponse body = registerAggregationService
+            .getManpowerRegister(projectId, date, cmUserId);
+        return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
+    /**
+     * Phase 6 — cumulative equipment-days / manpower-days summed across all dates
+     * {@code <= asOf}. Optionally restricted to a single CM's downline.
+     */
+    @GetMapping("/register/cumulative")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ') "
+        + "and @dbsPersonAccess.canViewRegister(#projectId, #cmUserId)")
+    public ResponseEntity<ApiResponse<CumulativeDaysResponse>> getCumulative(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf,
+        @RequestParam(required = false) UUID cmUserId) {
+
+        CumulativeDaysResponse body = registerAggregationService
+            .cumulative(projectId, asOf, cmUserId);
+        return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
+    // ── admin recompute ─────────────────────────────────────────────────────────
+
+    @PostMapping("/recompute")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.RECOMPUTE')")
+    public ResponseEntity<ApiResponse<DbsDailyProject>> recompute(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+
+        log.info("Admin recompute requested projectId={} date={}", projectId, date);
+        DbsDailyProject project = recomputeProjectDay(projectId, date);
+        return ResponseEntity.ok(ApiResponse.ok(project));
+    }
+
+    @PostMapping("/recompute-range")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.RECOMPUTE')")
+    public ResponseEntity<ApiResponse<DbsRecomputeJobDto>> recomputeRange(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+
+        log.info("Admin recompute-range requested projectId={} from={} to={}", projectId, from, to);
+        DbsRecomputeJob job = jobService.startRange(projectId, from, to);
+        return ResponseEntity.accepted().body(ApiResponse.ok(toDto(job)));
+    }
+
+    @PostMapping("/recompute-cumulative")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.RECOMPUTE')")
+    public ResponseEntity<ApiResponse<DbsRecomputeJobDto>> recomputeCumulative(
+        @PathVariable UUID projectId) {
+
+        log.info("Admin recompute-cumulative requested projectId={}", projectId);
+        DbsRecomputeJob job = jobService.startCumulative(projectId);
+        return ResponseEntity.accepted().body(ApiResponse.ok(toDto(job)));
+    }
+
+    @GetMapping("/recompute-jobs/{jobId}")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
+    public ResponseEntity<ApiResponse<DbsRecomputeJobDto>> getRecomputeJob(
+        @PathVariable UUID projectId,
+        @PathVariable UUID jobId) {
+
+        return jobService.getJob(jobId)
+            .filter(j -> projectId.equals(j.getProjectId()))
+            .map(j -> ResponseEntity.ok(ApiResponse.ok(toDto(j))))
+            .orElseGet(() -> ResponseEntity.ok(ApiResponse.ok(null)));
+    }
+
+    @GetMapping("/recompute-jobs/latest")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.READ')")
+    public ResponseEntity<ApiResponse<DbsRecomputeJobDto>> getLatestRecomputeJob(
+        @PathVariable UUID projectId) {
+
+        DbsRecomputeJobDto dto = jobService.activeJobFor(projectId)
+            .map(this::toDto)
+            .orElse(null);
+        return ResponseEntity.ok(ApiResponse.ok(dto));
+    }
+
+    // ── exports ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Excel export of the DBS for a date.
+     *
+     * <p>{@code level=PM} (default) builds the full workbook — Summary-Financial sheet,
+     * one PRE sheet per engineer, one Costing-Report sheet per supervisor. {@code level=SUPERVISOR}
+     * builds a single supervisor sheet and requires {@code supervisorUserId}. Returned
+     * as a binary attachment (not wrapped in {@code ApiResponse}).
+     */
+    @GetMapping("/export.xlsx")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.EXPORT') "
+        + "and @dbsPersonAccess.canExport(#projectId, #level, #supervisorUserId)")
+    public ResponseEntity<byte[]> exportExcel(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false, defaultValue = "PM") String level,
+        @RequestParam(required = false) UUID supervisorUserId) {
+
+        String lvl = normaliseLevel(level);
+        byte[] body;
+        if ("SUPERVISOR".equals(lvl)) {
+            if (supervisorUserId == null) {
+                return ResponseEntity.badRequest().build();
+            }
+            body = excelWriter.writeSupervisorReport(projectId, supervisorUserId, date);
+        } else {
+            body = excelWriter.writePmReport(projectId, date);
+        }
+        String filename = sanitiseFilename("dbs-" + date + "-" + lvl + ".xlsx");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(XLSX_MEDIA_TYPE);
+        headers.setContentDispositionFormData("attachment", filename);
+        headers.setContentLength(body.length);
+        return new ResponseEntity<>(body, headers, 200);
+    }
+
+    /**
+     * PDF export — same shape as {@link #exportExcel} but renders via openhtmltopdf.
+     */
+    @GetMapping("/export.pdf")
+    @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DBS.EXPORT') "
+        + "and @dbsPersonAccess.canExport(#projectId, #level, #supervisorUserId)")
+    public ResponseEntity<byte[]> exportPdf(
+        @PathVariable UUID projectId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestParam(required = false, defaultValue = "PM") String level,
+        @RequestParam(required = false) UUID supervisorUserId) {
+
+        String lvl = normaliseLevel(level);
+        byte[] body;
+        if ("SUPERVISOR".equals(lvl)) {
+            if (supervisorUserId == null) {
+                return ResponseEntity.badRequest().build();
+            }
+            body = pdfWriter.writeSupervisorReport(projectId, supervisorUserId, date);
+        } else {
+            body = pdfWriter.writePmReport(projectId, date);
+        }
+        String filename = sanitiseFilename("dbs-" + date + "-" + lvl + ".pdf");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDispositionFormData("attachment", filename);
+        headers.setContentLength(body.length);
+        return new ResponseEntity<>(body, headers, 200);
+    }
+
+    // ── helpers ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Delegates the full fan-out (supervisor → engineer → CM → project) to
+     * {@link DbsAggregationService#recomputeAllTiersForDay} and returns the saved
+     * project row. Behaviour is identical to the previous inline fan-out.
+     */
+    private DbsDailyProject recomputeProjectDay(UUID projectId, LocalDate date) {
+        return aggregationService.recomputeAllTiersForDay(projectId, date);
+    }
+
+    private static boolean isPeriod(String periodType) {
+        if (periodType == null) return false;
+        String p = periodType.trim().toUpperCase();
+        return p.equals("WEEK") || p.equals("MONTH");
+    }
+
+    private static String normaliseLevel(String level) {
+        if (level == null) return "PM";
+        String l = level.trim().toUpperCase(Locale.ROOT);
+        return l.equals("SUPERVISOR") ? "SUPERVISOR" : "PM";
+    }
+
+    /** Strip path / disposition-hostile characters so filename headers stay well-formed. */
+    private static String sanitiseFilename(String raw) {
+        return raw.replaceAll("[\\\\/:*?\"<>|\\r\\n]+", "-");
+    }
+
+    private DbsRecomputeJobDto toDto(DbsRecomputeJob job) {
+        return new DbsRecomputeJobDto(
+            job.getJobId(),
+            job.getKind().name(),
+            job.getStatus().name(),
+            job.getFromDate(),
+            job.getToDate(),
+            job.getTotalDays(),
+            job.getProcessedDays().get(),
+            job.getStartedAt(),
+            job.getFinishedAt(),
+            job.getErrorMessage()
+        );
+    }
+}

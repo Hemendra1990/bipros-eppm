@@ -2,6 +2,9 @@ package com.bipros.project.application.service;
 
 import com.bipros.common.dto.PagedResponse;
 import com.bipros.common.event.ProjectCreatedEvent;
+import com.bipros.project.domain.model.ProjectTeamMember;
+import com.bipros.project.domain.model.ProjectRole;
+import com.bipros.common.event.ProjectUpdatedEvent;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.common.security.AccessSpecifications;
@@ -45,6 +48,10 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ProjectService {
 
+    /** Optional so plain unit tests and internal callers keep working unchanged; see canReadCost(). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.bipros.common.security.PermissionChecker permissionChecker;
+
     private final ProjectRepository projectRepository;
     private final EpsNodeRepository epsNodeRepository;
     private final WbsNodeRepository wbsNodeRepository;
@@ -52,6 +59,7 @@ public class ProjectService {
     private final ContractRepository contractRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ProjectAccessGuard projectAccess;
+    private final com.bipros.project.domain.repository.ProjectTeamRepository projectTeamRepository;
 
     public ProjectResponse createProject(CreateProjectRequest request) {
         log.info("Creating project with code: {}", request.code());
@@ -98,6 +106,9 @@ public class ProjectService {
         project.setTotalLengthKm(deriveTotalLengthKm(
             request.fromChainageM(), request.toChainageM(), request.totalLengthKm()));
         project.setCalendarId(request.calendarId());
+        if (request.budgetCurrency() != null && !request.budgetCurrency().isBlank()) {
+            project.setBudgetCurrency(request.budgetCurrency().strip().toUpperCase());
+        }
         project.setOwnerId(creatorId);
 
         Project saved = projectRepository.save(project);
@@ -112,6 +123,17 @@ public class ProjectService {
 
         // Auto-create root WBS node
         createRootWbsNode(saved);
+
+        // Access-control round (2026-08-11): membership auto-provisioning — the creator gets a
+        // PM seat on the Team tab, so a freshly created project is immediately visible to its
+        // creator (gate 2). Mirrors ProjectTeamBackfillSeeder's ownerId rule for old projects.
+        if (creatorId != null) {
+            projectTeamRepository.save(ProjectTeamMember.builder()
+                .projectId(saved.getId())
+                .userId(creatorId)
+                .role(ProjectRole.PM)
+                .build());
+        }
 
         eventPublisher.publishEvent(
             new ProjectCreatedEvent(saved.getId(), saved.getCode(), saved.getName())
@@ -192,8 +214,61 @@ public class ProjectService {
         if (request.toLocation() != null) {
             project.setToLocation(sanitizeText(request.toLocation()));
         }
+        // ── Site location for weather monitoring ──
+        if (request.siteLatitude() != null) {
+            project.setSiteLatitude(request.siteLatitude());
+        }
+        if (request.siteLongitude() != null) {
+            project.setSiteLongitude(request.siteLongitude());
+        }
+        if (request.sitePlaceLabel() != null) {
+            project.setSitePlaceLabel(sanitizeText(request.sitePlaceLabel()));
+        }
+        if (request.siteCountry() != null) {
+            project.setSiteCountry(sanitizeText(request.siteCountry()));
+        }
+        if (request.siteCountryCode() != null) {
+            project.setSiteCountryCode(sanitizeText(request.siteCountryCode()));
+        }
+        if (request.siteRegion() != null) {
+            project.setSiteRegion(sanitizeText(request.siteRegion()));
+        }
+        if (request.siteCity() != null) {
+            project.setSiteCity(sanitizeText(request.siteCity()));
+        }
+        if (request.siteTimezone() != null) {
+            project.setSiteTimezone(sanitizeText(request.siteTimezone()));
+        }
+        if (request.weatherMonitoringEnabled() != null) {
+            project.setWeatherMonitoringEnabled(request.weatherMonitoringEnabled());
+        }
         if (request.calendarId() != null) {
             project.setCalendarId(request.calendarId());
+        }
+        if (request.budgetCurrency() != null && !request.budgetCurrency().isBlank()) {
+            String oldCur = project.getBudgetCurrency() == null ? "INR" : project.getBudgetCurrency().toUpperCase();
+            String newCur = request.budgetCurrency().strip().toUpperCase();
+            if (!newCur.equals(oldCur)) {
+                // Relabel-only currency change. The BAC is stored in the currency's
+                // "major-unit" (crores=1e7 for INR, millions=1e6 for others) and EVM/Cost
+                // multiply it back to raw by that factor. To keep the REAL money unchanged
+                // across a currency switch (no FX conversion), rescale the stored figure so
+                // raw stays constant: e.g. 2 (₹ crore) -> 20 (OMR million), both 20,000,000.
+                java.math.BigDecimal oldF = "INR".equals(oldCur)
+                    ? new java.math.BigDecimal("10000000") : new java.math.BigDecimal("1000000");
+                java.math.BigDecimal newF = "INR".equals(newCur)
+                    ? new java.math.BigDecimal("10000000") : new java.math.BigDecimal("1000000");
+                if (oldF.compareTo(newF) != 0) {
+                    java.math.BigDecimal ratio = oldF.divide(newF, 10, java.math.RoundingMode.HALF_UP);
+                    if (project.getOriginalBudget() != null) {
+                        project.setOriginalBudget(project.getOriginalBudget().multiply(ratio));
+                    }
+                    if (project.getCurrentBudget() != null) {
+                        project.setCurrentBudget(project.getCurrentBudget().multiply(ratio));
+                    }
+                }
+            }
+            project.setBudgetCurrency(newCur);
         }
         validateChainage(project.getFromChainageM(), project.getToChainageM());
         // Recompute derived length whenever chainages change (respecting an explicit override).
@@ -238,6 +313,10 @@ public class ProjectService {
         if (request.dataDate() != null && !request.dataDate().equals(oldDataDate)) {
             auditService.logUpdate("Project", id, "dataDate", oldDataDate, request.dataDate());
         }
+
+        eventPublisher.publishEvent(
+            new ProjectUpdatedEvent(updated.getId(), updated.getCode(), updated.getName())
+        );
 
         return buildProjectResponse(updated);
     }
@@ -397,6 +476,14 @@ public class ProjectService {
         log.info("Root WBS node created for project: {}", project.getId());
     }
 
+    /**
+     * True when the caller may see project money. Absent checker (plain unit tests, internal
+     * callers with no security context) means no redaction — the guard exists for HTTP callers.
+     */
+    private boolean canReadCost() {
+        return permissionChecker == null || permissionChecker.has("COST.READ");
+    }
+
     private ProjectResponse buildProjectResponse(Project project) {
         return new ProjectResponse(
             project.getId(),
@@ -418,6 +505,15 @@ public class ProjectService {
             project.getFromLocation(),
             project.getToLocation(),
             project.getTotalLengthKm(),
+            project.getSiteLatitude(),
+            project.getSiteLongitude(),
+            project.getSitePlaceLabel(),
+            project.getSiteCountry(),
+            project.getSiteCountryCode(),
+            project.getSiteRegion(),
+            project.getSiteCity(),
+            project.getSiteTimezone(),
+            project.isWeatherMonitoringEnabled(),
             project.getCalendarId(),
             project.getActiveBaselineId(),
             project.getPrimaryBaselineId(),
@@ -425,8 +521,13 @@ public class ProjectService {
             project.getTertiaryBaselineId(),
             project.isRequiresRebaseline(),
             primaryContractSummary(project.getId()),
-            project.getOriginalBudget(),
-            project.getCurrentBudget(),
+            // Commercial figures are omitted for callers without COST.READ. The project record
+            // itself is readable by every site user (PROJECT.READ), so without this the budget
+            // travels to supervisors, storekeepers and quality staff on every project fetch —
+            // hiding the card in the UI alone would leave the number in the API response.
+            // The currency code stays: it is only a label, and money elsewhere needs it.
+            canReadCost() ? project.getOriginalBudget() : null,
+            canReadCost() ? project.getCurrentBudget() : null,
             project.getBudgetCurrency(),
             toLocalDateTime(project.getCreatedAt()),
             toLocalDateTime(project.getUpdatedAt()),

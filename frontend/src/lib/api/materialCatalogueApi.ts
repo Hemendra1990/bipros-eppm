@@ -10,6 +10,7 @@ import type {
   MaterialResponse,
   MaterialStockRow,
 } from "../types";
+import type { MaterialRateMaster } from "./materialRateMasterApi";
 
 /** PMS MasterData Screen 09a — Material Catalogue CRUD. */
 export const materialCatalogueApi = {
@@ -33,6 +34,17 @@ export const materialCatalogueApi = {
 
   delete: (id: string) =>
     apiClient.delete<ApiResponse<void>>(`/v1/materials/${id}`).then((r) => r.data),
+
+  /**
+   * Resolve the active Material Rate Master row matching this material's category +
+   * specification grade. Backend returns {@code null} (wrapped in ApiResponse) when no
+   * matching master row exists — the UI surfaces an "unmapped" hint that links to the rate
+   * master screen so the user can create one.
+   */
+  getEffectiveRate: (id: string) =>
+    apiClient
+      .get<ApiResponse<MaterialRateMaster | null>>(`/v1/materials/${id}/effective-rate`)
+      .then((r) => r.data),
 };
 
 /** PMS MasterData Screen 09b — Stock Register + GRN + Issue. */
@@ -85,5 +97,44 @@ export const materialIssueApi = {
   listByMaterial: (materialId: string) =>
     apiClient
       .get<ApiResponse<MaterialIssueResponse[]>>(`/v1/materials/${materialId}/issues`)
+      .then((r) => r.data),
+};
+
+/** Physical state of material coming back: only USABLE re-enters store stock. */
+export type ReturnCondition = "USABLE" | "SCRAP";
+
+export interface MaterialReturnResponse {
+  id: string;
+  projectId: string;
+  materialIssueId: string;
+  materialId: string;
+  returnDate: string;
+  quantity: number;
+  condition: ReturnCondition;
+  returnedByUserId: string | null;
+  receivedByUserId: string | null;
+  remarks: string | null;
+}
+
+export interface CreateMaterialReturnRequest {
+  returnDate: string;
+  quantity: number;
+  condition: ReturnCondition;
+  receivedByUserId?: string | null;
+  remarks?: string | null;
+}
+
+export const materialReturnApi = {
+  listByProject: (projectId: string) =>
+    apiClient
+      .get<ApiResponse<MaterialReturnResponse[]>>(`/v1/projects/${projectId}/returns`)
+      .then((r) => r.data),
+
+  create: (projectId: string, issueId: string, body: CreateMaterialReturnRequest) =>
+    apiClient
+      .post<ApiResponse<MaterialReturnResponse>>(
+        `/v1/projects/${projectId}/issues/${issueId}/returns`,
+        body,
+      )
       .then((r) => r.data),
 };

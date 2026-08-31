@@ -33,7 +33,7 @@ public class NextDayPlanController {
   private final NextDayPlanService service;
 
   @PostMapping
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.CREATE')")
   public ResponseEntity<ApiResponse<NextDayPlanResponse>> create(
       @PathVariable UUID projectId,
       @Valid @RequestBody CreateNextDayPlanRequest request) {
@@ -44,7 +44,7 @@ public class NextDayPlanController {
   }
 
   @PostMapping("/bulk")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.CREATE')")
   public ResponseEntity<ApiResponse<List<NextDayPlanResponse>>> createBulk(
       @PathVariable UUID projectId,
       @Valid @RequestBody List<CreateNextDayPlanRequest> requests) {
@@ -53,6 +53,7 @@ public class NextDayPlanController {
   }
 
   @GetMapping
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.READ')")
   public ResponseEntity<ApiResponse<List<NextDayPlanResponse>>> list(
       @PathVariable UUID projectId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -61,6 +62,7 @@ public class NextDayPlanController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.READ')")
   public ResponseEntity<ApiResponse<NextDayPlanResponse>> get(
       @PathVariable UUID projectId,
       @PathVariable UUID id) {
@@ -68,7 +70,7 @@ public class NextDayPlanController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'DPR.DELETE')")
   public ResponseEntity<ApiResponse<Void>> delete(
       @PathVariable UUID projectId,
       @PathVariable UUID id) {

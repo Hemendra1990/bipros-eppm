@@ -1,5 +1,6 @@
 package com.bipros.activity.application.startup;
 
+import com.bipros.activity.application.percent.BoqProgressGuard;
 import com.bipros.activity.application.percent.PercentCompleteCalculator;
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.model.ActivityStatus;
@@ -45,6 +46,7 @@ public class PercentCompleteBackfillRunner implements CommandLineRunner {
     private final PercentCompleteCalculator calculator;
     private final AuditService auditService;
     private final ScheduledJobLeaseRepository leaseRepository;
+    private final BoqProgressGuard boqProgressGuard;
 
     @Override
     @Transactional
@@ -55,6 +57,28 @@ public class PercentCompleteBackfillRunner implements CommandLineRunner {
         if (leaseRepository.tryAcquire(JOB_NAME, until, now, owner) == 0) {
             log.info("PercentCompleteBackfillRunner skipped — another node holds the lease");
             return;
+        }
+
+        // One-time data heal (idempotent): reconcile legacy rows where stored percentComplete
+        // already reached 100 but status was never flipped to COMPLETED — the symptom of the
+        // pre-fix BOQ listener that wrote percent without status. Runs over ALL activities,
+        // independent of type / dataDate / BOQ, so "100% ⇔ COMPLETED" holds for pre-existing
+        // data too. Only the forward direction (>=100 → COMPLETED) is healed; nothing is
+        // un-completed, and no actual-finish date is fabricated.
+        int statusReconciled = 0;
+        for (Activity a : activityRepository.findAll()) {
+            Double pct = a.getPercentComplete();
+            if (pct != null && pct >= 100.0 && a.getStatus() != ActivityStatus.COMPLETED) {
+                ActivityStatus prior = a.getStatus();
+                a.setStatus(ActivityStatus.COMPLETED);
+                activityRepository.save(a);
+                auditService.logUpdate("Activity", a.getId(), "status", prior, ActivityStatus.COMPLETED);
+                statusReconciled++;
+            }
+        }
+        if (statusReconciled > 0) {
+            log.info("PercentCompleteBackfillRunner: reconciled status -> COMPLETED for {} activities already at >=100%",
+                    statusReconciled);
         }
 
         List<PercentCompleteType> types = List.of(PercentCompleteType.UNITS, PercentCompleteType.DURATION);
@@ -69,18 +93,40 @@ public class PercentCompleteBackfillRunner implements CommandLineRunner {
             return;
         }
 
+        // IMPORTANT: do NOT default to LocalDate.now() when the project has no dataDate.
+        // PercentCompleteBackfillRunner runs at every boot; if today is far past the activity's
+        // actualStart + originalDuration, the calculator caps at 100 and clobbers a still-young
+        // activity to "100% done / COMPLETED" — which then becomes EV ≈ BAC in
+        // ACTIVITY_PERCENT_COMPLETE EVM. Skip the activity instead so the (correct) DPR-driven
+        // listener value (or the existing manual value) stays in place until an operator sets a
+        // real project dataDate. BOQ-driven activities are also skipped because
+        // ActivityProgressFromBoqListener owns their percentComplete (precedence #1).
         Map<UUID, LocalDate> dataDateByProject = activities.stream()
                 .map(Activity::getProjectId)
                 .distinct()
-                .collect(Collectors.toMap(
-                        pid -> pid,
-                        pid -> projectRepository.findById(pid)
-                                .map(Project::getDataDate)
-                                .orElse(LocalDate.now())));
+                .filter(pid -> pid != null)
+                .collect(java.util.HashMap::new,
+                        (m, pid) -> {
+                            LocalDate dd = projectRepository.findById(pid)
+                                    .map(Project::getDataDate)
+                                    .orElse(null);
+                            if (dd != null) m.put(pid, dd);
+                        },
+                        java.util.HashMap::putAll);
 
         int updated = 0;
+        int skippedNoDataDate = 0;
+        int skippedBoqDriven = 0;
         for (Activity activity : activities) {
-            LocalDate dataDate = dataDateByProject.getOrDefault(activity.getProjectId(), LocalDate.now());
+            LocalDate dataDate = dataDateByProject.get(activity.getProjectId());
+            if (dataDate == null) {
+                skippedNoDataDate++;
+                continue;
+            }
+            if (boqProgressGuard.isBoqDriven(activity.getId())) {
+                skippedBoqDriven++;
+                continue;
+            }
             Double oldPercent = activity.getPercentComplete();
 
             PercentCompleteCalculator.Result result = calculator.calculate(
@@ -109,6 +155,7 @@ public class PercentCompleteBackfillRunner implements CommandLineRunner {
             updated++;
         }
 
-        log.info("PercentCompleteBackfillRunner updated {} activities (old values audited)", updated);
+        log.info("PercentCompleteBackfillRunner updated {} activities (old values audited); skipped {} with no project dataDate; skipped {} BOQ-driven",
+                updated, skippedNoDataDate, skippedBoqDriven);
     }
 }

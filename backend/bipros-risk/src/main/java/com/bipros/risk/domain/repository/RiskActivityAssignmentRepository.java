@@ -4,6 +4,7 @@ import com.bipros.risk.domain.model.RiskActivityAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,4 +17,5 @@ public interface RiskActivityAssignmentRepository extends JpaRepository<RiskActi
     Optional<RiskActivityAssignment> findByRiskIdAndActivityId(UUID riskId, UUID activityId);
     void deleteByRiskIdAndActivityId(UUID riskId, UUID activityId);
     boolean existsByRiskIdAndActivityId(UUID riskId, UUID activityId);
+    long countByActivityIdIn(Collection<UUID> activityIds);
 }

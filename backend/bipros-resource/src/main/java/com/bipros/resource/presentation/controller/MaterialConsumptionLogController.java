@@ -33,7 +33,7 @@ public class MaterialConsumptionLogController {
   private final MaterialConsumptionLogService service;
 
   @PostMapping
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','STORE_KEEPER','SITE_SUPERVISOR')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.UPDATE')")
   public ResponseEntity<ApiResponse<MaterialConsumptionLogResponse>> create(
       @PathVariable UUID projectId,
       @Valid @RequestBody CreateMaterialConsumptionLogRequest request) {
@@ -43,7 +43,7 @@ public class MaterialConsumptionLogController {
   }
 
   @PostMapping("/bulk")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','STORE_KEEPER','SITE_SUPERVISOR')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.UPDATE')")
   public ResponseEntity<ApiResponse<List<MaterialConsumptionLogResponse>>> createBulk(
       @PathVariable UUID projectId,
       @Valid @RequestBody List<CreateMaterialConsumptionLogRequest> requests) {
@@ -53,17 +53,21 @@ public class MaterialConsumptionLogController {
     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
   }
 
-  @PreAuthorize("@projectAccess.canRead(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.READ')")
   @GetMapping
   public ResponseEntity<ApiResponse<List<MaterialConsumptionLogResponse>>> list(
       @PathVariable UUID projectId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-    log.info("GET /v1/projects/{}/material-consumption, from={}, to={}", projectId, from, to);
-    return ResponseEntity.ok(ApiResponse.ok(service.list(projectId, from, to)));
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+      @RequestParam(required = false) String enteredByRole,
+      @RequestParam(required = false) UUID issuedByUserId) {
+    log.info("GET /v1/projects/{}/material-consumption, from={}, to={}, enteredByRole={}, issuedByUserId={}",
+        projectId, from, to, enteredByRole, issuedByUserId);
+    return ResponseEntity.ok(
+        ApiResponse.ok(service.list(projectId, from, to, enteredByRole, issuedByUserId)));
   }
 
-  @PreAuthorize("@projectAccess.canRead(#projectId)")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.READ')")
   @GetMapping("/{id}")
   public ResponseEntity<ApiResponse<MaterialConsumptionLogResponse>> get(
       @PathVariable UUID projectId, @PathVariable UUID id) {
@@ -72,7 +76,7 @@ public class MaterialConsumptionLogController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'STORE.UPDATE')")
   public ResponseEntity<ApiResponse<Void>> delete(
       @PathVariable UUID projectId, @PathVariable UUID id) {
     log.info("DELETE /v1/projects/{}/material-consumption/{}", projectId, id);

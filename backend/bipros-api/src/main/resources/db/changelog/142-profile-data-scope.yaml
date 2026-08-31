@@ -1,0 +1,22 @@
+databaseChangeLog:
+  # Access-control round (2026-08-11): gate-3 row-visibility level on permission profiles.
+  # Dev schemas get the column from ddl-auto:update; this changeset is the prod mirror.
+  - changeSet:
+      id: 142-profile-data-scope
+      author: bipros
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                schemaName: public
+                tableName: profiles
+                columnName: data_scope
+      changes:
+        - addColumn:
+            schemaName: public
+            tableName: profiles
+            columns:
+              - column:
+                  name: data_scope
+                  type: VARCHAR(10)
+                  remarks: "Row-visibility level: OWN | PROJECT | ALL; null reads as PROJECT"

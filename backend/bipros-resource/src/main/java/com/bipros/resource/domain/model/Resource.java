@@ -39,7 +39,7 @@ import java.util.UUID;
         @Index(name = "idx_resource_status", columnList = "status"),
         @Index(name = "idx_resource_parent", columnList = "parent_id"),
         @Index(name = "idx_resource_calendar", columnList = "calendar_id"),
-        @Index(name = "idx_resource_user", columnList = "user_id")
+        @Index(name = "idx_resource_rate_master", columnList = "rate_master_id")
     })
 @Getter
 @Setter
@@ -74,6 +74,19 @@ public class Resource extends BaseEntity {
   @Column(length = 30)
   private String unit;
 
+  /**
+   * FK to the type-appropriate rate master row this resource is linked to. Semantics depend on
+   * {@link #resourceType}: LABOR → {@code manpower_rate_masters}, EQUIPMENT →
+   * {@code equipment_rate_masters}, MATERIAL → {@code material_rate_masters}. Nullable: legacy
+   * resources and custom resource types may not have a rate master link, in which case
+   * {@link #unit} and {@link #costPerUnit} are entered directly.
+   *
+   * <p>When set, {@link #unit} and {@link #costPerUnit} are snapshotted from the rate master row
+   * at create/update time and re-synced when the rate master row is edited.
+   */
+  @Column(name = "rate_master_id")
+  private UUID rateMasterId;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
   @Default
@@ -84,9 +97,6 @@ public class Resource extends BaseEntity {
 
   @Column(name = "parent_id")
   private UUID parentId;
-
-  @Column(name = "user_id")
-  private UUID userId;
 
   @Column(name = "sort_order", nullable = false)
   @Default

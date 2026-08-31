@@ -29,4 +29,16 @@ public interface DailyActivityResourceOutputRepository
   Optional<DailyActivityResourceOutput>
       findFirstByProjectIdAndOutputDateAndActivityIdAndResourceId(
           UUID projectId, LocalDate outputDate, UUID activityId, UUID resourceId);
+
+  /**
+   * Manual-only duplicate check — used by direct CRUD on the ledger to keep "one MANUAL row per
+   * key" while allowing DPR-sourced rows to coexist for the same (project, date, activity, resource).
+   */
+  Optional<DailyActivityResourceOutput>
+      findFirstByProjectIdAndOutputDateAndActivityIdAndResourceIdAndSource(
+          UUID projectId, LocalDate outputDate, UUID activityId, UUID resourceId, String source);
+
+  List<DailyActivityResourceOutput> findByDprId(UUID dprId);
+
+  void deleteByDprId(UUID dprId);
 }

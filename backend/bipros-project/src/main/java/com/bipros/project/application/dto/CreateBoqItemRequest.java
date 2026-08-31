@@ -13,6 +13,7 @@ public record CreateBoqItemRequest(
     String itemNo,
 
     @NotBlank(message = "description is required")
+    @Size(max = 2000, message = "description must be at most 2000 characters")
     String description,
 
     @NotBlank(message = "unit is required")

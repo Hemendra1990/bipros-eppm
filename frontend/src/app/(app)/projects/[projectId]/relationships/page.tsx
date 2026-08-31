@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { activityApi, type RelationshipResponse, type RelationshipType } from "@/lib/api/activityApi";
-import { DataTable, type ColumnDef } from "@/components/common/DataTable";
+import { VirtualDataTable } from "@/components/common/VirtualDataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { PageHeader } from "@/components/common/PageHeader";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -46,12 +47,18 @@ export default function RelationshipsPage() {
   const relationships = relationshipsData?.data ?? [];
   const activities = activitiesData?.data?.content ?? [];
 
-  const activityMap = new Map(activities.map((a) => [a.id, a]));
+  const activityMap = useMemo(
+    () => new Map(activities.map((a) => [a.id, a])),
+    [activities]
+  );
 
-  const getActivityLabel = (id: string) => {
-    const act = activityMap.get(id);
-    return act ? `${act.code} — ${act.name}` : id;
-  };
+  const getActivityLabel = useCallback(
+    (id: string) => {
+      const act = activityMap.get(id);
+      return act ? `${act.code} — ${act.name}` : id;
+    },
+    [activityMap]
+  );
 
   const deleteMutation = useMutation({
     mutationFn: (relationshipId: string) =>
@@ -65,75 +72,93 @@ export default function RelationshipsPage() {
     },
   });
 
-  const handleDelete = (rel: RelationshipResponse) => {
-    if (confirm(`Delete relationship: ${getActivityLabel(rel.predecessorActivityId)} → ${getActivityLabel(rel.successorActivityId)}?`)) {
-      deleteMutation.mutate(rel.id);
-    }
-  };
+  const handleDelete = useCallback(
+    (rel: RelationshipResponse) => {
+      if (confirm(`Delete relationship: ${getActivityLabel(rel.predecessorActivityId)} → ${getActivityLabel(rel.successorActivityId)}?`)) {
+        deleteMutation.mutate(rel.id);
+      }
+    },
+    [deleteMutation, getActivityLabel]
+  );
 
-  const columns: ColumnDef<RelationshipResponse>[] = [
+  const columns = useMemo<ColumnDef<RelationshipResponse>[]>(() => [
     {
-      key: "predecessorActivityId",
-      label: "Predecessor",
-      sortable: true,
-      render: (_v, row) => (
-        <span className="text-text-primary font-medium">{getActivityLabel(row.predecessorActivityId)}</span>
-      ),
+      accessorKey: "predecessorActivityId",
+      header: "Predecessor",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <span className="text-text-primary font-medium">{getActivityLabel(row.predecessorActivityId)}</span>
+        );
+      },
     },
     {
-      key: "relationshipType",
-      label: "Type",
-      sortable: true,
-      render: (_v, row) => (
-        <span className="inline-flex items-center rounded-md bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
-          {RELATIONSHIP_TYPE_SHORT[row.relationshipType] ?? row.relationshipType}
-        </span>
-      ),
+      accessorKey: "relationshipType",
+      header: "Type",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <span className="inline-flex items-center rounded-md bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+            {RELATIONSHIP_TYPE_SHORT[row.relationshipType] ?? row.relationshipType}
+          </span>
+        );
+      },
     },
     {
-      key: "lag",
-      label: "Lag",
-      sortable: true,
-      render: (v) => <span className="font-mono text-text-secondary">{String(v)}d</span>,
+      accessorKey: "lag",
+      header: "Lag",
+      enableSorting: true,
+      cell: (info) => {
+        const val = info.getValue();
+        return <span className="font-mono text-text-secondary">{String(val)}d</span>;
+      },
     },
     {
-      key: "successorActivityId",
-      label: "Successor",
-      sortable: true,
-      render: (_v, row) => (
-        <span className="text-text-primary font-medium">{getActivityLabel(row.successorActivityId)}</span>
-      ),
+      accessorKey: "successorActivityId",
+      header: "Successor",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <span className="text-text-primary font-medium">{getActivityLabel(row.successorActivityId)}</span>
+        );
+      },
     },
     {
-      key: "actions",
-      label: "",
-      render: (_v, row) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingRel(row);
-            }}
-            className="text-text-secondary hover:text-accent transition-colors"
-            title="Edit"
-          >
-            <Pencil size={14} />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(row);
-            }}
-            disabled={deleteMutation.isPending}
-            className="text-text-secondary hover:text-danger transition-colors disabled:opacity-50"
-            title="Delete"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      ),
+      id: "actions",
+      header: "",
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingRel(row);
+              }}
+              className="text-text-secondary hover:text-accent transition-colors"
+              title="Edit"
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(row);
+              }}
+              disabled={deleteMutation.isPending}
+              className="text-text-secondary hover:text-danger transition-colors disabled:opacity-50"
+              title="Delete"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        );
+      },
     },
-  ];
+  ], [getActivityLabel, handleDelete, deleteMutation.isPending]);
 
   const isLoading = isLoadingRels || isLoadingActs;
 
@@ -156,13 +181,11 @@ export default function RelationshipsPage() {
       {isLoading ? (
         <div className="text-center text-text-muted py-12">Loading relationships...</div>
       ) : (
-        <DataTable
+        <VirtualDataTable
           columns={columns}
           data={relationships}
-          rowKey="id"
-          pageSize={25}
-          searchable
-          searchPlaceholder="Search by activity code or name..."
+          sortable
+          resizable
         />
       )}
 

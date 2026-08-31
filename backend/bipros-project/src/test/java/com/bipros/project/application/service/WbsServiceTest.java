@@ -32,12 +32,13 @@ class WbsServiceTest {
     @Mock private ProjectRepository projectRepository;
     @Mock private ProjectActivityCounter projectActivityCounter;
     @Mock private AuditService auditService;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     private WbsService service;
 
     @BeforeEach
     void setUp() {
-        service = new WbsService(wbsNodeRepository, projectRepository, projectActivityCounter, auditService);
+        service = new WbsService(wbsNodeRepository, projectRepository, projectActivityCounter, auditService, eventPublisher);
     }
 
     @Nested

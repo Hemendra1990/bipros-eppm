@@ -1,15 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { VirtualDataTable, type ColumnDef } from "@/components/common/VirtualDataTable";
+
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   workActivityApi,
   type CreateWorkActivityRequest,
+  type NormCombination,
   type WorkActivityResponse,
 } from "@/lib/api/workActivityApi";
 import { TabTip } from "@/components/common/TabTip";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { getErrorMessage } from "@/lib/utils/error";
+import { unitOptionsWithFallback, STANDARD_UNITS } from "@/lib/constants/units";
 
 interface ActivityForm {
   code: string;
@@ -19,6 +23,7 @@ interface ActivityForm {
   description: string;
   sortOrder: string;
   active: boolean;
+  normCombination: NormCombination;
 }
 
 const initialFormState: ActivityForm = {
@@ -29,6 +34,7 @@ const initialFormState: ActivityForm = {
   description: "",
   sortOrder: "",
   active: true,
+  normCombination: "SERIES",
 };
 
 const toIntOrUndefined = (value: string): number | undefined => {
@@ -42,6 +48,7 @@ export default function WorkActivitiesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<ActivityForm>(initialFormState);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -56,7 +63,20 @@ export default function WorkActivitiesPage() {
     queryFn: () => workActivityApi.list(),
   });
 
-  const activities: WorkActivityResponse[] = data?.data ?? [];
+  const activities: WorkActivityResponse[] = useMemo(() => data?.data ?? [], [data]);
+
+  // Filter on code + name + discipline. Case-insensitive substring match — the dataset is small
+  // enough (≤ a few thousand entries) that client-side filtering is fine without debouncing.
+  const filteredActivities = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return activities;
+    return activities.filter((a) => {
+      const haystack = [a.code, a.name, a.discipline ?? "", a.defaultUnit ?? ""]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [activities, searchQuery]);
 
   const resetForm = () => {
     setFormData(initialFormState);
@@ -75,6 +95,7 @@ export default function WorkActivitiesPage() {
       description: activity.description ?? "",
       sortOrder: activity.sortOrder?.toString() ?? "",
       active: activity.active,
+      normCombination: activity.normCombination ?? "SERIES",
     });
     setShowForm(true);
     setError(null);
@@ -91,6 +112,7 @@ export default function WorkActivitiesPage() {
         description: formData.description || undefined,
         sortOrder: toIntOrUndefined(formData.sortOrder),
         active: formData.active,
+        normCombination: formData.normCombination,
       };
       if (editingId) {
         await workActivityApi.update(editingId, request);
@@ -138,6 +160,59 @@ export default function WorkActivitiesPage() {
       },
     });
   };
+
+  const columns = useMemo<ColumnDef<WorkActivityResponse>[]>(() => [
+    {
+      accessorKey: "code",
+      header: "Code",
+      cell: ({ row }) => <span className="font-mono text-sm">{row.original.code}</span>,
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => <span>{row.original.name}</span>,
+    },
+    {
+      accessorKey: "defaultUnit",
+      header: "Default Unit",
+      cell: ({ row }) => <span>{row.original.defaultUnit ?? "-"}</span>,
+    },
+    {
+      accessorKey: "discipline",
+      header: "Discipline",
+      cell: ({ row }) => <span>{row.original.discipline ?? "-"}</span>,
+    },
+    {
+      accessorKey: "sortOrder",
+      header: "Sort",
+      cell: ({ row }) => <span className="text-right block">{row.original.sortOrder ?? "-"}</span>,
+    },
+    {
+      accessorKey: "active",
+      header: "Active",
+      cell: ({ row }) => <span className="text-center block">{row.original.active ? "✓" : "—"}</span>,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleEdit(row.original)}
+            className="px-3 py-1 bg-accent/10 text-accent ring-1 ring-accent/20 rounded hover:bg-accent/20"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => handleDelete(row.original.id)}
+            className="px-3 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded hover:bg-danger/20"
+          >
+            Delete
+          </button>
+        </div>
+      ),
+    },
+  ], [handleEdit, handleDelete]);
 
   if (isLoading && activities.length === 0) {
     return <div className="p-6 text-text-muted">Loading work activities...</div>;
@@ -222,18 +297,23 @@ export default function WorkActivitiesPage() {
                 <label className="block text-sm font-medium mb-1 text-text-secondary">
                   Default Unit
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.defaultUnit}
                   onChange={(e) => setFormData({ ...formData, defaultUnit: e.target.value })}
                   className="w-full px-3 py-2 border border-border bg-surface-hover text-text-primary rounded-lg"
-                  placeholder="e.g. Sqm, Cum, MT"
-                  maxLength={20}
-                />
+                >
+                  <option value="">— select a unit —</option>
+                  {unitOptionsWithFallback(formData.defaultUnit).map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                      {!(STANDARD_UNITS as readonly string[]).includes(u) ? " (legacy)" : ""}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-xs text-text-muted mt-1">
-                  Pre-fills the <em>Unit</em> field on the Productivity Norms form when this
-                  activity is selected. Use the unit you most often measure this work in (Sqm for
-                  plastering, Cum for excavation, MT for steel).
+                  Pre-fills the <em>Unit</em> field on the DPR form and the Productivity Norms
+                  form when this activity is selected. Same dropdown the DPR form uses, so the
+                  values stay consistent. Sqm for plastering, Cum for excavation, MT for steel.
                 </p>
               </div>
               <div>
@@ -304,6 +384,84 @@ export default function WorkActivitiesPage() {
                   reference. Shows up only on this admin page.
                 </p>
               </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1 text-text-secondary">
+                  Norm combination
+                </label>
+                <p className="text-xs text-text-muted mb-2">
+                  How should the DPR preview combine expected output when this activity has{" "}
+                  <em>both</em> Manpower and Equipment productivity norms? Ignored when only one
+                  side has a norm — that single side drives the expected output regardless.
+                </p>
+                <div className="flex flex-col gap-2">
+                  {(
+                    [
+                      {
+                        value: "SERIES" as const,
+                        title: "Series — bottleneck (default)",
+                        body: (
+                          <>
+                            Manpower and equipment work on the <em>same</em> unit of output, in
+                            sequence (e.g. excavator digs, mason cleans behind it). Expected ={" "}
+                            <strong>min(Manpower, Equipment)</strong>. Slowest side caps output.
+                            Use for excavation, concreting, paving, plastering — most gang work.
+                          </>
+                        ),
+                      },
+                      {
+                        value: "PARALLEL" as const,
+                        title: "Parallel — independent teams",
+                        body: (
+                          <>
+                            Manpower team and equipment team work <em>independently</em> on
+                            different stretches. Expected ={" "}
+                            <strong>Manpower + Equipment</strong>. Outputs add. Use for road side
+                            clearance, brush cutting, survey — where the two sides cover different
+                            ground.
+                          </>
+                        ),
+                      },
+                      {
+                        value: "SUBSTITUTE" as const,
+                        title: "Substitute — either alone",
+                        body: (
+                          <>
+                            Either side alone can finish the unit; the slower one is redundant.
+                            Expected = <strong>max(Manpower, Equipment)</strong>. Rare — use only
+                            for activities like demolition where hammer-and-JCB are
+                            interchangeable. Default to Series if unsure.
+                          </>
+                        ),
+                      },
+                    ] as const
+                  ).map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`flex items-start gap-3 rounded-lg border px-3 py-2 cursor-pointer ${
+                        formData.normCombination === opt.value
+                          ? "border-accent bg-accent/10"
+                          : "border-border bg-surface-hover"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="norm-combination"
+                        value={opt.value}
+                        checked={formData.normCombination === opt.value}
+                        onChange={() =>
+                          setFormData({ ...formData, normCombination: opt.value })
+                        }
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-text-primary">{opt.title}</div>
+                        <div className="text-xs text-text-muted mt-1">{opt.body}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="flex gap-2 mt-4">
               <button
@@ -323,58 +481,40 @@ export default function WorkActivitiesPage() {
           </form>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-border">
-            <thead>
-              <tr className="bg-surface/80">
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Code</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Name</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Default Unit</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Discipline</th>
-                <th className="border border-border px-4 py-2 text-right text-text-secondary">Sort</th>
-                <th className="border border-border px-4 py-2 text-center text-text-secondary">Active</th>
-                <th className="border border-border px-4 py-2 text-left text-text-secondary">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activities.map((a) => (
-                <tr key={a.id} className="hover:bg-surface-hover/30 text-text-primary">
-                  <td className="border border-border px-4 py-2 font-mono text-sm">{a.code}</td>
-                  <td className="border border-border px-4 py-2">{a.name}</td>
-                  <td className="border border-border px-4 py-2">{a.defaultUnit ?? "-"}</td>
-                  <td className="border border-border px-4 py-2">{a.discipline ?? "-"}</td>
-                  <td className="border border-border px-4 py-2 text-right">{a.sortOrder ?? "-"}</td>
-                  <td className="border border-border px-4 py-2 text-center">
-                    {a.active ? "✓" : "—"}
-                  </td>
-                  <td className="border border-border px-4 py-2">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEdit(a)}
-                        className="px-3 py-1 bg-accent/10 text-accent ring-1 ring-accent/20 rounded hover:bg-accent/20"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(a.id)}
-                        className="px-3 py-1 bg-danger/10 text-danger ring-1 ring-red-500/20 rounded hover:bg-danger/20"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {activities.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="border border-border px-4 py-8 text-center text-text-muted">
-                    No work activities yet — add one to start defining productivity norms.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+
+        <div className="mb-3 flex items-center gap-3">
+          <div className="relative flex-1 max-w-md">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by code, name, unit, or discipline…"
+              className="w-full px-3 py-2 pl-9 border border-border bg-surface-hover text-text-primary rounded-lg"
+            />
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </div>
+          <span className="text-xs text-text-muted">
+            {searchQuery
+              ? `${filteredActivities.length} of ${activities.length} matching`
+              : `${activities.length} activities`}
+          </span>
         </div>
+
+        <VirtualDataTable columns={columns} data={filteredActivities} sortable resizable searchable={false} />
       </div>
 
       <ConfirmDialog

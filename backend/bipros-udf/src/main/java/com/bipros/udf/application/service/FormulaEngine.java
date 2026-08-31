@@ -3,13 +3,16 @@ package com.bipros.udf.application.service;
 import com.bipros.common.exception.BusinessRuleException;
 import com.bipros.common.exception.ResourceNotFoundException;
 import com.bipros.udf.application.dto.FormulaResultDto;
-import com.bipros.udf.domain.engine.BigDecimalFormulaEvaluator;
+import com.bipros.udf.domain.engine.BigDecimalFormulaVisitor;
+import com.bipros.udf.domain.engine.FormulaAstCache;
+import com.bipros.udf.domain.engine.FormulaParseException;
 import com.bipros.udf.domain.model.FormulaMaster;
 import com.bipros.udf.domain.model.FormulaOverride;
 import com.bipros.udf.domain.repository.FormulaMasterRepository;
 import com.bipros.udf.domain.repository.FormulaOverrideRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +34,7 @@ public class FormulaEngine {
 
     private final FormulaMasterRepository formulaMasterRepository;
     private final FormulaOverrideRepository formulaOverrideRepository;
+    private final FormulaAstCache formulaAstCache;
 
     /**
      * Resolves the effective expression for a formula code and project.
@@ -78,19 +82,51 @@ public class FormulaEngine {
 
         Map<String, BigDecimal> safeContext = context != null ? context : Collections.emptyMap();
 
-        BigDecimalFormulaEvaluator evaluator = new BigDecimalFormulaEvaluator(
-                expression, safeContext, scale, rounding, zeroDefault);
+        try {
+            ParseTree tree = formulaAstCache.get(expression);
+            if (tree == null) {
+                return FormulaResultDto.builder()
+                        .formulaCode(formulaCode)
+                        .expressionUsed(expression)
+                        .value(BigDecimal.ZERO)
+                        .formatted("0")
+                        .error(true)
+                        .errorMessage("Empty expression")
+                        .build();
+            }
 
-        BigDecimalFormulaEvaluator.FormulaResult result = evaluator.evaluate();
+            BigDecimalFormulaVisitor visitor = new BigDecimalFormulaVisitor(
+                    safeContext, scale, rounding, zeroDefault);
+            BigDecimal result = visitor.visit(tree);
 
-        return FormulaResultDto.builder()
-                .formulaCode(formulaCode)
-                .expressionUsed(expression)
-                .value(result.value())
-                .formatted(result.formatted())
-                .error(result.error())
-                .errorMessage(result.errorMessage())
-                .build();
+            return FormulaResultDto.builder()
+                    .formulaCode(formulaCode)
+                    .expressionUsed(expression)
+                    .value(result)
+                    .formatted(result.setScale(scale, rounding).toPlainString())
+                    .error(false)
+                    .build();
+        } catch (FormulaParseException e) {
+            log.warn("Formula parse error for {}: {}", formulaCode, e.getMessage());
+            return FormulaResultDto.builder()
+                    .formulaCode(formulaCode)
+                    .expressionUsed(expression)
+                    .value(BigDecimal.ZERO)
+                    .formatted("0")
+                    .error(true)
+                    .errorMessage(e.getMessage())
+                    .build();
+        } catch (Exception e) {
+            log.warn("Formula evaluation error for {}: {}", formulaCode, e.getMessage());
+            return FormulaResultDto.builder()
+                    .formulaCode(formulaCode)
+                    .expressionUsed(expression)
+                    .value(BigDecimal.ZERO)
+                    .formatted("0")
+                    .error(true)
+                    .errorMessage(e.getMessage())
+                    .build();
+        }
     }
 
     /**

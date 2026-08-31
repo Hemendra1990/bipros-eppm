@@ -2,6 +2,7 @@ package com.bipros.analytics.etl.batch;
 
 import com.bipros.activity.domain.model.Activity;
 import com.bipros.activity.domain.repository.ActivityRepository;
+import com.bipros.analytics.etl.AnalyticsDimensionSql;
 import com.bipros.analytics.store.ClickHouseTemplate;
 import com.bipros.common.scheduling.ScheduledJobLeaseRepository;
 import com.bipros.cost.domain.entity.CostAccount;
@@ -14,14 +15,38 @@ import com.bipros.project.domain.model.Project;
 import com.bipros.project.domain.model.WbsNode;
 import com.bipros.project.domain.repository.ProjectRepository;
 import com.bipros.project.domain.repository.WbsNodeRepository;
+import com.bipros.resource.domain.model.GradeMaster;
 import com.bipros.resource.domain.model.LabourDesignation;
+import com.bipros.resource.domain.model.ProductivityNorm;
 import com.bipros.resource.domain.model.ProjectLabourDeployment;
 import com.bipros.resource.domain.model.Resource;
+import com.bipros.resource.domain.model.ResourceRole;
+import com.bipros.resource.domain.model.WorkActivity;
+import com.bipros.resource.domain.model.master.ManpowerCategoryMaster;
+import com.bipros.resource.domain.model.role.EquipmentRoleVariant;
+import com.bipros.resource.domain.model.role.ManpowerRoleRate;
+import com.bipros.resource.domain.model.role.MaterialRoleVariant;
+import com.bipros.resource.domain.model.role.ProjectEquipmentRoleVariantOverride;
+import com.bipros.resource.domain.model.role.ProjectManpowerRoleRateOverride;
+import com.bipros.resource.domain.model.role.ProjectMaterialRoleVariantOverride;
+import com.bipros.resource.domain.repository.GradeMasterRepository;
 import com.bipros.resource.domain.repository.LabourDesignationRepository;
+import com.bipros.resource.domain.repository.ManpowerCategoryMasterRepository;
+import com.bipros.resource.domain.repository.ProductivityNormRepository;
 import com.bipros.resource.domain.repository.ProjectLabourDeploymentRepository;
 import com.bipros.resource.domain.repository.ResourceRepository;
+import com.bipros.resource.domain.repository.ResourceRoleRepository;
+import com.bipros.resource.domain.repository.WorkActivityRepository;
+import com.bipros.resource.domain.repository.role.EquipmentRoleVariantRepository;
+import com.bipros.resource.domain.repository.role.ManpowerRoleRateRepository;
+import com.bipros.resource.domain.repository.role.MaterialRoleVariantRepository;
+import com.bipros.resource.domain.repository.role.ProjectEquipmentRoleVariantOverrideRepository;
+import com.bipros.resource.domain.repository.role.ProjectManpowerRoleRateOverrideRepository;
+import com.bipros.resource.domain.repository.role.ProjectMaterialRoleVariantOverrideRepository;
 import com.bipros.risk.domain.model.Risk;
 import com.bipros.risk.domain.repository.RiskRepository;
+import com.bipros.security.domain.model.User;
+import com.bipros.security.domain.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -35,6 +60,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Nightly full refresh of ClickHouse dimension tables from Postgres.
@@ -62,6 +88,26 @@ public class DimensionSyncJob {
     private final LabourDesignationRepository labourDesignationRepository;
     private final ProjectLabourDeploymentRepository projectLabourDeploymentRepository;
 
+    // Role-owned rate book (2026-05-13)
+    private final ResourceRoleRepository resourceRoleRepository;
+    private final ManpowerRoleRateRepository manpowerRoleRateRepository;
+    private final EquipmentRoleVariantRepository equipmentRoleVariantRepository;
+    private final MaterialRoleVariantRepository materialRoleVariantRepository;
+    private final ProjectManpowerRoleRateOverrideRepository manpowerOverrideRepository;
+    private final ProjectEquipmentRoleVariantOverrideRepository equipmentOverrideRepository;
+    private final ProjectMaterialRoleVariantOverrideRepository materialOverrideRepository;
+    private final WorkActivityRepository workActivityRepository;
+    private final ProductivityNormRepository productivityNormRepository;
+    private final ManpowerCategoryMasterRepository manpowerCategoryRepository;
+    private final GradeMasterRepository gradeRepository;
+    private final UserRepository userRepository;
+
+    /** Public hook for the backfill endpoint (POST /v1/admin/analytics/backfill-role-model). */
+    @Transactional
+    public void runBackfill() {
+        run();
+    }
+
     @Scheduled(cron = "0 30 1 * * *")
     @Transactional
     public void run() {
@@ -74,138 +120,91 @@ public class DimensionSyncJob {
         }
 
         long start = System.currentTimeMillis();
-        syncProjects();
-        syncWbs();
-        syncActivities();
-        syncResources();
-        syncCostAccounts();
-        syncCalendar();
-        syncRisks();
-        syncPermitTypeTemplates();
-        syncPermits();
-        syncLabourDesignations();
-        syncLabourDeploymentSnapshot();
+        // Run each sub-sync independently. One bad-data table shouldn't kill
+        // the rest — log it and continue so the resync produces partial-but-
+        // still-useful results.
+        safeRun("projects", this::syncProjects);
+        safeRun("wbs", this::syncWbs);
+        safeRun("activities", this::syncActivities);
+        safeRun("resources", this::syncResources);
+        safeRun("cost_accounts", this::syncCostAccounts);
+        safeRun("calendar", this::syncCalendar);
+        safeRun("risks", this::syncRisks);
+        safeRun("permit_type_templates", this::syncPermitTypeTemplates);
+        safeRun("permits", this::syncPermits);
+        safeRun("labour_designations", this::syncLabourDesignations);
+        safeRun("labour_deployment_snapshot", this::syncLabourDeploymentSnapshot);
+        // Role-owned rate book + supervisor User dimension
+        safeRun("resource_roles", this::syncResourceRoles);
+        safeRun("manpower_role_rates", this::syncManpowerRoleRates);
+        safeRun("equipment_role_variants", this::syncEquipmentRoleVariants);
+        safeRun("material_role_variants", this::syncMaterialRoleVariants);
+        safeRun("project_rate_overrides", this::syncProjectRateOverrides);
+        safeRun("work_activities", this::syncWorkActivities);
+        safeRun("productivity_norms", this::syncProductivityNorms);
+        safeRun("users", this::syncUsers);
         log.info("DimensionSyncJob completed in {} ms", System.currentTimeMillis() - start);
+    }
+
+    private void safeRun(String label, Runnable task) {
+        try {
+            task.run();
+        } catch (Exception e) {
+            log.warn("DimensionSyncJob sub-sync [{}] failed: {} — continuing with remaining tables.",
+                    label, e.getMessage());
+        }
     }
 
     private void syncProjects() {
         List<Project> projects = projectRepository.findAll();
-        String sql = """
-            INSERT INTO bipros_analytics.dim_project
-            (project_id, code, name, status, portfolio_id, org_id, start_date, finish_date, currency, obs_node_id, updated_at, _version)
-            VALUES (:projectId, :code, :name, :status, :portfolioId, :orgId, :startDate, :finishDate, :currency, :obsNodeId, now(), :version)
-            """;
         for (Project p : projects) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("projectId", p.getId());
-            params.put("code", p.getCode());
-            params.put("name", p.getName());
-            params.put("status", p.getStatus() != null ? p.getStatus().name() : null);
-            params.put("portfolioId", null);
-            params.put("orgId", null);
-            params.put("startDate", p.getPlannedStartDate());
-            params.put("finishDate", p.getPlannedFinishDate());
-            params.put("currency", "INR");
-            params.put("obsNodeId", p.getObsNodeId());
-            params.put("version", VERSION);
-            clickHouse.execute(sql, params);
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_PROJECT,
+                    AnalyticsDimensionSql.projectParams(p, VERSION));
         }
         log.debug("Synced {} projects", projects.size());
     }
 
     private void syncWbs() {
         List<WbsNode> nodes = wbsNodeRepository.findAll();
-        String sql = """
-            INSERT INTO bipros_analytics.dim_wbs
-            (wbs_id, project_id, parent_wbs_id, code, name, level, weight, path, _version)
-            VALUES (:wbsId, :projectId, :parentId, :code, :name, :level, :weight, :path, :version)
-            """;
         for (WbsNode n : nodes) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("wbsId", n.getId());
-            params.put("projectId", n.getProjectId());
-            params.put("parentId", n.getParentId());
-            params.put("code", n.getCode());
-            params.put("name", n.getName());
-            params.put("level", n.getWbsLevel() != null ? n.getWbsLevel() : 0);
-            params.put("weight", 1.0);
-            params.put("path", n.getCode());
-            params.put("version", VERSION);
-            clickHouse.execute(sql, params);
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_WBS,
+                    AnalyticsDimensionSql.wbsParams(n, VERSION));
         }
         log.debug("Synced {} WBS nodes", nodes.size());
     }
 
     private void syncActivities() {
+        // Build work_activity_id → code lookup once so we can denormalise the master code
+        // onto each dim_activity row without N+1.
+        Map<UUID, String> workActivityCodes = workActivityRepository.findAll().stream()
+                .collect(Collectors.toMap(WorkActivity::getId,
+                        w -> w.getCode() != null ? w.getCode() : ""));
+
         List<Activity> activities = activityRepository.findAll();
-        String sql = """
-            INSERT INTO bipros_analytics.dim_activity
-            (activity_id, project_id, wbs_id, code, name, activity_type, uom, bq_quantity, planned_start, planned_finish,
-             chainage_from_m, chainage_to_m, is_critical, _version)
-            VALUES (:activityId, :projectId, :wbsId, :code, :name, :activityType, :uom, :bqQty,
-                    :plannedStart, :plannedFinish, :chainageFrom, :chainageTo, :isCritical, :version)
-            """;
         for (Activity a : activities) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("activityId", a.getId());
-            params.put("projectId", a.getProjectId());
-            params.put("wbsId", a.getWbsNodeId());
-            params.put("code", a.getCode());
-            params.put("name", a.getName());
-            params.put("activityType", a.getActivityType() != null ? a.getActivityType().name() : null);
-            params.put("uom", null);
-            params.put("bqQty", null);
-            params.put("plannedStart", a.getPlannedStartDate());
-            params.put("plannedFinish", a.getPlannedFinishDate());
-            params.put("chainageFrom", a.getChainageFromM() != null ? a.getChainageFromM().doubleValue() : null);
-            params.put("chainageTo", a.getChainageToM() != null ? a.getChainageToM().doubleValue() : null);
-            params.put("isCritical", a.getIsCritical() != null && a.getIsCritical() ? 1 : 0);
-            params.put("version", VERSION);
-            clickHouse.execute(sql, params);
+            String waCode = a.getWorkActivityId() != null
+                    ? workActivityCodes.getOrDefault(a.getWorkActivityId(), "")
+                    : "";
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_ACTIVITY,
+                    AnalyticsDimensionSql.activityParams(a, waCode, VERSION));
         }
         log.debug("Synced {} activities", activities.size());
     }
 
     private void syncResources() {
         List<Resource> resources = resourceRepository.findAll();
-        String sql = """
-            INSERT INTO bipros_analytics.dim_resource
-            (resource_id, project_id, resource_type, code, name, uom, unit_rate, is_subcontractor, _version)
-            VALUES (:resourceId, :projectId, :resourceType, :code, :name, :uom, :unitRate, :isSubcontractor, :version)
-            """;
         for (Resource r : resources) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("resourceId", r.getId());
-            params.put("projectId", null);
-            params.put("resourceType", r.getResourceType() != null ? r.getResourceType().getCode() : null);
-            params.put("code", r.getCode());
-            params.put("name", r.getName());
-            params.put("uom", r.getUnit());
-            params.put("unitRate", r.getCostPerUnit() != null ? r.getCostPerUnit().doubleValue() : null);
-            params.put("isSubcontractor", 0);
-            params.put("version", VERSION);
-            clickHouse.execute(sql, params);
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_RESOURCE,
+                    AnalyticsDimensionSql.resourceParams(r, VERSION));
         }
         log.debug("Synced {} resources", resources.size());
     }
 
     private void syncCostAccounts() {
         List<CostAccount> accounts = costAccountRepository.findAll();
-        String sql = """
-            INSERT INTO bipros_analytics.dim_cost_account
-            (cost_account_id, project_id, code, name, parent_id, category, _version)
-            VALUES (:costAccountId, :projectId, :code, :name, :parentId, :category, :version)
-            """;
         for (CostAccount ca : accounts) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("costAccountId", ca.getId());
-            params.put("projectId", null);
-            params.put("code", ca.getCode());
-            params.put("name", ca.getName());
-            params.put("parentId", ca.getParentId());
-            params.put("category", null);
-            params.put("version", VERSION);
-            clickHouse.execute(sql, params);
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_COST_ACCOUNT,
+                    AnalyticsDimensionSql.costAccountParams(ca, VERSION));
         }
         log.debug("Synced {} cost accounts", accounts.size());
     }
@@ -430,5 +429,184 @@ public class DimensionSyncJob {
             clickHouse.execute(sql, params);
         }
         log.debug("Synced {} labour deployment snapshot rows", deployments.size());
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // Role-owned rate book (2026-05-13) — Phase 4 sync
+    // ────────────────────────────────────────────────────────────────────────────
+
+    private void syncResourceRoles() {
+        List<ResourceRole> roles = resourceRoleRepository.findAll();
+        for (ResourceRole r : roles) {
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_RESOURCE_ROLE,
+                    AnalyticsDimensionSql.resourceRoleParams(r, VERSION));
+        }
+        log.debug("Synced {} resource roles", roles.size());
+    }
+
+    private void syncManpowerRoleRates() {
+        Map<UUID, String> roleCodes = roleCodeLookup();
+        Map<UUID, String> roleNames = roleNameLookup();
+        Map<UUID, String> categoryNames = manpowerCategoryRepository.findAll().stream()
+                .collect(Collectors.toMap(ManpowerCategoryMaster::getId,
+                        c -> c.getName() != null ? c.getName() : ""));
+        Map<UUID, String> gradeNames = gradeRepository.findAll().stream()
+                .collect(Collectors.toMap(GradeMaster::getId,
+                        g -> g.getName() != null ? g.getName() : ""));
+
+        List<ManpowerRoleRate> rates = manpowerRoleRateRepository.findAll();
+        for (ManpowerRoleRate r : rates) {
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_MANPOWER_ROLE_RATE,
+                    AnalyticsDimensionSql.manpowerRoleRateParams(r,
+                            roleCodes.get(r.getRoleId()),
+                            roleNames.get(r.getRoleId()),
+                            categoryNames.get(r.getCategoryId()),
+                            gradeNames.get(r.getGradeId()),
+                            VERSION));
+        }
+        log.debug("Synced {} manpower role rates", rates.size());
+    }
+
+    private void syncEquipmentRoleVariants() {
+        Map<UUID, String> roleCodes = roleCodeLookup();
+        Map<UUID, String> roleNames = roleNameLookup();
+        List<EquipmentRoleVariant> variants = equipmentRoleVariantRepository.findAll();
+        for (EquipmentRoleVariant v : variants) {
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_EQUIPMENT_ROLE_VARIANT,
+                    AnalyticsDimensionSql.equipmentRoleVariantParams(v,
+                            roleCodes.get(v.getRoleId()),
+                            roleNames.get(v.getRoleId()),
+                            VERSION));
+        }
+        log.debug("Synced {} equipment role variants", variants.size());
+    }
+
+    private void syncMaterialRoleVariants() {
+        Map<UUID, String> roleCodes = roleCodeLookup();
+        Map<UUID, String> roleNames = roleNameLookup();
+        List<MaterialRoleVariant> variants = materialRoleVariantRepository.findAll();
+        for (MaterialRoleVariant v : variants) {
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_MATERIAL_ROLE_VARIANT,
+                    AnalyticsDimensionSql.materialRoleVariantParams(v,
+                            roleCodes.get(v.getRoleId()),
+                            roleNames.get(v.getRoleId()),
+                            VERSION));
+        }
+        log.debug("Synced {} material role variants", variants.size());
+    }
+
+    private void syncProjectRateOverrides() {
+        Map<UUID, String> roleCodes = roleCodeLookup();
+
+        // Manpower overrides — variant_id is the manpower_role_rate id. Resolve role via the
+        // variant's roleId so the dim row carries role_id without an extra JPA lookup per row.
+        Map<UUID, UUID> manpowerVariantToRole = manpowerRoleRateRepository.findAll().stream()
+                .collect(Collectors.toMap(ManpowerRoleRate::getId, ManpowerRoleRate::getRoleId));
+        List<ProjectManpowerRoleRateOverride> mp = manpowerOverrideRepository.findAll();
+        for (ProjectManpowerRoleRateOverride o : mp) {
+            UUID roleId = manpowerVariantToRole.get(o.getManpowerRoleRateId());
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_PROJECT_RATE_OVERRIDE,
+                    AnalyticsDimensionSql.projectRateOverrideParams(
+                            o.getId(), o.getProjectId(), "MANPOWER",
+                            o.getManpowerRoleRateId(), roleId, roleCodes.get(roleId),
+                            o.getOverrideRate(), Boolean.TRUE.equals(o.getActive()), VERSION));
+        }
+
+        Map<UUID, UUID> equipmentVariantToRole = equipmentRoleVariantRepository.findAll().stream()
+                .collect(Collectors.toMap(EquipmentRoleVariant::getId, EquipmentRoleVariant::getRoleId));
+        List<ProjectEquipmentRoleVariantOverride> eq = equipmentOverrideRepository.findAll();
+        for (ProjectEquipmentRoleVariantOverride o : eq) {
+            UUID roleId = equipmentVariantToRole.get(o.getEquipmentRoleVariantId());
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_PROJECT_RATE_OVERRIDE,
+                    AnalyticsDimensionSql.projectRateOverrideParams(
+                            o.getId(), o.getProjectId(), "EQUIPMENT",
+                            o.getEquipmentRoleVariantId(), roleId, roleCodes.get(roleId),
+                            o.getOverrideRate(), Boolean.TRUE.equals(o.getActive()), VERSION));
+        }
+
+        Map<UUID, UUID> materialVariantToRole = materialRoleVariantRepository.findAll().stream()
+                .collect(Collectors.toMap(MaterialRoleVariant::getId, MaterialRoleVariant::getRoleId));
+        List<ProjectMaterialRoleVariantOverride> mt = materialOverrideRepository.findAll();
+        for (ProjectMaterialRoleVariantOverride o : mt) {
+            UUID roleId = materialVariantToRole.get(o.getMaterialRoleVariantId());
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_PROJECT_RATE_OVERRIDE,
+                    AnalyticsDimensionSql.projectRateOverrideParams(
+                            o.getId(), o.getProjectId(), "MATERIAL",
+                            o.getMaterialRoleVariantId(), roleId, roleCodes.get(roleId),
+                            o.getOverrideRate(), Boolean.TRUE.equals(o.getActive()), VERSION));
+        }
+        log.debug("Synced {} manpower + {} equipment + {} material project rate overrides",
+                mp.size(), eq.size(), mt.size());
+    }
+
+    private void syncWorkActivities() {
+        List<WorkActivity> activities = workActivityRepository.findAll();
+        for (WorkActivity w : activities) {
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_WORK_ACTIVITY,
+                    AnalyticsDimensionSql.workActivityParams(w, VERSION));
+        }
+        log.debug("Synced {} work activities", activities.size());
+    }
+
+    private void syncProductivityNorms() {
+        Map<UUID, String> roleCodes = roleCodeLookup();
+        Map<UUID, String> categoryNames = manpowerCategoryRepository.findAll().stream()
+                .collect(Collectors.toMap(ManpowerCategoryMaster::getId,
+                        c -> c.getName() != null ? c.getName() : ""));
+        Map<UUID, String> gradeNames = gradeRepository.findAll().stream()
+                .collect(Collectors.toMap(GradeMaster::getId,
+                        g -> g.getName() != null ? g.getName() : ""));
+
+        List<ProductivityNorm> norms = productivityNormRepository.findAll();
+        for (ProductivityNorm n : norms) {
+            String scope = resolveNormScope(n);
+            String waCode = n.getWorkActivity() != null
+                    ? (n.getWorkActivity().getCode() != null ? n.getWorkActivity().getCode() : "")
+                    : "";
+            String waName = n.getWorkActivity() != null
+                    ? (n.getWorkActivity().getName() != null ? n.getWorkActivity().getName() : "")
+                    : "";
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_PRODUCTIVITY_NORM,
+                    AnalyticsDimensionSql.productivityNormParams(n,
+                            waCode, waName,
+                            roleCodes.get(n.getRoleId()),
+                            categoryNames.get(n.getCategoryId()),
+                            gradeNames.get(n.getGradeId()),
+                            scope, VERSION));
+        }
+        log.debug("Synced {} productivity norms", norms.size());
+    }
+
+    private static String resolveNormScope(ProductivityNorm n) {
+        if (n.getRoleId() == null) return "UNSCOPED";
+        boolean hasManpowerVariant = n.getCategoryId() != null || n.getGradeId() != null;
+        boolean hasEquipmentVariant = (n.getMake() != null && !n.getMake().isBlank())
+                || (n.getModel() != null && !n.getModel().isBlank());
+        return (hasManpowerVariant || hasEquipmentVariant) ? "VARIANT" : "ROLE";
+    }
+
+    private void syncUsers() {
+        List<User> users = userRepository.findAll();
+        for (User u : users) {
+            clickHouse.execute(AnalyticsDimensionSql.INSERT_USER,
+                    AnalyticsDimensionSql.userParams(u.getId(), u.getUsername(),
+                            u.getFirstName(), u.getLastName(), u.getDesignation(),
+                            u.getOrganisationId(), u.isEnabled(), VERSION));
+        }
+        log.debug("Synced {} users", users.size());
+    }
+
+    // ── helpers ─────────────────────────────────────────────────────────────────
+
+    private Map<UUID, String> roleCodeLookup() {
+        return resourceRoleRepository.findAll().stream()
+                .collect(Collectors.toMap(ResourceRole::getId,
+                        r -> r.getCode() != null ? r.getCode() : ""));
+    }
+
+    private Map<UUID, String> roleNameLookup() {
+        return resourceRoleRepository.findAll().stream()
+                .collect(Collectors.toMap(ResourceRole::getId,
+                        r -> r.getName() != null ? r.getName() : ""));
     }
 }

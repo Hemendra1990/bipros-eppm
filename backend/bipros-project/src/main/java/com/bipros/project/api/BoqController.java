@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -33,7 +34,7 @@ public class BoqController {
   private final BoqService boqService;
 
   @PostMapping
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','COST_ENGINEER')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.UPDATE')")
   public ResponseEntity<ApiResponse<BoqItemResponse>> create(
       @PathVariable UUID projectId,
       @Valid @RequestBody CreateBoqItemRequest request) {
@@ -43,7 +44,7 @@ public class BoqController {
   }
 
   @PostMapping("/bulk")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','COST_ENGINEER')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.UPDATE')")
   public ResponseEntity<ApiResponse<List<BoqItemResponse>>> createBulk(
       @PathVariable UUID projectId,
       @Valid @RequestBody List<CreateBoqItemRequest> requests) {
@@ -53,12 +54,27 @@ public class BoqController {
   }
 
   @GetMapping
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.READ')")
   public ResponseEntity<ApiResponse<BoqSummaryResponse>> list(@PathVariable UUID projectId) {
     log.info("GET /v1/projects/{}/boq", projectId);
     return ResponseEntity.ok(ApiResponse.ok(boqService.getProjectBoqSummary(projectId)));
   }
 
+  /**
+   * BOQ candidates for an activity — used by the DPR form to suggest/pre-select a BOQ when
+   * the supervisor picks an activity. The match is heuristic (activity name vs item description).
+   */
+  @GetMapping("/by-activity")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.READ')")
+  public ResponseEntity<ApiResponse<List<BoqItemResponse>>> listForActivity(
+      @PathVariable UUID projectId,
+      @RequestParam UUID activityId) {
+    log.info("GET /v1/projects/{}/boq/by-activity activityId={}", projectId, activityId);
+    return ResponseEntity.ok(ApiResponse.ok(boqService.listForActivity(projectId, activityId)));
+  }
+
   @GetMapping("/{itemId}")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.READ')")
   public ResponseEntity<ApiResponse<BoqItemResponse>> get(
       @PathVariable UUID projectId,
       @PathVariable UUID itemId) {
@@ -66,7 +82,7 @@ public class BoqController {
   }
 
   @PatchMapping("/{itemId}")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER','COST_ENGINEER')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.UPDATE')")
   public ResponseEntity<ApiResponse<BoqItemResponse>> update(
       @PathVariable UUID projectId,
       @PathVariable UUID itemId,
@@ -75,7 +91,7 @@ public class BoqController {
   }
 
   @DeleteMapping("/{itemId}")
-  @PreAuthorize("hasAnyRole('ADMIN','PROJECT_MANAGER')")
+  @PreAuthorize("@projectAccess.hasProjectPermission(#projectId, 'PROJECT.UPDATE')")
   public ResponseEntity<ApiResponse<Void>> delete(
       @PathVariable UUID projectId,
       @PathVariable UUID itemId) {

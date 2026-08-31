@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AlertCircle,
@@ -16,6 +16,8 @@ import {
 
 import { aiApi } from "@/lib/api/aiApi";
 import type { ChartSpec, InsightsResponse } from "@/lib/types";
+import { SimpleTable } from "@/components/common/SimpleTable";
+import type { ColumnDef } from "@tanstack/react-table";
 
 import { EChart, chartHasData } from "./charts/EChart";
 import { InsightsMdx } from "./InsightsMdx";
@@ -61,6 +63,39 @@ export function AiInsightsPanel({
   const [state, setState] = useState<PanelState>({ status: "empty" });
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  const varianceColumns = useMemo<
+    ColumnDef<NonNullable<InsightsResponse["variances"]>[number]>[]
+  >(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: (info) => (
+          <span className="font-medium text-text-primary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "delta",
+        header: "Delta",
+        cell: (info) => (
+          <span className="text-text-primary">{info.getValue() as string}</span>
+        ),
+      },
+      {
+        accessorKey: "explanation",
+        header: "Explanation",
+        cell: (info) => (
+          <span className="text-text-secondary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
 
   const fetchInsights = useCallback(
     async (force = false) => {
@@ -339,39 +374,11 @@ export function AiInsightsPanel({
                             <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
                               Variances
                             </h4>
-                            <div className="overflow-x-auto rounded-md border border-border">
-                              <table className="w-full text-xs">
-                                <thead className="border-b border-border bg-surface/80">
-                                  <tr>
-                                    <th className="px-2 py-1.5 text-left font-medium text-text-secondary">
-                                      Name
-                                    </th>
-                                    <th className="px-2 py-1.5 text-left font-medium text-text-secondary">
-                                      Delta
-                                    </th>
-                                    <th className="px-2 py-1.5 text-left font-medium text-text-secondary">
-                                      Explanation
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {d.variances!.map((v, i) => (
-                                    <tr
-                                      key={i}
-                                      className="border-b border-border last:border-b-0 hover:bg-surface/80"
-                                    >
-                                      <td className="px-2 py-1.5 font-medium text-text-primary">
-                                        {v.name}
-                                      </td>
-                                      <td className="px-2 py-1.5 text-text-primary">{v.delta}</td>
-                                      <td className="px-2 py-1.5 text-text-secondary">
-                                        {v.explanation}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
+                            <SimpleTable
+                              columns={varianceColumns}
+                              data={d.variances!}
+                              sortable={false}
+                            />
                           </div>
                         )}
 

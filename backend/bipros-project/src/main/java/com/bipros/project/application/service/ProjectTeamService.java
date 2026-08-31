@@ -1,0 +1,388 @@
+package com.bipros.project.application.service;
+
+import com.bipros.common.exception.BusinessRuleException;
+import com.bipros.common.exception.ResourceNotFoundException;
+import com.bipros.common.security.UserPermissionPort;
+import com.bipros.project.application.dto.ProjectTeamMemberRequest;
+import com.bipros.project.application.dto.ProjectTeamMemberResponse;
+import com.bipros.project.domain.model.ProjectRole;
+import com.bipros.project.domain.model.ProjectTeamMember;
+import com.bipros.project.domain.repository.ProjectRepository;
+import com.bipros.project.domain.repository.ProjectTeamRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Stream;
+
+/**
+ * CRUD + resolver helpers for the project-scoped reporting line (see
+ * {@link ProjectTeamMember}). The two {@code resolveXxx} methods back the DBS rollup —
+ * they translate a supervisor's user id into their Engineer / PM so the aggregator can SUM
+ * upwards.
+ */
+@Slf4j
+@Service
+@Transactional
+@RequiredArgsConstructor
+public class ProjectTeamService {
+
+    private final ProjectTeamRepository teamRepository;
+    private final ProjectRepository projectRepository;
+    private final UserPermissionPort userPermissionPort;
+
+    @PersistenceContext
+    private EntityManager em;
+
+    public static final String DPR_APPROVE = "DPR.APPROVE";
+
+    public ProjectTeamMemberResponse create(UUID projectId, ProjectTeamMemberRequest req) {
+        ensureProjectExists(projectId);
+        if (req.userId() == null) {
+            throw new BusinessRuleException("PROJECT_TEAM_USER_REQUIRED", "userId is required");
+        }
+        ProjectRole role = parseRole(req.role());
+
+        // Idempotent semantics on the unique key (project, user, role) — surface a clear
+        // BusinessRuleException instead of letting Hibernate translate to a 500.
+        teamRepository.findByProjectIdAndUserIdAndRole(projectId, req.userId(), role)
+            .ifPresent(existing -> {
+                throw new BusinessRuleException(
+                    "PROJECT_TEAM_DUPLICATE",
+                    "User %s already holds role %s on project %s".formatted(req.userId(), role, projectId));
+            });
+
+        ProjectTeamMember member = ProjectTeamMember.builder()
+            .projectId(projectId)
+            .userId(req.userId())
+            .role(role)
+            .reportsToUserId(req.reportsToUserId())
+            .activeFrom(req.activeFrom())
+            .activeTo(req.activeTo())
+            .build();
+
+        ProjectTeamMember saved = teamRepository.save(member);
+        log.info("Created project_team member project={} user={} role={}", projectId, req.userId(), role);
+        return toResponse(saved, lookupUsers(memberUserIds(List.of(saved))));
+    }
+
+    public ProjectTeamMemberResponse update(UUID projectId, UUID memberId, ProjectTeamMemberRequest req) {
+        ensureProjectExists(projectId);
+        ProjectTeamMember member = loadMember(projectId, memberId);
+
+        if (req.userId() != null) {
+            member.setUserId(req.userId());
+        }
+        if (req.role() != null) {
+            member.setRole(parseRole(req.role()));
+        }
+        // reportsToUserId / active dates may legitimately be cleared to null — assign directly.
+        member.setReportsToUserId(req.reportsToUserId());
+        member.setActiveFrom(req.activeFrom());
+        member.setActiveTo(req.activeTo());
+
+        ProjectTeamMember saved = teamRepository.save(member);
+        return toResponse(saved, lookupUsers(memberUserIds(List.of(saved))));
+    }
+
+    public void delete(UUID projectId, UUID memberId) {
+        ensureProjectExists(projectId);
+        ProjectTeamMember member = loadMember(projectId, memberId);
+        teamRepository.delete(member);
+        log.info("Deleted project_team member project={} memberId={}", projectId, memberId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProjectTeamMemberResponse> listForProject(UUID projectId) {
+        ensureProjectExists(projectId);
+        List<ProjectTeamMember> rows = teamRepository.findByProjectId(projectId);
+        Map<UUID, UserRow> users = lookupUsers(memberUserIds(rows));
+        return rows.stream()
+            .sorted(Comparator.comparing(ProjectTeamMember::getRole))
+            .map(m -> toResponse(m, users))
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProjectTeamMemberResponse> listByRole(UUID projectId, ProjectRole role) {
+        ensureProjectExists(projectId);
+        List<ProjectTeamMember> rows = teamRepository.findByProjectIdAndRole(projectId, role);
+        Map<UUID, UserRow> users = lookupUsers(memberUserIds(rows));
+        return rows.stream()
+            .map(m -> toResponse(m, users))
+            .toList();
+    }
+
+    /**
+     * Find the SUPERVISOR membership for {@code supervisorUserId} on this project and return
+     * the user id they report to (the Engineer). Empty when the supervisor isn't enrolled or
+     * has no reporting line yet.
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> resolveEngineerFor(UUID projectId, UUID supervisorUserId) {
+        return teamRepository
+            .findByProjectIdAndUserIdAndRole(projectId, supervisorUserId, ProjectRole.SUPERVISOR)
+            .map(ProjectTeamMember::getReportsToUserId);
+    }
+
+    /**
+     * Return the user id of the first PM membership on this project. If the project has
+     * multiple PMs (rare — usually outgoing handover) the first by repository order wins;
+     * callers needing all PMs should use {@link #listByRole}.
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> resolvePmFor(UUID projectId) {
+        return teamRepository.findByProjectIdAndRole(projectId, ProjectRole.PM).stream()
+            .findFirst()
+            .map(ProjectTeamMember::getUserId);
+    }
+
+    /** The user {@code userId} reports to on this project (one level up), or empty. Role-agnostic. */
+    @Transactional(readOnly = true)
+    public Optional<UUID> getImmediateReporter(UUID projectId, UUID userId) {
+        if (userId == null) return Optional.empty();
+        return teamRepository.findAllByProjectIdAndUserId(projectId, userId).stream()
+            .findFirst()
+            .map(ProjectTeamMember::getReportsToUserId);
+    }
+
+    /**
+     * Walk the reporting chain from {@code startUserId} upward and return the first
+     * CONSTRUCTION_MANAGER encountered. Returns empty if the chain does not include a
+     * CM (e.g. legacy four-tier configuration without the CM seat).
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> resolveCmFor(UUID projectId, UUID startUserId) {
+        return walkUpChain(projectId, startUserId)
+            .filter(m -> m.getRole() == ProjectRole.CONSTRUCTION_MANAGER)
+            .findFirst()
+            .map(ProjectTeamMember::getUserId);
+    }
+
+    /**
+     * Walk the reporting chain from {@code startUserId} upward and return the first PM
+     * encountered. Differs from {@link #resolvePmFor(UUID)} (which returns the project's
+     * PM regardless of the caller's place in the hierarchy) — this overload walks the
+     * chain edges, so an orphaned subtree without a PM at the top returns empty.
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> resolvePmFor(UUID projectId, UUID startUserId) {
+        return walkUpChain(projectId, startUserId)
+            .filter(m -> m.getRole() == ProjectRole.PM)
+            .findFirst()
+            .map(ProjectTeamMember::getUserId);
+    }
+
+    /**
+     * Resolve the DPR approver for {@code submitterUserId}: the FIRST member strictly ABOVE the
+     * submitter in the project reporting chain whose effective permissions include DPR.APPROVE.
+     * The submitter is never their own approver (separation of duties). Empty when no capable
+     * approver exists up the chain (caller treats this as "unassigned — pending").
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> resolveApprover(UUID projectId, UUID submitterUserId) {
+        return resolveApproverDetailed(projectId, submitterUserId).map(ApproverResolution::userId);
+    }
+
+    /** How an approver was resolved: the reporting chain, a role-seat fallback, or an admin. */
+    public record ApproverResolution(UUID userId, ProjectRole role, String source) {
+        public static final String SOURCE_CHAIN = "CHAIN";
+        public static final String SOURCE_ADMIN = "ADMIN";
+    }
+
+    /**
+     * Approver resolution with the fallback ladder (owner decision 2026-08-31): reporting chain
+     * first, then the project's CONSTRUCTION_MANAGER → PM → PROJECT_CONTROL seat, then any
+     * enabled admin. Seat fallbacks still require DPR.APPROVE (assigning someone who cannot
+     * approve would deadlock the DPR); admins bypass permission checks everywhere, so the admin
+     * rung is unfiltered. The submitter is excluded at every rung. {@code source} tells the
+     * pre-submit preview why this person was picked (CHAIN / role name / ADMIN).
+     */
+    @Transactional(readOnly = true)
+    public Optional<ApproverResolution> resolveApproverDetailed(UUID projectId, UUID submitterUserId) {
+        if (submitterUserId == null) return Optional.empty();
+        Optional<ProjectTeamMember> chain = walkUpChain(projectId, submitterUserId)
+            .filter(m -> !m.getUserId().equals(submitterUserId))  // exclude self (separation of duties)
+            .filter(m -> userPermissionPort.hasPermission(m.getUserId(), DPR_APPROVE))
+            .findFirst();
+        if (chain.isPresent()) {
+            ProjectTeamMember m = chain.get();
+            return Optional.of(new ApproverResolution(m.getUserId(), m.getRole(), ApproverResolution.SOURCE_CHAIN));
+        }
+        for (ProjectRole seat : List.of(ProjectRole.CONSTRUCTION_MANAGER, ProjectRole.PM, ProjectRole.PROJECT_CONTROL)) {
+            Optional<UUID> holder = teamRepository.findByProjectIdAndRole(projectId, seat).stream()
+                .map(ProjectTeamMember::getUserId)
+                .filter(uid -> !uid.equals(submitterUserId))
+                .filter(uid -> userPermissionPort.hasPermission(uid, DPR_APPROVE))
+                .findFirst();
+            if (holder.isPresent()) {
+                return Optional.of(new ApproverResolution(holder.get(), seat, seat.name()));
+            }
+        }
+        return firstEnabledAdmin(submitterUserId)
+            .map(uid -> new ApproverResolution(uid, null, ApproverResolution.SOURCE_ADMIN));
+    }
+
+    /**
+     * Who to raise an overdue item to on behalf of {@code forUserId}: their immediate reporter,
+     * else the same CM → PM → PROJECT_CONTROL → admin seat ladder as the approver fallback (no
+     * permission filter — this is an information escalation, not an assignment). Never
+     * {@code forUserId} themself.
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> resolveEscalationContact(UUID projectId, UUID forUserId) {
+        Optional<UUID> reporter = getImmediateReporter(projectId, forUserId)
+            .filter(uid -> !uid.equals(forUserId));
+        if (reporter.isPresent()) return reporter;
+        for (ProjectRole seat : List.of(ProjectRole.CONSTRUCTION_MANAGER, ProjectRole.PM, ProjectRole.PROJECT_CONTROL)) {
+            Optional<UUID> holder = teamRepository.findByProjectIdAndRole(projectId, seat).stream()
+                .map(ProjectTeamMember::getUserId)
+                .filter(uid -> !uid.equals(forUserId))
+                .findFirst();
+            if (holder.isPresent()) return holder;
+        }
+        return firstEnabledAdmin(forUserId);
+    }
+
+    /** First enabled ADMIN-role user other than {@code exclude} (ordered by username for
+     *  determinism — two rows are fetched so the exclusion can never empty the rung while
+     *  another admin exists). Native query — the security module's repositories aren't a
+     *  dependency of this module, same as {@link #lookupUsers}. */
+    private Optional<UUID> firstEnabledAdmin(UUID exclude) {
+        if (em == null) return Optional.empty();
+        @SuppressWarnings("unchecked")
+        List<Object> rows = em.createNativeQuery(
+                "SELECT u.id FROM public.users u "
+                    + "JOIN public.user_roles ur ON ur.user_id = u.id "
+                    + "JOIN public.roles r ON r.id = ur.role_id "
+                    + "WHERE r.name = 'ADMIN' AND u.enabled = true "
+                    + "ORDER BY u.username")
+            .setMaxResults(2)
+            .getResultList();
+        return rows.stream()
+            .map(r -> (UUID) r)
+            .filter(uid -> !uid.equals(exclude))
+            .findFirst();
+    }
+
+    /**
+     * Stream the chain of {@link ProjectTeamMember} rows starting at {@code startUserId}
+     * and following {@code reportsToUserId} edges. The starting row itself is included.
+     * A visited-set guards against accidental cycles in the data.
+     */
+    private Stream<ProjectTeamMember> walkUpChain(UUID projectId, UUID startUserId) {
+        if (startUserId == null) return Stream.empty();
+        List<ProjectTeamMember> chain = new java.util.ArrayList<>();
+        Set<UUID> visited = new HashSet<>();
+        UUID cursor = startUserId;
+        while (cursor != null && visited.add(cursor)) {
+            List<ProjectTeamMember> rows = teamRepository.findAllByProjectIdAndUserId(projectId, cursor);
+            if (rows.isEmpty()) break;
+            ProjectTeamMember m = rows.get(0);
+            chain.add(m);
+            cursor = m.getReportsToUserId();
+        }
+        return chain.stream();
+    }
+
+    // ── helpers ─────────────────────────────────────────────────────────────────
+
+    private void ensureProjectExists(UUID projectId) {
+        if (!projectRepository.existsById(projectId)) {
+            throw new ResourceNotFoundException("Project", projectId);
+        }
+    }
+
+    private ProjectTeamMember loadMember(UUID projectId, UUID memberId) {
+        ProjectTeamMember member = teamRepository.findById(memberId)
+            .orElseThrow(() -> new ResourceNotFoundException("ProjectTeamMember", memberId));
+        if (!projectId.equals(member.getProjectId())) {
+            throw new BusinessRuleException(
+                "PROJECT_TEAM_PROJECT_MISMATCH",
+                "Member %s does not belong to project %s".formatted(memberId, projectId));
+        }
+        return member;
+    }
+
+    private ProjectRole parseRole(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new BusinessRuleException("PROJECT_TEAM_ROLE_REQUIRED", "role is required");
+        }
+        try {
+            return ProjectRole.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessRuleException(
+                "PROJECT_TEAM_ROLE_INVALID",
+                "Unknown project role: " + raw);
+        }
+    }
+
+    /** Name/email columns projected from {@code public.users} for the Team tab. */
+    private record UserRow(String username, String firstName, String lastName, String email) {
+        String displayName() {
+            String full = ((firstName == null ? "" : firstName) + " "
+                + (lastName == null ? "" : lastName)).trim();
+            return full.isEmpty() ? username : full;
+        }
+    }
+
+    /** All user ids referenced by the rows — members plus their reports-to targets. */
+    private static Set<UUID> memberUserIds(Collection<ProjectTeamMember> rows) {
+        Set<UUID> ids = new HashSet<>();
+        for (ProjectTeamMember m : rows) {
+            if (m.getUserId() != null) ids.add(m.getUserId());
+            if (m.getReportsToUserId() != null) ids.add(m.getReportsToUserId());
+        }
+        return ids;
+    }
+
+    /** Batch display-name lookup. Null-safe on {@code em} (plain unit tests) — enrichment
+     *  is best-effort, the ids in the response stay authoritative. */
+    private Map<UUID, UserRow> lookupUsers(Set<UUID> ids) {
+        if (em == null || ids.isEmpty()) return Map.of();
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery(
+                "SELECT id, username, first_name, last_name, email FROM public.users WHERE id IN (:ids)")
+            .setParameter("ids", ids)
+            .getResultList();
+        Map<UUID, UserRow> map = new HashMap<>();
+        for (Object[] r : rows) {
+            map.put((UUID) r[0], new UserRow((String) r[1], (String) r[2], (String) r[3], (String) r[4]));
+        }
+        return map;
+    }
+
+    private ProjectTeamMemberResponse toResponse(ProjectTeamMember m, Map<UUID, UserRow> users) {
+        UserRow user = users.get(m.getUserId());
+        UserRow boss = m.getReportsToUserId() != null ? users.get(m.getReportsToUserId()) : null;
+        return new ProjectTeamMemberResponse(
+            m.getId(),
+            m.getProjectId(),
+            m.getUserId(),
+            m.getRole() != null ? m.getRole().name() : null,
+            m.getReportsToUserId(),
+            m.getActiveFrom(),
+            m.getActiveTo(),
+            m.getCreatedAt(),
+            m.getUpdatedAt(),
+            user != null ? user.username() : null,
+            user != null ? user.firstName() : null,
+            user != null ? user.lastName() : null,
+            user != null ? user.email() : null,
+            boss != null ? boss.username() : null,
+            boss != null ? boss.displayName() : null
+        );
+    }
+}

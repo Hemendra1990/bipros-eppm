@@ -72,7 +72,8 @@ class CostIntegrationTest {
         CreateProjectRequest projReq = new CreateProjectRequest(
                 "PRJ-CST-" + suffix, "Project Cost " + suffix, "desc",
                 epsId, null, LocalDate.now(), LocalDate.now().plusMonths(12),
-                5, null, null, null, null, null, null, null, null, null);
+                5, null, null, null, null, null, null, null, null, null,
+                null);
         HttpEntity<CreateProjectRequest> projE = new HttpEntity<>(projReq, h);
         ResponseEntity<ApiResponse> projR = restTemplate.exchange("/v1/projects", HttpMethod.POST, projE, ApiResponse.class);
         Map<String, Object> projD = (Map<String, Object>) projR.getBody().data();
@@ -306,6 +307,7 @@ class CostIntegrationTest {
         @DisplayName("POST /v1/financial-periods - create")
         void createPeriod_returns201() {
             CreateFinancialPeriodRequest req = new CreateFinancialPeriodRequest(
+                    projectId,
                     "FY-" + System.currentTimeMillis(),
                     LocalDate.now(), LocalDate.now().plusMonths(3), "QUARTER", 1);
             HttpEntity<CreateFinancialPeriodRequest> e = new HttpEntity<>(req, authJsonHeaders());

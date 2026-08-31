@@ -19,6 +19,14 @@ public final class PermissionCatalog {
     private static final String DELETE = "DELETE";
     private static final String EXPORT = "EXPORT";
     private static final String APPROVE = "APPROVE";
+    private static final String ANNOTATE = "ANNOTATE";
+    private static final String AUDIT = "AUDIT";
+    private static final String WRITE = "WRITE";
+    private static final String INCIDENT_LOG = "INCIDENT_LOG";
+    private static final String MANAGE = "MANAGE";
+    private static final String CLOSE = "CLOSE";
+    private static final String RELEASE = "RELEASE";
+    private static final String RECOMPUTE = "RECOMPUTE";
 
     public static final List<Permission> ALL = List.of(
             // Project
@@ -33,6 +41,8 @@ public final class PermissionCatalog {
             new Permission("ACTIVITY.READ",   "ACTIVITY", READ,   "View activities and WBS"),
             new Permission("ACTIVITY.UPDATE", "ACTIVITY", UPDATE, "Update activities and progress"),
             new Permission("ACTIVITY.DELETE", "ACTIVITY", DELETE, "Delete activities"),
+            new Permission("ACTIVITY.LOCK",   "ACTIVITY", UPDATE, "Lock an activity (freeze edits, enable DPR submission)"),
+            new Permission("ACTIVITY.UNLOCK", "ACTIVITY", UPDATE, "Unlock an activity (return to Draft for edits)"),
 
             // Schedule
             new Permission("SCHEDULE.READ",    "SCHEDULE", READ,    "View schedules"),
@@ -114,7 +124,128 @@ public final class PermissionCatalog {
             new Permission("ADMIN_MASTER.UPDATE", "ADMIN_MASTER", UPDATE, "Edit master data"),
 
             new Permission("ADMIN_SETTINGS.READ",   "ADMIN_SETTINGS", READ,   "View global settings"),
-            new Permission("ADMIN_SETTINGS.UPDATE", "ADMIN_SETTINGS", UPDATE, "Edit global settings and integrations")
+            new Permission("ADMIN_SETTINGS.UPDATE", "ADMIN_SETTINGS", UPDATE, "Edit global settings and integrations"),
+
+            // Quality / NCR (used by QC_MANAGER profile and analyze_ncr_trends tool)
+            new Permission("NCR.CREATE",  "NCR", CREATE, "Create non-conformance reports"),
+            new Permission("NCR.READ",    "NCR", READ,   "View non-conformance reports"),
+            new Permission("NCR.UPDATE",  "NCR", UPDATE, "Update / close NCRs"),
+            new Permission("NCR.APPROVE", "NCR", APPROVE, "Approve NCR closure"),
+
+            // Data quality (used by BIM_DATA_COORDINATOR profile)
+            new Permission("DATA_QUALITY.READ",  "DATA_QUALITY", READ,  "View data-quality and DPR audit reports"),
+            new Permission("DATA_QUALITY.AUDIT", "DATA_QUALITY", AUDIT, "Run DPR completeness audits"),
+
+            // DPR QC annotations (used by QC_MANAGER profile)
+            new Permission("DPR.QC_ANNOTATE", "DPR", ANNOTATE, "Add QC observations / annotations to DPRs"),
+
+            // Yield variance (used by PROJECT_ENGINEER profile and analyze_yield_variance tool)
+            new Permission("YIELD_VARIANCE.READ", "YIELD_VARIANCE", READ, "View material yield variance reports"),
+
+            // AI write (lets a profile both run the AI and use write-capable AI tools when added)
+            new Permission("AI.WRITE", "AI", WRITE, "Run AI tools that write back to the system"),
+
+            // DPR (Daily Progress Report)
+            new Permission("DPR.READ",    "DPR", READ,    "View daily progress reports"),
+            new Permission("DPR.CREATE",  "DPR", CREATE,  "Submit DPRs (field role)"),
+            new Permission("DPR.UPDATE",  "DPR", UPDATE,  "Edit own / team DPRs"),
+            new Permission("DPR.DELETE",  "DPR", DELETE,  "Delete DPRs"),
+            new Permission("DPR.APPROVE", "DPR", APPROVE, "Approve DPR submissions"),
+
+            // Safety / HSE
+            new Permission("SAFETY.READ",         "SAFETY", READ,         "View safety records and incident logs"),
+            new Permission("SAFETY.CREATE",       "SAFETY", CREATE,       "Create safety records / inspections"),
+            new Permission("SAFETY.UPDATE",       "SAFETY", UPDATE,       "Edit safety records"),
+            new Permission("SAFETY.INCIDENT_LOG", "SAFETY", INCIDENT_LOG, "Log a safety incident (subset of CREATE for field roles)"),
+
+            // Permits (Permit To Work)
+            new Permission("PERMIT.READ",    "PERMIT", READ,    "View permits"),
+            new Permission("PERMIT.CREATE",  "PERMIT", CREATE,  "Create new permits"),
+            new Permission("PERMIT.APPROVE", "PERMIT", APPROVE, "Approve / reject permit steps"),
+
+            // Project membership
+            new Permission("PROJECT_MEMBER.READ",   "PROJECT_MEMBER", READ,   "View project members"),
+            new Permission("PROJECT_MEMBER.MANAGE", "PROJECT_MEMBER", MANAGE, "Add/remove/edit project members"),
+
+            // Workfront / area readiness — supervisor confirms, site-engineer releases
+            new Permission("WORKFRONT.CREATE",  "WORKFRONT", CREATE,  "Mark a workfront ready"),
+            new Permission("WORKFRONT.READ",    "WORKFRONT", READ,    "View workfront list and status"),
+            new Permission("WORKFRONT.UPDATE",  "WORKFRONT", UPDATE,  "Edit workfront ready state or notes"),
+            new Permission("WORKFRONT.RELEASE", "WORKFRONT", RELEASE, "Release a workfront for execution (engineering sign-off)"),
+
+            // Snag / punch list — supervisor raises, engineer / QC closes
+            new Permission("SNAG.CREATE", "SNAG", CREATE, "Raise a snag / punch-list item"),
+            new Permission("SNAG.READ",   "SNAG", READ,   "View snags"),
+            new Permission("SNAG.UPDATE", "SNAG", UPDATE, "Edit snag description / severity / status"),
+            new Permission("SNAG.CLOSE",  "SNAG", CLOSE,  "Close a snag (QA/QC or site engineer)"),
+
+            // Shift handover notes — between supervisors / foremen
+            new Permission("SHIFT_HANDOVER.CREATE", "SHIFT_HANDOVER", CREATE, "Log a shift handover note"),
+            new Permission("SHIFT_HANDOVER.READ",   "SHIFT_HANDOVER", READ,   "View shift handover notes"),
+
+            // Attendance — daily contractor headcount and approval
+            new Permission("ATTENDANCE.CREATE",  "ATTENDANCE", CREATE,  "Log daily attendance row"),
+            new Permission("ATTENDANCE.READ",    "ATTENDANCE", READ,    "View attendance"),
+            new Permission("ATTENDANCE.UPDATE",  "ATTENDANCE", UPDATE,  "Edit attendance before approval"),
+            new Permission("ATTENDANCE.APPROVE", "ATTENDANCE", APPROVE, "Approve daily attendance (supervisor)"),
+
+            // Checklist (pre-concrete, excavation, shuttering, …) — supervisor fills, QC signs
+            new Permission("CHECKLIST.CREATE",  "CHECKLIST", CREATE,  "Start a checklist instance"),
+            new Permission("CHECKLIST.READ",    "CHECKLIST", READ,    "View checklist templates and instances"),
+            new Permission("CHECKLIST.UPDATE",  "CHECKLIST", UPDATE,  "Update checklist answers / attachments"),
+            new Permission("CHECKLIST.APPROVE", "CHECKLIST", APPROVE, "Sign off a completed checklist"),
+
+            // Procurement / material indent — supervisor raises, store/procurement approves
+            new Permission("PROCUREMENT_REQUEST.CREATE",  "PROCUREMENT_REQUEST", CREATE,  "Raise a material indent / procurement request"),
+            new Permission("PROCUREMENT_REQUEST.READ",    "PROCUREMENT_REQUEST", READ,    "View material indents"),
+            new Permission("PROCUREMENT_REQUEST.UPDATE",  "PROCUREMENT_REQUEST", UPDATE,  "Edit indent before submission"),
+            new Permission("PROCUREMENT_REQUEST.APPROVE", "PROCUREMENT_REQUEST", APPROVE, "Approve / reject indent (store / procurement)"),
+
+            // HDS — Highway Design Standards knowledge base (PDF library, vector retrieval).
+            // READ defaults to all roles (every engineer can query standards); CREATE/UPDATE
+            // for librarians (ADMIN + PORTFOLIO_MANAGER/EXECUTIVE); DELETE admin-only.
+            new Permission("HDS_LIBRARY.READ",   "HDS_LIBRARY", READ,   "Query the HDS standards library"),
+            new Permission("HDS_LIBRARY.CREATE", "HDS_LIBRARY", CREATE, "Upload new HDS documents / versions"),
+            new Permission("HDS_LIBRARY.UPDATE", "HDS_LIBRARY", UPDATE, "Edit HDS metadata / re-trigger ingestion"),
+            new Permission("HDS_LIBRARY.DELETE", "HDS_LIBRARY", DELETE, "Delete HDS documents"),
+
+            // DBS (Daily Balance Sheet) — admin-grade recompute of the daily aggregates.
+            new Permission("DBS.RECOMPUTE", "DBS", RECOMPUTE, "Trigger DBS aggregate recompute (day / range / cumulative)"),
+
+            // Access-control round (2026-08-11), from the client's Access-Input/Output sheets:
+            // "Report Download" is a separate action from "View", and PM/QS may edit site
+            // concerns WITHOUT being able to edit DPR data — hence the dedicated ISSUE family
+            // (DprIssueController is keyed on these instead of DPR.*). DBS reads/exports get
+            // their own codes so the DBS GET endpoints can be guarded at all.
+            new Permission("DPR.EXPORT",   "DPR",   EXPORT, "Download DPR reports (PDF / Excel)"),
+            new Permission("DBS.READ",     "DBS",   READ,   "View daily balance sheets"),
+            new Permission("DBS.EXPORT",   "DBS",   EXPORT, "Download DBS exports (Excel / PDF)"),
+            new Permission("ISSUE.CREATE", "ISSUE", CREATE, "Raise site concerns / issues"),
+            new Permission("ISSUE.READ",   "ISSUE", READ,   "View site concerns / issues"),
+            new Permission("ISSUE.UPDATE", "ISSUE", UPDATE, "Edit / resolve site concerns"),
+
+            // Material store round (2026-08-19, client ask "entry limited to storekeeper"):
+            // the store surfaces (catalogue, GRN, issue slips/returns, stock register,
+            // consumption log) get their OWN family so store access can be granted or
+            // withdrawn per profile without touching RESOURCE.* — which also gates
+            // equipment/labour deployment logs, sub-contractor entries and rate masters
+            // that supervisors/engineers must keep.
+            new Permission("STORE.READ",   "STORE", READ,   "View material store (catalogue, GRNs, issues, stock, ledger)"),
+            new Permission("STORE.UPDATE", "STORE", UPDATE, "Record store movements (GRN, issue slips, returns, ledger entries)"),
+            new Permission("STORE.DELETE", "STORE", DELETE, "Delete material catalogue entries"),
+
+            // QC client-feedback round (2026-08-19): supervisors/engineers must re-raise an
+            // RFI after a failed test without holding DOCUMENT.CREATE (which also opens
+            // document uploads and transmittals). The RFI create endpoint accepts
+            // RFI.CREATE OR DOCUMENT.CREATE, so existing document-tier profiles keep working.
+            new Permission("RFI.CREATE", "RFI", CREATE, "Raise RFIs in the RFI register"),
+
+            // My-progress card (client ask, 2026-08-20): per-user overview of the
+            // activities the caller supervises — qty done today/week/month/cumulative.
+            // Own family so any profile can be granted the card without touching
+            // REPORT.* (which opens the full reports surface).
+            new Permission("MY_PROGRESS.READ", "MY_PROGRESS", READ,
+                "View own supervised-activity progress (day/week/month/cumulative)")
     );
 
     public static final Set<String> ALL_CODES = ALL.stream()
